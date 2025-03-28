@@ -27,11 +27,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <windows.h>
 #endif//_WINDOWS
 
-#ifndef _MAC
-#include <GL/gl.h>
-#else//_MAC
-#include <OpenGL/gl.h>
-#endif//_MAC
+#include <GL/glew.h>
 
 
 PROFILER_DECLARE(draw_p);
@@ -39,6 +35,11 @@ PROFILER_DECLARE(draw);
 
 namespace xPlatform
 {
+
+void initGlew()
+{
+	glewInit();
+}
 
 static struct eOptionZoom : public xOptions::eOptionInt
 {
@@ -55,11 +56,11 @@ static struct eOptionZoom : public xOptions::eOptionInt
 	virtual int Order() const { return 35; }
 	float Zoom() const
 	{
-		switch(*this)
+		switch (*this)
 		{
-			case 1: return 300.0f/256.0f;
-			case 2: return 320.0f/256.0f;
-			default: return 1.0f;
+		case 1: return 300.0f / 256.0f;
+		case 2: return 320.0f / 256.0f;
+		default: return 1.0f;
 		}
 	}
 } op_zoom;
@@ -73,8 +74,101 @@ static struct eOptionFiltering : public xOptions::eOptionBool
 	virtual int Order() const { return 36; }
 } op_filtering;
 
+static GLuint textureID, vao, vbo, ebo;
+static GLuint shaderProgram;
+static dword tex[512 * 256];
 
-static dword tex[512*256];
+const char* vertexShaderSource = R"(
+#version 330 core
+layout (location = 0) in vec2 aPos;
+layout (location = 1) in vec2 aTexCoord;
+out vec2 TexCoord;
+
+uniform vec2 scale;
+
+void main()
+{
+    vec2 pos = aPos * scale;
+    gl_Position = vec4(pos, 0.0, 1.0);
+    TexCoord = aTexCoord;
+}
+)";
+
+const char* fragmentShaderSource = R"(
+#version 330 core
+out vec4 FragColor;
+in vec2 TexCoord;
+uniform sampler2D texture1;
+
+void main()
+{
+    FragColor = texture(texture1, TexCoord);
+}
+)";
+
+void initGraphics()
+{
+	glGenTextures(1, &textureID);
+	glBindTexture(GL_TEXTURE_2D, textureID);
+
+	GLint filter = op_filtering ? GL_LINEAR : GL_NEAREST;
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	float vertices[] = {
+		-1.0f,  1.0f, 0.0f,            0.0f,
+		-1.0f, -1.0f, 0.0f,            240.0f / 256.0f,
+		 1.0f, -1.0f, 320.0f / 512.0f, 240.0f / 256.0f,
+		 1.0f,  1.0f, 320.0f / 512.0f, 0.0f
+	};
+
+	unsigned int indices[] = { 0, 1, 2, 0, 2, 3 };
+
+	glGenVertexArrays(1, &vao);
+	glGenBuffers(1, &vbo);
+	glGenBuffers(1, &ebo);
+
+	glBindVertexArray(vao);
+
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+	glEnableVertexAttribArray(1);
+
+	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+	glCompileShader(vertexShader);
+
+	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+	glCompileShader(fragmentShader);
+
+	shaderProgram = glCreateProgram();
+	glAttachShader(shaderProgram, vertexShader);
+	glAttachShader(shaderProgram, fragmentShader);
+	glLinkProgram(shaderProgram);
+
+	glDeleteShader(vertexShader);
+	glDeleteShader(fragmentShader);
+}
+
+void cleanupGraphics()
+{
+	glDeleteTextures(1, &textureID);
+	glDeleteBuffers(1, &vbo);
+	glDeleteBuffers(1, &ebo);
+	glDeleteVertexArrays(1, &vao);
+	glDeleteProgram(shaderProgram);
+}
 
 #ifdef USE_BIG_ENDIAN
 #define RGBX(r, g, b) (((r) << 24)|((g) << 16)|((b) << 8))
@@ -86,18 +180,6 @@ static dword tex[512*256];
 //	DrawGL
 //-----------------------------------------------------------------------------
 
-static const GLushort vertices[4 * 2] =
-{
-	0, 0,
-	0, 1,
-	1, 1,
-	1, 0,
-};
-static const GLubyte triangles[2 * 3] =
-{
-	0, 1, 2,
-	0, 2, 3,
-};
 static struct eCachedColors
 {
 	eCachedColors()
@@ -153,38 +235,35 @@ void DrawGL(int _w, int _h)
 
 	PROFILER_SECTION(draw);
 
-	float sx, sy;
-	GetScaleWithAspectRatio43(&sx, &sy, _w, _h);
-	int w = sx * _w * OpZoom();
-	int h = sy * _h * OpZoom();
+	float aspectSrc = 320.0f / 240.0f;
+	float aspectDst = (float)_w / (float)_h;
+	float scaleX = 1.0f, scaleY = 1.0f;
 
-	GLint filter = op_filtering ? GL_LINEAR : GL_NEAREST;
+	if (aspectDst > aspectSrc) {
+		scaleX = aspectSrc / aspectDst;
+	}
+	else {
+		scaleY = aspectDst / aspectSrc;
+	}
 
+	glViewport(0, 0, _w, _h);
 	glClear(GL_COLOR_BUFFER_BIT);
-    glMatrixMode(GL_TEXTURE);
-    glLoadIdentity();
-    glScalef(320.0f/512.0f, 240.0f/256.0f, 1.0f);
-	glEnable(GL_TEXTURE_2D);
+
+	glBindTexture(GL_TEXTURE_2D, textureID);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
-	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST);
 
-	glColor3f(1.0f, 1.0f, 1.0f);
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	glOrtho(0.0f, 1.0f, 1.0f, 0.0f, -1.0f, 1.0f);
-	glViewport((_w - w)/2, (_h - h)/2, w, h);
+	glUseProgram(shaderProgram);
+	glUniform2f(glGetUniformLocation(shaderProgram, "scale"), scaleX * OpZoom(), scaleY * OpZoom());
 
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glVertexPointer(2, GL_SHORT, 0, vertices);
-	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-	glTexCoordPointer(2, GL_SHORT, 0, vertices);
-	glDrawElements(GL_TRIANGLES, 2*3, GL_UNSIGNED_BYTE, triangles);
+	glBindVertexArray(vao);
 
-	glFlush();
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, textureID);
+	glUniform1i(glGetUniformLocation(shaderProgram, "texture1"), 0);
+
+	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+	glBindVertexArray(0);
 }
 
 }

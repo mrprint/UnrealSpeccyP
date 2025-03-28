@@ -10,13 +10,13 @@ endif()
 
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
 
-option(USE_WX_WIDGETS "wxWidgets + OpenAL + OpenGL version" OFF)
-option(USE_SDL "SDL version" ON)
+option(USE_WX_WIDGETS "wxWidgets + OpenAL + OpenGL version" ON)
+option(USE_SDL "SDL version" OFF)
 option(USE_SDL2 "SDL2 version" OFF)
 option(USE_HAIKU "Haiku version" OFF)
 option(USE_BENCHMARK "benchmark mode (console)" OFF)
 option(USE_LIBRARY "library mode" OFF)
-option(USE_WEB "use web sources (SDL or iOS versions)" ON)
+option(USE_WEB "use web sources (SDL or iOS versions)" OFF)
 
 project (USP)
 
@@ -348,7 +348,9 @@ source_group("platform\\win\\res" FILES ${SRCRES})
 ENDIF(WIN32)
 
 #Open GL
+find_package(GLEW REQUIRED)
 find_package(OpenGL REQUIRED)
+include_directories(${GLEW_INCLUDE_DIRS})
 if(NOT WIN32)
 include_directories("${OPENGL_INCLUDE_DIR}")
 endif(NOT WIN32)
@@ -358,7 +360,7 @@ source_group("platform\\gl" FILES ${SRCCXX_PLATFORM_OPENGL})
 
 add_executable(${PROJECT} WIN32 ${SRCCXX} ${SRCC} ${SRCH} ${SRCRES})
 target_link_libraries(${PROJECT} wx::core wx::base wx::adv wx::aui wx::gl)
-target_link_libraries(${PROJECT} ${OPENGL_LIBRARIES})
+target_link_libraries(${PROJECT} ${GLEW_LIBRARIES} ${OPENGL_LIBRARIES})
 
 elseif(USE_HAIKU)
 

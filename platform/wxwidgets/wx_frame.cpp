@@ -707,12 +707,18 @@ void Frame::OnPauseToggle(wxCommandEvent& event)
 //=============================================================================
 //	Frame::OnViewFilteringToggle
 //-----------------------------------------------------------------------------
+
+void initGraphics();
+void cleanupGraphics();
+
 void Frame::OnViewFilteringToggle(wxCommandEvent& event)
 {
+	cleanupGraphics();
 	if(UpdateBoolOption(menu_view.filtering, "filtering", true))
 		SetStatusText(_("Filtering on"));
 	else
 		SetStatusText(_("Filtering off"));
+	initGraphics();
 }
 //=============================================================================
 //	Frame::OnTrueSpeedToggle

@@ -33,6 +33,9 @@ void OnLoopSound();
 void TranslateKey(int& key, dword& flags);
 
 void VsyncGL(bool on);
+void initGlew();
+void initGraphics();
+void cleanupGraphics();
 void DrawGL(int w, int h);
 
 wxWindow* CreateMouseCapture(wxWindow* parent);
@@ -93,7 +96,22 @@ END_EVENT_TABLE()
 //-----------------------------------------------------------------------------
 GLCanvas::GLCanvas(wxWindow* parent) : eInherited(parent, wxID_ANY, canvas_attr), mouse_capture(NULL)
 {
-    gl_context = new wxGLContext(this);
+	wxGLContextAttrs ctx_attrs;
+	ctx_attrs.PlatformDefaults().CoreProfile().OGLVersion(3, 2).EndList();
+    gl_context = new wxGLContext(this, nullptr, &ctx_attrs);
+	if (!gl_context->IsOK())
+	{
+		wxMessageBox("An OpenGL 3.2 capable driver is required.\nThe app will end now.",
+			"OpenGL version error", wxOK | wxICON_INFORMATION, this);
+		delete gl_context;
+		gl_context = nullptr;
+	}
+	else
+	{
+		SetCurrent(*gl_context);
+	}
+	initGlew();
+	initGraphics();
 	joysticks[0] = new eWxJoystick(this, wxJOYSTICK1);
 	joysticks[1] = new eWxJoystick(this, wxJOYSTICK2);
 }
@@ -102,6 +120,7 @@ GLCanvas::GLCanvas(wxWindow* parent) : eInherited(parent, wxID_ANY, canvas_attr)
 //-----------------------------------------------------------------------------
 GLCanvas::~GLCanvas()
 {
+	cleanupGraphics();
 	delete joysticks[0];
 	delete joysticks[1];
     delete gl_context;
