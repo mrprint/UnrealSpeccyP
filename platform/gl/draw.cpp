@@ -16,6 +16,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <utility>
+
 #include "../platform.h"
 #include "../../ui/ui.h"
 #include "../../tools/profiler.h"
@@ -74,9 +76,18 @@ static struct eOptionFiltering : public xOptions::eOptionBool
 	virtual int Order() const { return 36; }
 } op_filtering;
 
-static GLuint textureID, vao, vbo, ebo;
+static struct eOptionGigascreen : public xOptions::eOptionBool
+{
+	eOptionGigascreen() { Set(false); }
+	virtual const char* Name() const { return "gigascreen"; }
+	virtual int Order() const { return 38; }
+} op_gigascreen;
+
+static GLuint textureID1, textureID2, vao, vbo, ebo;
 static GLuint shaderProgram;
-static dword tex[512 * 256];
+static dword tex1[512 * 256], *p_tex1 = tex1;
+static dword tex2[512 * 256], *p_tex2 = tex2;
+static int video_frame_last = -1;
 
 const char* vertexShaderSource = R"(
 #version 330 core
@@ -99,20 +110,31 @@ const char* fragmentShaderSource = R"(
 out vec4 FragColor;
 in vec2 TexCoord;
 uniform sampler2D texture1;
+uniform sampler2D texture2;
+uniform float blendFactor;
 
 void main()
 {
-    FragColor = texture(texture1, TexCoord);
+    vec4 color1 = texture(texture1, TexCoord);
+    vec4 color2 = texture(texture2, TexCoord);
+    FragColor = mix(color1, color2, blendFactor);
 }
 )";
 
 void initGraphics()
 {
-	glGenTextures(1, &textureID);
-	glBindTexture(GL_TEXTURE_2D, textureID);
+	glGenTextures(1, &textureID1);
+	glGenTextures(1, &textureID2);
 
 	GLint filter = op_filtering ? GL_LINEAR : GL_NEAREST;
 
+	glBindTexture(GL_TEXTURE_2D, textureID1);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	glBindTexture(GL_TEXTURE_2D, textureID2);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -163,7 +185,8 @@ void initGraphics()
 
 void cleanupGraphics()
 {
-	glDeleteTextures(1, &textureID);
+	glDeleteTextures(1, &textureID1);
+	glDeleteTextures(1, &textureID2);
 	glDeleteBuffers(1, &vbo);
 	glDeleteBuffers(1, &ebo);
 	glDeleteVertexArrays(1, &vao);
@@ -202,8 +225,18 @@ color_cache;
 void DrawGL(int _w, int _h)
 {
 	PROFILER_BEGIN(draw_p);
+
+	bool giga_enabled = op_gigascreen;
+
+	if (giga_enabled && video_frame_last != Handler()->VideoFrame())
+	{
+		video_frame_last = Handler()->VideoFrame();
+		std::swap(p_tex1, p_tex2);
+	}
+
 	byte* data = (byte*)Handler()->VideoData();
-	dword* p = tex;
+	dword* p = p_tex1; // swap?
+
 #ifdef USE_UI
 	byte* data_ui = (byte*)Handler()->VideoDataUI();
 	if(data_ui)
@@ -247,20 +280,24 @@ void DrawGL(int _w, int _h)
 	}
 
 	glViewport(0, 0, _w, _h);
+
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	glBindTexture(GL_TEXTURE_2D, textureID);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex);
-
 	glUseProgram(shaderProgram);
+	glUniform1f(glGetUniformLocation(shaderProgram, "blendFactor"), (giga_enabled) ? 0.5f : 0.0f);
 	glUniform2f(glGetUniformLocation(shaderProgram, "scale"), scaleX * OpZoom(), scaleY * OpZoom());
 
-	glBindVertexArray(vao);
-
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, textureID);
+	glBindTexture(GL_TEXTURE_2D, textureID1);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, p_tex1);
 	glUniform1i(glGetUniformLocation(shaderProgram, "texture1"), 0);
 
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, textureID2);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, p_tex2);
+	glUniform1i(glGetUniformLocation(shaderProgram, "texture2"), 1);
+
+	glBindVertexArray(vao);
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
 	glBindVertexArray(0);

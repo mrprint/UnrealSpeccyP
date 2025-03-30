@@ -88,6 +88,7 @@ private:
 	void OnResize(wxCommandEvent& event);
 	void OnViewMode(wxCommandEvent& event);
 	void OnViewFilteringToggle(wxCommandEvent& event);
+	void OnViewGigascreenToggle(wxCommandEvent& event);
 	void OnTapeToggle(wxCommandEvent& event);
 	void OnTapeFastToggle(wxCommandEvent& event);
 	void OnBetaDiskDrive(wxCommandEvent& event);
@@ -117,7 +118,7 @@ private:
 	enum
 	{
 		ID_Reset = 1, ID_ResetToServiceRomToggle, ID_Size200, ID_Size300, ID_Minimize, ID_Zoom,
-		ID_ViewFillScreen, ID_ViewSmallBorder, ID_ViewNoBorder, ID_ViewFilteringToggle, ID_FullScreenToggle,
+		ID_ViewFillScreen, ID_ViewSmallBorder, ID_ViewNoBorder, ID_ViewFilteringToggle, ID_ViewGigascreenToggle, ID_FullScreenToggle,
 		ID_TapeToggle, ID_TapeFastToggle, ID_AutoPlayImageToggle,
 		ID_JoyCursor, ID_JoyKempston, ID_JoyQAOPSpace, ID_JoySinclair2,
 		ID_PauseToggle, ID_TrueSpeedToggle, ID_Mode48kToggle,
@@ -140,6 +141,7 @@ private:
 		wxMenuItem* small_border;
 		wxMenuItem* no_border;
 		wxMenuItem* filtering;
+		wxMenuItem* gigascreen;
 	};
 	eJoyMenuItems menu_joy;
 	eViewMenuItems menu_view;
@@ -179,6 +181,7 @@ BEGIN_EVENT_TABLE(Frame, wxFrame)
 	EVT_MENU(Frame::ID_ViewSmallBorder, Frame::OnViewMode)
 	EVT_MENU(Frame::ID_ViewNoBorder, Frame::OnViewMode)
 	EVT_MENU(Frame::ID_ViewFilteringToggle, Frame::OnViewFilteringToggle)
+	EVT_MENU(Frame::ID_ViewGigascreenToggle, Frame::OnViewGigascreenToggle)
 	EVT_MENU(Frame::ID_FullScreenToggle, Frame::OnFullScreenToggle)
 	EVT_MENU(Frame::ID_TapeToggle,	Frame::OnTapeToggle)
 	EVT_MENU(Frame::ID_TapeFastToggle,Frame::OnTapeFastToggle)
@@ -228,6 +231,7 @@ END_EVENT_TABLE()
 #define SHORTCUT_VIEW_SMALL_BORDER	"Ctrl+Shift+2"
 #define SHORTCUT_VIEW_NO_BORDER		"Ctrl+Shift+3"
 #define SHORTCUT_VIEW_FILTERING		"Ctrl+Shift+F"
+#define SHORTCUT_VIEW_GIGASCREEN	"Ctrl+Shift+G"
 #define SHORTCUT_VIEW_FULLSCREEN	"Ctrl+F"
 #else//_MAC
 #define SHORTCUT_OPEN				"Ctrl+O"
@@ -246,6 +250,7 @@ END_EVENT_TABLE()
 #define SHORTCUT_VIEW_SMALL_BORDER	"RawCtrl+Shift+2"
 #define SHORTCUT_VIEW_NO_BORDER		"RawCtrl+Shift+3"
 #define SHORTCUT_VIEW_FILTERING		"RawCtrl+F"
+#define SHORTCUT_VIEW_GIGASCREEN	"RawCtrl+G"
 #define SHORTCUT_VIEW_FULLSCREEN	"RawCtrl+Ctrl+F"
 #endif//_MAC
 
@@ -339,6 +344,7 @@ Frame::Frame(const wxString& title, const wxPoint& pos, const eCmdLine& cmdline)
 	menu_view.no_border = menuView->Append(ID_ViewNoBorder, wxString(_("No border\t")) + _(SHORTCUT_VIEW_NO_BORDER), _(""), wxITEM_CHECK);
 	menuView->AppendSeparator();
 	menu_view.filtering = menuView->Append(ID_ViewFilteringToggle, wxString(_("Filtering\t")) + _(SHORTCUT_VIEW_FILTERING), _(""), wxITEM_CHECK);
+	menu_view.gigascreen = menuView->Append(ID_ViewGigascreenToggle, wxString(_("Gigascreen\t")) + _(SHORTCUT_VIEW_GIGASCREEN), _(""), wxITEM_CHECK);
 	menuView->AppendSeparator();
 	menuView->Append(ID_FullScreenToggle, wxString(_("&Full screen\t")) + _(SHORTCUT_VIEW_FULLSCREEN));
 
@@ -405,6 +411,7 @@ Frame::Frame(const wxString& title, const wxPoint& pos, const eCmdLine& cmdline)
 	UpdateBoolOption(menu_reset_to_service_rom, "reset to service rom");
 	UpdateBoolOption(menu_auto_play_image, "auto play image");
 	UpdateBoolOption(menu_view.filtering, "filtering");
+	UpdateBoolOption(menu_view.gigascreen, "gigascreen");
 	UpdateViewZoomMenu();
 
 	if(!cmdline.file_to_open.empty())
@@ -719,6 +726,16 @@ void Frame::OnViewFilteringToggle(wxCommandEvent& event)
 	else
 		SetStatusText(_("Filtering off"));
 	initGraphics();
+}
+//=============================================================================
+//	Frame::OnViewGigascreenToggle
+//-----------------------------------------------------------------------------
+void Frame::OnViewGigascreenToggle(wxCommandEvent& event)
+{
+	if (UpdateBoolOption(menu_view.gigascreen, "gigascreen", true))
+		SetStatusText(_("Gigascreen on"));
+	else
+		SetStatusText(_("Gigascreen off"));
 }
 //=============================================================================
 //	Frame::OnTrueSpeedToggle
