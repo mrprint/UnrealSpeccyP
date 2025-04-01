@@ -67,7 +67,7 @@ static struct eOptionZoom : public xOptions::eOptionInt
 	}
 } op_zoom;
 
-float OpZoom() { return op_zoom.Zoom(); }
+static float opZoom() { return op_zoom.Zoom(); }
 
 static struct eOptionFiltering : public xOptions::eOptionBool
 {
@@ -90,13 +90,19 @@ static struct eOptionScanlines : public xOptions::eOptionBool
 	virtual int Order() const { return 39; }
 } op_scanlines;
 
-static GLuint textureID1, textureID2, vao, vbo, ebo;
-static GLuint shaderProgram;
+static GLuint texture_id1, texture_id2, vao, vbo, ebo;
+static GLuint shader_program;
+static GLuint u_blend_factor;
+static GLuint u_scale;
+static GLuint u_show_scanlines;
+static GLuint u_texture1;
+static GLuint u_texture2;
+
 static dword tex1[512 * 256], *p_tex1 = tex1;
 static dword tex2[512 * 256], *p_tex2 = tex2;
 static int video_frame_last = -1;
 
-const char* vertexShaderSource = R"(
+const char* vertex_shader_source = R"(
 #version 330 core
 layout (location = 0) in vec2 aPos;
 layout (location = 1) in vec2 aTexCoord;
@@ -112,7 +118,7 @@ void main()
 }
 )";
 
-const char* fragmentShaderSource = R"(
+const char* fragment_shader_source = R"(
 #version 330 core
 out vec4 FragColor;
 in vec2 TexCoord;
@@ -142,18 +148,18 @@ void main()
 
 void initGraphics()
 {
-	glGenTextures(1, &textureID1);
-	glGenTextures(1, &textureID2);
+	glGenTextures(1, &texture_id1);
+	glGenTextures(1, &texture_id2);
 
 	GLint filter = op_filtering ? GL_LINEAR : GL_NEAREST;
 
-	glBindTexture(GL_TEXTURE_2D, textureID1);
+	glBindTexture(GL_TEXTURE_2D, texture_id1);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	glBindTexture(GL_TEXTURE_2D, textureID2);
+	glBindTexture(GL_TEXTURE_2D, texture_id2);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -186,30 +192,37 @@ void initGraphics()
 	glEnableVertexAttribArray(1);
 
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+	glShaderSource(vertexShader, 1, &vertex_shader_source, NULL);
 	glCompileShader(vertexShader);
 
 	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+	glShaderSource(fragmentShader, 1, &fragment_shader_source, NULL);
 	glCompileShader(fragmentShader);
 
-	shaderProgram = glCreateProgram();
-	glAttachShader(shaderProgram, vertexShader);
-	glAttachShader(shaderProgram, fragmentShader);
-	glLinkProgram(shaderProgram);
+	shader_program = glCreateProgram();
+	glAttachShader(shader_program, vertexShader);
+	glAttachShader(shader_program, fragmentShader);
+	glLinkProgram(shader_program);
 
 	glDeleteShader(vertexShader);
 	glDeleteShader(fragmentShader);
+
+	glUseProgram(shader_program);
+	u_blend_factor = glGetUniformLocation(shader_program, "blendFactor");
+	u_scale = glGetUniformLocation(shader_program, "scale");
+	u_show_scanlines = glGetUniformLocation(shader_program, "showScanlines");
+	u_texture1 = glGetUniformLocation(shader_program, "texture1");
+	u_texture2 = glGetUniformLocation(shader_program, "texture2");
 }
 
 void cleanupGraphics()
 {
-	glDeleteTextures(1, &textureID1);
-	glDeleteTextures(1, &textureID2);
+	glDeleteTextures(1, &texture_id1);
+	glDeleteTextures(1, &texture_id2);
 	glDeleteBuffers(1, &vbo);
 	glDeleteBuffers(1, &ebo);
 	glDeleteVertexArrays(1, &vao);
-	glDeleteProgram(shaderProgram);
+	glDeleteProgram(shader_program);
 }
 
 #ifdef USE_BIG_ENDIAN
@@ -287,35 +300,35 @@ void DrawGL(int _w, int _h)
 
 	PROFILER_SECTION(draw);
 
-	float aspectSrc = 320.0f / 240.0f;
-	float aspectDst = (float)_w / (float)_h;
-	float scaleX = 1.0f, scaleY = 1.0f;
+	float aspect_src = 320.0f / 240.0f;
+	float aspect_dst = (float)_w / (float)_h;
+	float scale_x = 1.0f, scale_y = 1.0f;
 
-	if (aspectDst > aspectSrc) {
-		scaleX = aspectSrc / aspectDst;
+	if (aspect_dst > aspect_src) {
+		scale_x = aspect_src / aspect_dst;
 	}
 	else {
-		scaleY = aspectDst / aspectSrc;
+		scale_y = aspect_dst / aspect_src;
 	}
 
 	glViewport(0, 0, _w, _h);
 
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	glUseProgram(shaderProgram);
-	glUniform1f(glGetUniformLocation(shaderProgram, "blendFactor"), (giga_enabled) ? 0.5f : 0.0f);
-	glUniform2f(glGetUniformLocation(shaderProgram, "scale"), scaleX * OpZoom(), scaleY * OpZoom());
-	glUniform1f(glGetUniformLocation(shaderProgram, "showScanlines"), op_scanlines);
+	glUseProgram(shader_program);
+	glUniform1f(u_blend_factor, (giga_enabled) ? 0.5f : 0.0f);
+	glUniform2f(u_scale, scale_x * opZoom(), scale_y * opZoom());
+	glUniform1f(u_show_scanlines, op_scanlines);
 
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, textureID1);
+	glBindTexture(GL_TEXTURE_2D, texture_id1);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, p_tex1);
-	glUniform1i(glGetUniformLocation(shaderProgram, "texture1"), 0);
+	glUniform1i(u_texture1, 0);
 
 	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, textureID2);
+	glBindTexture(GL_TEXTURE_2D, texture_id2);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, p_tex2);
-	glUniform1i(glGetUniformLocation(shaderProgram, "texture2"), 1);
+	glUniform1i(u_texture2, 1);
 
 	glBindVertexArray(vao);
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
