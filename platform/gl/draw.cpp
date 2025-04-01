@@ -83,6 +83,13 @@ static struct eOptionGigascreen : public xOptions::eOptionBool
 	virtual int Order() const { return 38; }
 } op_gigascreen;
 
+static struct eOptionScanlines : public xOptions::eOptionBool
+{
+	eOptionScanlines() { Set(false); }
+	virtual const char* Name() const { return "scanlines"; }
+	virtual int Order() const { return 39; }
+} op_scanlines;
+
 static GLuint textureID1, textureID2, vao, vbo, ebo;
 static GLuint shaderProgram;
 static dword tex1[512 * 256], *p_tex1 = tex1;
@@ -109,15 +116,27 @@ const char* fragmentShaderSource = R"(
 #version 330 core
 out vec4 FragColor;
 in vec2 TexCoord;
+
 uniform sampler2D texture1;
 uniform sampler2D texture2;
 uniform float blendFactor;
+uniform bool showScanlines;
 
 void main()
 {
     vec4 color1 = texture(texture1, TexCoord);
     vec4 color2 = texture(texture2, TexCoord);
-    FragColor = mix(color1, color2, blendFactor);
+	float scanlineEffect;
+	if (showScanlines)
+	{
+		scanlineEffect = 0.95 + 0.05 * sin(TexCoord.y * 512.0 * 3.14159);
+	}
+	else
+	{
+		scanlineEffect = 1.0;
+	}
+    vec4 color = mix(color1, color2, blendFactor) * scanlineEffect;
+    FragColor = color;
 }
 )";
 
@@ -286,6 +305,7 @@ void DrawGL(int _w, int _h)
 	glUseProgram(shaderProgram);
 	glUniform1f(glGetUniformLocation(shaderProgram, "blendFactor"), (giga_enabled) ? 0.5f : 0.0f);
 	glUniform2f(glGetUniformLocation(shaderProgram, "scale"), scaleX * OpZoom(), scaleY * OpZoom());
+	glUniform1f(glGetUniformLocation(shaderProgram, "showScanlines"), op_scanlines);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, textureID1);
