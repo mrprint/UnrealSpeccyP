@@ -102,7 +102,8 @@ static dword tex1[512 * 256], *p_tex1 = tex1;
 static dword tex2[512 * 256], *p_tex2 = tex2;
 static int video_frame_last = -1;
 
-const char* vertex_shader_source = R"(
+const char* vertex_shader_source = // vertex shader:
+R"(
 #version 330 core
 layout (location = 0) in vec2 aPos;
 layout (location = 1) in vec2 aTexCoord;
@@ -118,8 +119,10 @@ void main()
 }
 )";
 
-const char* fragment_shader_source = R"(
+const char* fragment_shader_source = // fragment shader:
+R"(
 #version 330 core
+
 out vec4 FragColor;
 in vec2 TexCoord;
 
@@ -130,18 +133,39 @@ uniform bool showScanlines;
 
 void main()
 {
-    vec4 color1 = texture(texture1, TexCoord);
-    vec4 color2 = texture(texture2, TexCoord);
-	float scanlineEffect;
-	if (showScanlines)
-	{
-		scanlineEffect = 0.95 + 0.05 * sin(TexCoord.y * 512.0 * 3.14159);
-	}
-	else
-	{
-		scanlineEffect = 1.0;
-	}
-    vec4 color = mix(color1, color2, blendFactor) * scanlineEffect;
+	vec4 color;
+
+    if (showScanlines)
+    {
+        float scanlineEffect = 0.95 + 0.05 * sin(TexCoord.y * 512.0 * 3.14159);
+		float blurRadius = 1.0 / (3.5 * 240.0);
+
+		vec4 blurredColor1 = texture(texture1, TexCoord) * 0.5;
+		blurredColor1 += texture(texture1, TexCoord - vec2(blurRadius, 0)) * 0.166;
+		blurredColor1 += texture(texture1, TexCoord - vec2(blurRadius * 0.666, 0)) * 0.167;
+		blurredColor1 += texture(texture1, TexCoord - vec2(blurRadius * 0.333, 0)) * 0.167;
+
+
+		if (blendFactor > 0.0001)
+		{
+			vec4 blurredColor2 = texture(texture2, TexCoord) * 0.5;
+			blurredColor2 += texture(texture2, TexCoord - vec2(blurRadius, 0)) * 0.166;
+			blurredColor2 += texture(texture2, TexCoord - vec2(blurRadius * 0.666, 0)) * 0.167;
+			blurredColor2 += texture(texture2, TexCoord - vec2(blurRadius * 0.333, 0)) * 0.167;
+			color = mix(blurredColor1, blurredColor2, blendFactor) * scanlineEffect;
+		}
+		else
+		{
+			color = blurredColor1 * scanlineEffect;
+		}
+    }
+    else
+    {
+        vec4 color1 = texture(texture1, TexCoord);
+		vec4 color2 = texture(texture2, TexCoord);
+		color = mix(color1, color2, blendFactor);
+    }
+
     FragColor = color;
 }
 )";
