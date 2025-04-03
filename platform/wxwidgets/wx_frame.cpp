@@ -418,6 +418,7 @@ Frame::Frame(const wxString& title, const wxPoint& pos, const eCmdLine& cmdline)
 	UpdateBoolOption(menu_auto_play_image, "auto play image");
 	UpdateBoolOption(menu_view.filtering, "filtering");
 	UpdateBoolOption(menu_view.gigascreen, "gigascreen");
+	UpdateBoolOption(menu_view.scanlines, "scanlines");
 	UpdateViewZoomMenu();
 
 	if(!cmdline.file_to_open.empty())
