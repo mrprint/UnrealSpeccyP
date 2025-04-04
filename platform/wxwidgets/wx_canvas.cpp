@@ -22,8 +22,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "../../options_common.h"
 
+#include <utility>
 #include <wx/wx.h>
 #include <wx/glcanvas.h>
+#include <wx/display.h>
 #include "wx_joystick.h"
 
 namespace xPlatform
@@ -34,9 +36,9 @@ void TranslateKey(int& key, dword& flags);
 
 void VsyncGL(bool on);
 void initGlew();
-void initGraphics();
+void initGraphics(int scr_width, int scr_height);
 void cleanupGraphics();
-void DrawGL(int w, int h);
+void DrawGL(int vport_width, int wport_height);
 
 wxWindow* CreateMouseCapture(wxWindow* parent);
 
@@ -65,6 +67,8 @@ private:
 	void OnMouseKey(wxMouseEvent& event);
 	void OnMouseCapture(wxCommandEvent& event);
 	void OnJoystickEvent(wxJoystickEvent& event);
+
+	static std::pair<int, int> getMaxDisplayResolution();
 
 private:
 	static int canvas_attr[];
@@ -111,7 +115,8 @@ GLCanvas::GLCanvas(wxWindow* parent) : eInherited(parent, wxID_ANY, canvas_attr)
 		SetCurrent(*gl_context);
 	}
 	initGlew();
-	initGraphics();
+	auto resolution = getMaxDisplayResolution();
+	initGraphics(resolution.first, resolution.second);
 	joysticks[0] = new eWxJoystick(this, wxJOYSTICK1);
 	joysticks[1] = new eWxJoystick(this, wxJOYSTICK2);
 }
@@ -261,6 +266,42 @@ void GLCanvas::OnJoystickEvent(wxJoystickEvent& event)
 wxWindow* CreateGLCanvas(wxWindow* parent)
 {
 	return new GLCanvas(parent);
+}
+
+//=============================================================================
+
+std::pair<int, int> GLCanvas::getMaxDisplayResolution()
+{
+	int displayCount = wxDisplay::GetCount();
+	if (displayCount == 0)
+	{
+		return { -1, -1 };
+	}
+
+	int maxWidth = -1;
+	int maxHeight = -1;
+
+	for (int i = 0; i < displayCount; ++i)
+	{
+		wxDisplay display(i);
+		if (!display.IsOk())
+			continue;
+
+		wxRect geometry = display.GetGeometry();
+		int width = geometry.GetWidth();
+		int height = geometry.GetHeight();
+
+		if (width * height > maxWidth * maxHeight)
+		{
+			maxWidth = width;
+			maxHeight = height;
+		}
+	}
+
+	if (maxWidth == -1 || maxHeight == -1)
+		return { -1, -1 };
+
+	return { maxWidth, maxHeight };
 }
 
 }

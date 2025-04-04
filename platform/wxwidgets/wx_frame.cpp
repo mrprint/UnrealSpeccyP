@@ -34,6 +34,9 @@ namespace xPlatform
 void InitSound();
 void DoneSound();
 
+void initGraphics(int scr_width, int scr_height);
+void cleanupGraphics();
+
 wxWindow* CreateGLCanvas(wxWindow* parent);
 
 static struct eOptionWindowState : public xOptions::eOptionString
@@ -87,7 +90,6 @@ private:
 	void OnFullScreenToggle(wxCommandEvent& event);
 	void OnResize(wxCommandEvent& event);
 	void OnViewMode(wxCommandEvent& event);
-	void OnViewFilteringToggle(wxCommandEvent& event);
 	void OnViewGigascreenToggle(wxCommandEvent& event);
 	void OnViewScanlinesToggle(wxCommandEvent& event);
 	void OnTapeToggle(wxCommandEvent& event);
@@ -119,7 +121,7 @@ private:
 	enum
 	{
 		ID_Reset = 1, ID_ResetToServiceRomToggle, ID_Size200, ID_Size300, ID_Minimize, ID_Zoom,
-		ID_ViewFillScreen, ID_ViewSmallBorder, ID_ViewNoBorder, ID_ViewFilteringToggle, ID_ViewGigascreenToggle, ID_ViewScanlinesToggle, ID_FullScreenToggle,
+		ID_ViewFillScreen, ID_ViewSmallBorder, ID_ViewNoBorder, ID_ViewGigascreenToggle, ID_ViewScanlinesToggle, ID_FullScreenToggle,
 		ID_TapeToggle, ID_TapeFastToggle, ID_AutoPlayImageToggle,
 		ID_JoyCursor, ID_JoyKempston, ID_JoyQAOPSpace, ID_JoySinclair2,
 		ID_PauseToggle, ID_TrueSpeedToggle, ID_Mode48kToggle,
@@ -141,7 +143,6 @@ private:
 		wxMenuItem* fill_screen;
 		wxMenuItem* small_border;
 		wxMenuItem* no_border;
-		wxMenuItem* filtering;
 		wxMenuItem* gigascreen;
 		wxMenuItem* scanlines;
 	};
@@ -182,7 +183,6 @@ BEGIN_EVENT_TABLE(Frame, wxFrame)
 	EVT_MENU(Frame::ID_ViewFillScreen, Frame::OnViewMode)
 	EVT_MENU(Frame::ID_ViewSmallBorder, Frame::OnViewMode)
 	EVT_MENU(Frame::ID_ViewNoBorder, Frame::OnViewMode)
-	EVT_MENU(Frame::ID_ViewFilteringToggle, Frame::OnViewFilteringToggle)
 	EVT_MENU(Frame::ID_ViewGigascreenToggle, Frame::OnViewGigascreenToggle)
 	EVT_MENU(Frame::ID_ViewScanlinesToggle, Frame::OnViewScanlinesToggle)
 	EVT_MENU(Frame::ID_FullScreenToggle, Frame::OnFullScreenToggle)
@@ -233,7 +233,6 @@ END_EVENT_TABLE()
 #define SHORTCUT_VIEW_FILL_SCREEN	"Ctrl+Shift+1"
 #define SHORTCUT_VIEW_SMALL_BORDER	"Ctrl+Shift+2"
 #define SHORTCUT_VIEW_NO_BORDER		"Ctrl+Shift+3"
-#define SHORTCUT_VIEW_FILTERING		"Ctrl+Shift+F"
 #define SHORTCUT_VIEW_GIGASCREEN	"Ctrl+Shift+G"
 #define SHORTCUT_VIEW_SCANLINES		"Ctrl+Shift+S"
 #define SHORTCUT_VIEW_FULLSCREEN	"Ctrl+F"
@@ -253,7 +252,6 @@ END_EVENT_TABLE()
 #define SHORTCUT_VIEW_FILL_SCREEN	"RawCtrl+Shift+1"
 #define SHORTCUT_VIEW_SMALL_BORDER	"RawCtrl+Shift+2"
 #define SHORTCUT_VIEW_NO_BORDER		"RawCtrl+Shift+3"
-#define SHORTCUT_VIEW_FILTERING		"RawCtrl+F"
 #define SHORTCUT_VIEW_GIGASCREEN	"RawCtrl+G"
 #define SHORTCUT_VIEW_SCANLINES		"RawCtrl+S"
 #define SHORTCUT_VIEW_FULLSCREEN	"RawCtrl+Ctrl+F"
@@ -348,7 +346,6 @@ Frame::Frame(const wxString& title, const wxPoint& pos, const eCmdLine& cmdline)
 	menu_view.small_border = menuView->Append(ID_ViewSmallBorder, wxString(_("Small border\t")) + _(SHORTCUT_VIEW_SMALL_BORDER), _(""), wxITEM_CHECK);
 	menu_view.no_border = menuView->Append(ID_ViewNoBorder, wxString(_("No border\t")) + _(SHORTCUT_VIEW_NO_BORDER), _(""), wxITEM_CHECK);
 	menuView->AppendSeparator();
-	menu_view.filtering = menuView->Append(ID_ViewFilteringToggle, wxString(_("Filtering\t")) + _(SHORTCUT_VIEW_FILTERING), _(""), wxITEM_CHECK);
 	menu_view.gigascreen = menuView->Append(ID_ViewGigascreenToggle, wxString(_("Gigascreen\t")) + _(SHORTCUT_VIEW_GIGASCREEN), _(""), wxITEM_CHECK);
 	menu_view.scanlines = menuView->Append(ID_ViewScanlinesToggle, wxString(_("CRT scanlines\t")) + _(SHORTCUT_VIEW_SCANLINES), _(""), wxITEM_CHECK);
 	menuView->AppendSeparator();
@@ -416,7 +413,6 @@ Frame::Frame(const wxString& title, const wxPoint& pos, const eCmdLine& cmdline)
 	UpdateBoolOption(menu_tape_fast, "fast tape");
 	UpdateBoolOption(menu_reset_to_service_rom, "reset to service rom");
 	UpdateBoolOption(menu_auto_play_image, "auto play image");
-	UpdateBoolOption(menu_view.filtering, "filtering");
 	UpdateBoolOption(menu_view.gigascreen, "gigascreen");
 	UpdateBoolOption(menu_view.scanlines, "scanlines");
 	UpdateViewZoomMenu();
@@ -717,22 +713,6 @@ void Frame::OnPauseToggle(wxCommandEvent& event)
 		Handler()->VideoPaused(false);
 		SetStatusText(_("Ready..."));
 	}
-}
-//=============================================================================
-//	Frame::OnViewFilteringToggle
-//-----------------------------------------------------------------------------
-
-void initGraphics();
-void cleanupGraphics();
-
-void Frame::OnViewFilteringToggle(wxCommandEvent& event)
-{
-	cleanupGraphics();
-	if(UpdateBoolOption(menu_view.filtering, "filtering", true))
-		SetStatusText(_("Filtering on"));
-	else
-		SetStatusText(_("Filtering off"));
-	initGraphics();
 }
 //=============================================================================
 //	Frame::OnViewGigascreenToggle

@@ -31,6 +31,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <GL/glew.h>
 
+constexpr int slines_cnt = 256;
+constexpr int sline_len = 512;
 
 PROFILER_DECLARE(draw_p);
 PROFILER_DECLARE(draw);
@@ -69,6 +71,7 @@ static struct eOptionZoom : public xOptions::eOptionInt
 
 static float opZoom() { return op_zoom.Zoom(); }
 
+// to deletion
 static struct eOptionFiltering : public xOptions::eOptionBool
 {
 	eOptionFiltering() { Set(true); }
@@ -90,21 +93,32 @@ static struct eOptionScanlines : public xOptions::eOptionBool
 	virtual int Order() const { return 39; }
 } op_scanlines;
 
-static GLuint texture_id1, texture_id2, vao, vbo, ebo;
-static GLuint shader_program;
+static GLuint fb_texture, texture_id1, texture_id2;
+static GLuint vao1, vbo1, ebo1;
+static GLuint vao2, vbo2, ebo2;
+static GLuint fbo;
+static GLuint fb_shader, screen_shader;
 static GLuint u_blend_factor;
 static GLuint u_scale;
+static GLuint u_simple_scale;
 static GLuint u_show_scanlines;
 static GLuint u_texture1;
 static GLuint u_texture2;
+static GLuint u_fb_texture;
 
-static dword tex1[512 * 256], *p_tex1 = tex1;
-static dword tex2[512 * 256], *p_tex2 = tex2;
+static int fb_width = sline_len, fb_height = slines_cnt;
+static int fb_scale = 4;
+
+GLenum err;
+
+static dword tex1[sline_len * slines_cnt], *p_tex1 = tex1;
+static dword tex2[sline_len * slines_cnt], *p_tex2 = tex2;
 static int video_frame_last = -1;
 
-const char* vertex_shader_source = // vertex shader:
+const char* vertex_src = // vertex shader:
 R"(
 #version 330 core
+
 layout (location = 0) in vec2 aPos;
 layout (location = 1) in vec2 aTexCoord;
 out vec2 TexCoord;
@@ -119,7 +133,7 @@ void main()
 }
 )";
 
-const char* fragment_shader_source = // fragment shader:
+const char* fb_fragment_src = // fragment shader:
 R"(
 #version 330 core
 
@@ -129,67 +143,91 @@ in vec2 TexCoord;
 uniform sampler2D texture1;
 uniform sampler2D texture2;
 uniform float blendFactor;
-uniform bool showScanlines;
 
 void main()
 {
-	vec4 color;
+	vec4 color1 = texture(texture1, TexCoord);
+    vec4 color2 = texture(texture2, TexCoord);
+	vec4 color = mix(color1, color2, blendFactor);
+	FragColor = color;
+}
+)";
+
+const char* screen_fragment_src =  // fragment shader:
+R"(
+#version 330 core
+
+in vec2 TexCoord;
+out vec4 FragColor;
+uniform sampler2D fbTexture;
+uniform bool showScanlines;
+
+#define slines_cnt 256.0
+#define sline_len 512.0
+
+void main()
+{
+    vec4 color;
 
     if (showScanlines)
     {
-        float scanlineEffect = 0.95 + 0.05 * sin(TexCoord.y * 512.0 * 3.14159);
-		float blurRadius = 1.0 / (3.5 * 240.0);
+        float scanlineEffect = 0.95 + 0.05 * sin(TexCoord.y * slines_cnt * 2 * 3.14159);
+		float blurRadius = 1.0 / (1.5 * sline_len);
 
-		vec4 blurredColor1 = texture(texture1, TexCoord) * 0.5;
-		blurredColor1 += texture(texture1, TexCoord - vec2(blurRadius, 0)) * 0.166;
-		blurredColor1 += texture(texture1, TexCoord - vec2(blurRadius * 0.666, 0)) * 0.167;
-		blurredColor1 += texture(texture1, TexCoord - vec2(blurRadius * 0.333, 0)) * 0.167;
+		vec4 blurredColor1 = texture(fbTexture, TexCoord) * 0.5;
+		blurredColor1 += texture(fbTexture, TexCoord - vec2(blurRadius, 0)) * 0.166;
+		blurredColor1 += texture(fbTexture, TexCoord - vec2(blurRadius * 0.666, 0)) * 0.167;
+		blurredColor1 += texture(fbTexture, TexCoord - vec2(blurRadius * 0.333, 0)) * 0.167;
 
-
-		if (blendFactor > 0.0001)
-		{
-			vec4 blurredColor2 = texture(texture2, TexCoord) * 0.5;
-			blurredColor2 += texture(texture2, TexCoord - vec2(blurRadius, 0)) * 0.166;
-			blurredColor2 += texture(texture2, TexCoord - vec2(blurRadius * 0.666, 0)) * 0.167;
-			blurredColor2 += texture(texture2, TexCoord - vec2(blurRadius * 0.333, 0)) * 0.167;
-			color = mix(blurredColor1, blurredColor2, blendFactor) * scanlineEffect;
-		}
-		else
-		{
-			color = blurredColor1 * scanlineEffect;
-		}
+		color = blurredColor1 * scanlineEffect;
     }
     else
     {
-        vec4 color1 = texture(texture1, TexCoord);
-		vec4 color2 = texture(texture2, TexCoord);
-		color = mix(color1, color2, blendFactor);
+		color = texture(fbTexture, TexCoord);
     }
 
     FragColor = color;
 }
 )";
 
-void initGraphics()
+void initGraphics(int scr_width, int scr_height)
 {
+	if (scr_height != -1)
+		fb_scale = ((scr_width > scr_height) ? scr_width : scr_height) * 2
+				   / ((scr_width > scr_height) ? sline_len : slines_cnt);
+
 	glGenTextures(1, &texture_id1);
 	glGenTextures(1, &texture_id2);
-
-	GLint filter = op_filtering ? GL_LINEAR : GL_NEAREST;
+	glGenTextures(1, &fb_texture);
 
 	glBindTexture(GL_TEXTURE_2D, texture_id1);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 	glBindTexture(GL_TEXTURE_2D, texture_id2);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	glBindTexture(GL_TEXTURE_2D, fb_texture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sline_len * fb_scale, slines_cnt * fb_scale, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 	float vertices[] = {
+		//  pos       // tex
+		-1.0f,  1.0f,  0.0f, 1.0f,
+		-1.0f, -1.0f,  0.0f, 0.0f,
+		 1.0f, -1.0f,  1.0f, 0.0f,
+		 1.0f,  1.0f,  1.0f, 1.0f
+	};
+
+	float vertices_scaled[] = {
 		-1.0f,  1.0f, 0.0f,            0.0f,
 		-1.0f, -1.0f, 0.0f,            240.0f / 256.0f,
 		 1.0f, -1.0f, 320.0f / 512.0f, 240.0f / 256.0f,
@@ -198,16 +236,16 @@ void initGraphics()
 
 	unsigned int indices[] = { 0, 1, 2, 0, 2, 3 };
 
-	glGenVertexArrays(1, &vao);
-	glGenBuffers(1, &vbo);
-	glGenBuffers(1, &ebo);
+	glGenVertexArrays(1, &vao1);
+	glGenBuffers(1, &vbo1);
+	glGenBuffers(1, &ebo1);
 
-	glBindVertexArray(vao);
+	glBindVertexArray(vao1);
 
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo1);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices_scaled), vertices_scaled, GL_STATIC_DRAW);
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo1);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
@@ -215,38 +253,88 @@ void initGraphics()
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
 	glEnableVertexAttribArray(1);
 
+	glGenVertexArrays(1, &vao2);
+	glGenBuffers(1, &vbo2);
+	glGenBuffers(1, &ebo2);
+
+	glBindVertexArray(vao2);
+
+	glBindBuffer(GL_ARRAY_BUFFER, vbo2);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo2);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+	glEnableVertexAttribArray(1);
+
+	// Create and attach framebuffer
+	glGenFramebuffers(1, &fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fb_texture, 0);
+
+	/*if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+	{
+		fprintf(stderr, "Error: Framebuffer not complete!\n");
+	}*/
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vertexShader, 1, &vertex_shader_source, NULL);
+	glShaderSource(vertexShader, 1, &vertex_src, NULL);
 	glCompileShader(vertexShader);
 
 	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragmentShader, 1, &fragment_shader_source, NULL);
+	glShaderSource(fragmentShader, 1, &fb_fragment_src, NULL);
 	glCompileShader(fragmentShader);
 
-	shader_program = glCreateProgram();
-	glAttachShader(shader_program, vertexShader);
-	glAttachShader(shader_program, fragmentShader);
-	glLinkProgram(shader_program);
+	GLuint simpleFragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(simpleFragmentShader, 1, &screen_fragment_src, NULL);
+	glCompileShader(simpleFragmentShader);
+
+	fb_shader = glCreateProgram();
+	glAttachShader(fb_shader, vertexShader);
+	glAttachShader(fb_shader, fragmentShader);
+	glLinkProgram(fb_shader);
+
+	screen_shader = glCreateProgram();
+	glAttachShader(screen_shader, vertexShader);
+	glAttachShader(screen_shader, simpleFragmentShader);
+	glLinkProgram(screen_shader);
 
 	glDeleteShader(vertexShader);
 	glDeleteShader(fragmentShader);
+	glDeleteShader(simpleFragmentShader);
 
-	glUseProgram(shader_program);
-	u_blend_factor = glGetUniformLocation(shader_program, "blendFactor");
-	u_scale = glGetUniformLocation(shader_program, "scale");
-	u_show_scanlines = glGetUniformLocation(shader_program, "showScanlines");
-	u_texture1 = glGetUniformLocation(shader_program, "texture1");
-	u_texture2 = glGetUniformLocation(shader_program, "texture2");
+	glUseProgram(fb_shader);
+	u_scale = glGetUniformLocation(fb_shader, "scale");
+
+	u_blend_factor = glGetUniformLocation(fb_shader, "blendFactor");
+	u_texture1 = glGetUniformLocation(fb_shader, "texture1");
+	u_texture2 = glGetUniformLocation(fb_shader, "texture2");
+
+	glUseProgram(screen_shader);
+	u_simple_scale = glGetUniformLocation(screen_shader, "scale");
+
+	u_fb_texture = glGetUniformLocation(screen_shader, "fbTexture");
+	u_show_scanlines = glGetUniformLocation(screen_shader, "showScanlines");
 }
 
 void cleanupGraphics()
 {
 	glDeleteTextures(1, &texture_id1);
 	glDeleteTextures(1, &texture_id2);
-	glDeleteBuffers(1, &vbo);
-	glDeleteBuffers(1, &ebo);
-	glDeleteVertexArrays(1, &vao);
-	glDeleteProgram(shader_program);
+	glDeleteTextures(1, &fb_texture);
+	glDeleteFramebuffers(1, &fbo);
+	glDeleteBuffers(1, &vbo1);
+	glDeleteBuffers(1, &ebo1);
+	glDeleteVertexArrays(1, &vao1);
+	glDeleteBuffers(1, &vbo2);
+	glDeleteBuffers(1, &ebo2);
+	glDeleteVertexArrays(1, &vao2);
+	glDeleteProgram(fb_shader);
+	glDeleteProgram(screen_shader);
 }
 
 #ifdef USE_BIG_ENDIAN
@@ -278,7 +366,7 @@ static struct eCachedColors
 }
 color_cache;
 
-void DrawGL(int _w, int _h)
+void DrawGL(int vport_width, int wport_height)
 {
 	PROFILER_BEGIN(draw_p);
 
@@ -325,7 +413,7 @@ void DrawGL(int _w, int _h)
 	PROFILER_SECTION(draw);
 
 	float aspect_src = 320.0f / 240.0f;
-	float aspect_dst = (float)_w / (float)_h;
+	float aspect_dst = (float)vport_width / (float)wport_height;
 	float scale_x = 1.0f, scale_y = 1.0f;
 
 	if (aspect_dst > aspect_src) {
@@ -335,29 +423,46 @@ void DrawGL(int _w, int _h)
 		scale_y = aspect_dst / aspect_src;
 	}
 
-	glViewport(0, 0, _w, _h);
+	// 1st pass: render to FBO
+
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glViewport(0, 0, sline_len * fb_scale, slines_cnt * fb_scale);
 
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	glUseProgram(shader_program);
+	glUseProgram(fb_shader);
 	glUniform1f(u_blend_factor, (giga_enabled) ? 0.5f : 0.0f);
-	glUniform2f(u_scale, scale_x * opZoom(), scale_y * opZoom());
-	glUniform1f(u_show_scanlines, op_scanlines);
+	glUniform2f(u_scale, 1.0f, 1.0f);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture_id1);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, p_tex1);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, sline_len, slines_cnt, 0, GL_RGBA, GL_UNSIGNED_BYTE, p_tex1);
 	glUniform1i(u_texture1, 0);
 
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, texture_id2);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 512, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, p_tex2);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, sline_len, slines_cnt, 0, GL_RGBA, GL_UNSIGNED_BYTE, p_tex2);
 	glUniform1i(u_texture2, 1);
 
-	glBindVertexArray(vao);
+	glBindVertexArray(vao2);
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-	glBindVertexArray(0);
+	// 2nd pass: render FBO texture to screen (downsampled)
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, vport_width, wport_height);
+
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glUseProgram(screen_shader);
+	glUniform1f(u_show_scanlines, op_scanlines);
+	glUniform2f(u_simple_scale, scale_x * opZoom(), scale_y * opZoom());
+	glUniform1i(u_fb_texture, 0);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, fb_texture);
+
+	glBindVertexArray(vao1);
+	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
 }
