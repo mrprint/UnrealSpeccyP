@@ -106,8 +106,7 @@ static GLuint u_texture1;
 static GLuint u_texture2;
 static GLuint u_fb_texture;
 
-static int fb_width = sline_len, fb_height = slines_cnt;
-static int fb_scale = 4;
+static int fb_width = sline_len * 4, fb_height = slines_cnt * 4;
 
 GLenum err;
 
@@ -193,8 +192,12 @@ void main()
 void initGraphics(int scr_width, int scr_height)
 {
 	if (scr_height != -1)
-		fb_scale = ((scr_width > scr_height) ? scr_width : scr_height) * 2
-				   / ((scr_width > scr_height) ? sline_len : slines_cnt);
+	{
+		int scale = ((scr_width > scr_height) ? scr_width : scr_height) * 2
+			/ ((scr_width > scr_height) ? sline_len : slines_cnt);
+		fb_width = sline_len * scale;
+		fb_height = slines_cnt * scale;
+	}
 
 	glGenTextures(1, &texture_id1);
 	glGenTextures(1, &texture_id2);
@@ -213,7 +216,7 @@ void initGraphics(int scr_width, int scr_height)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 	glBindTexture(GL_TEXTURE_2D, fb_texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sline_len * fb_scale, slines_cnt * fb_scale, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, fb_width, fb_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -426,7 +429,7 @@ void DrawGL(int vport_width, int wport_height)
 	// 1st pass: render to FBO
 
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-	glViewport(0, 0, sline_len * fb_scale, slines_cnt * fb_scale);
+	glViewport(0, 0, fb_width, fb_height);
 
 	glClear(GL_COLOR_BUFFER_BIT);
 
