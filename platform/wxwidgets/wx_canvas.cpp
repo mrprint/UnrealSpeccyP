@@ -77,6 +77,7 @@ private:
     wxGLContext* gl_context;
 	wxWindow* mouse_capture;
 	eWxJoystick* joysticks[2];
+	bool gl_initialized;
 };
 int GLCanvas::canvas_attr[] = { WX_GL_RGBA, WX_GL_DOUBLEBUFFER, 0 };
 
@@ -98,7 +99,7 @@ END_EVENT_TABLE()
 //=============================================================================
 //	GLCanvas::GLCanvas
 //-----------------------------------------------------------------------------
-GLCanvas::GLCanvas(wxWindow* parent) : eInherited(parent, wxID_ANY, canvas_attr), mouse_capture(NULL)
+GLCanvas::GLCanvas(wxWindow* parent) : eInherited(parent, wxID_ANY, canvas_attr), mouse_capture(NULL), gl_initialized(false)
 {
 	wxGLContextAttrs ctx_attrs;
 	ctx_attrs.PlatformDefaults().CoreProfile().OGLVersion(3, 3).EndList();
@@ -110,13 +111,6 @@ GLCanvas::GLCanvas(wxWindow* parent) : eInherited(parent, wxID_ANY, canvas_attr)
 		delete gl_context;
 		gl_context = nullptr;
 	}
-	else
-	{
-		SetCurrent(*gl_context);
-	}
-	initGlew();
-	auto resolution = getMaxDisplayResolution();
-	initGraphics(resolution.first, resolution.second);
 	joysticks[0] = new eWxJoystick(this, wxJOYSTICK1);
 	joysticks[1] = new eWxJoystick(this, wxJOYSTICK2);
 }
@@ -143,9 +137,18 @@ void GLCanvas::OnPaint(wxPaintEvent& event)
 //-----------------------------------------------------------------------------
 void GLCanvas::Paint(wxDC& dc)
 {
+	if (!IsShown() || !gl_context)
+		return;
 	int w, h;
 	GetClientSize(&w, &h);
     SetCurrent(*gl_context);
+	if (!gl_initialized)
+	{
+		initGlew();
+		auto resolution = getMaxDisplayResolution();
+		initGraphics(resolution.first, resolution.second);
+		gl_initialized = true;
+	}
 	DrawGL(w, h);
 	SwapBuffers();
 }

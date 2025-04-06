@@ -6,6 +6,9 @@ endif()
 if(POLICY CMP0004)
 cmake_policy(SET CMP0004 OLD)
 endif()
+if(POLICY CMP0072)
+cmake_policy(SET CMP0072 NEW)
+endif()
 
 
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)

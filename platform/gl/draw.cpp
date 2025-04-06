@@ -42,6 +42,7 @@ namespace xPlatform
 
 void initGlew()
 {
+	glewExperimental = GL_TRUE;
 	glewInit();
 }
 
