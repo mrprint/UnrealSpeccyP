@@ -101,11 +101,11 @@ END_EVENT_TABLE()
 GLCanvas::GLCanvas(wxWindow* parent) : eInherited(parent, wxID_ANY, canvas_attr), mouse_capture(NULL)
 {
 	wxGLContextAttrs ctx_attrs;
-	ctx_attrs.PlatformDefaults().CoreProfile().OGLVersion(3, 2).EndList();
+	ctx_attrs.PlatformDefaults().CoreProfile().OGLVersion(3, 3).EndList();
     gl_context = new wxGLContext(this, nullptr, &ctx_attrs);
 	if (!gl_context->IsOK())
 	{
-		wxMessageBox("An OpenGL 3.2 capable driver is required.\nThe app will end now.",
+		wxMessageBox("An OpenGL 3.3 capable driver is required.\nThe app will end now.",
 			"OpenGL version error", wxOK | wxICON_INFORMATION, this);
 		delete gl_context;
 		gl_context = nullptr;
