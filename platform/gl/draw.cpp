@@ -108,8 +108,6 @@ static GLuint u_fb_texture;
 
 static int fb_width = sline_len * 4, fb_height = slines_cnt * 4;
 
-GLenum err;
-
 static dword tex1[sline_len * slines_cnt], *p_tex1 = tex1;
 static dword tex2[sline_len * slines_cnt], *p_tex2 = tex2;
 static int video_frame_last = -1;
