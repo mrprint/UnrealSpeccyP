@@ -223,7 +223,7 @@ void OpSound(eSound s) { op_sound.Set(s); }
 
 static struct eOptionJoy : public xOptions::eOptionInt
 {
-	eOptionJoy() { Set(J_FIRST); }
+	eOptionJoy() { Set(J_FIRST); storeable = true; }
 	virtual const char* Name() const { return "joystick"; }
 	virtual const char** Values() const
 	{
@@ -295,10 +295,10 @@ bool OpQuit() { return op_quit; }
 void OpQuit(bool v) { op_quit.Set(v); }
 
 eDrive OpDrive() { return (eDrive)(int)op_drive; }
-void OpDrive(eDrive d) { op_drive.Set(d); }
+void OpDrive(eDrive d) { op_drive.Set(d); op_drive.Apply(); }
 
 eJoystick OpJoystick() { return (eJoystick)(int)op_joy; }
-void OpJoystick(eJoystick v) { op_joy.Set(v); }
+void OpJoystick(eJoystick v) { op_joy.Set(v); op_joy.Apply(); }
 dword OpJoyKeyFlags()
 {
 	switch(op_joy)
