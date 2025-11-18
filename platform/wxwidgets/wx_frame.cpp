@@ -23,7 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "../../tools/options.h"
 #include "../../options_common.h"
 #include "wx_cmdline.h"
-#include "wx_optionsdialog.h" // NEW: Include for dialog
+#include "wx_optionsdialog.h"
 
 #include <wx/wx.h>
 #include <wx/dnd.h>
@@ -93,6 +93,7 @@ namespace xPlatform
 		void OnViewMode(wxCommandEvent& event);
 		void OnViewGigascreenToggle(wxCommandEvent& event);
 		void OnViewScanlinesToggle(wxCommandEvent& event);
+		void OnViewPalEffectsToggle(wxCommandEvent& event);
 		void OnTapeToggle(wxCommandEvent& event);
 		void OnTapeFastToggle(wxCommandEvent& event);
 		void OnPauseToggle(wxCommandEvent& event);
@@ -106,7 +107,7 @@ namespace xPlatform
 		void OnQuickSave(wxCommandEvent& event);
 		void OnMinimize(wxCommandEvent& event);
 		void OnZoom(wxCommandEvent& event);
-		void OnOptions(wxCommandEvent& event); // NEW: Open dialog handler
+		void OnOptions(wxCommandEvent& event);
 		void UpdateViewZoomMenu();
 		bool UpdateBoolOption(wxMenuItem* o, const char* name, bool toggle = false) const; // returns option value
 		bool RestoreWindowState();
@@ -119,7 +120,8 @@ namespace xPlatform
 			ID_TapeToggle, ID_TapeFastToggle, ID_AutoPlayImageToggle,
 			ID_PauseToggle, ID_TrueSpeedToggle, ID_Mode48kToggle,
 			ID_QuickSave, ID_QuickLoad,
-			ID_Options // NEW: Options dialog menu item
+			ID_Options,
+			ID_ViewPalEffectsToggle
 		};
 		struct eViewMenuItems
 		{
@@ -128,6 +130,7 @@ namespace xPlatform
 			wxMenuItem* no_border;
 			wxMenuItem* gigascreen;
 			wxMenuItem* scanlines;
+			wxMenuItem* pal_effects;
 		};
 		eViewMenuItems menu_view;
 		wxMenuItem* menu_pause;
@@ -164,6 +167,7 @@ namespace xPlatform
 		EVT_MENU(Frame::ID_ViewNoBorder, Frame::OnViewMode)
 		EVT_MENU(Frame::ID_ViewGigascreenToggle, Frame::OnViewGigascreenToggle)
 		EVT_MENU(Frame::ID_ViewScanlinesToggle, Frame::OnViewScanlinesToggle)
+		EVT_MENU(Frame::ID_ViewPalEffectsToggle, Frame::OnViewPalEffectsToggle)
 		EVT_MENU(Frame::ID_FullScreenToggle, Frame::OnFullScreenToggle)
 		EVT_MENU(Frame::ID_TapeToggle, Frame::OnTapeToggle)
 		EVT_MENU(Frame::ID_TapeFastToggle, Frame::OnTapeFastToggle)
@@ -177,7 +181,7 @@ namespace xPlatform
 		EVT_COMMAND(wxID_ANY, evtMouseCapture, Frame::OnMouseCapture)
 		EVT_COMMAND(wxID_ANY, evtSetStatusText, Frame::OnSetStatusText)
 		EVT_COMMAND(wxID_ANY, evtExitFullScreen, Frame::OnExitFullScreen)
-		EVT_MENU(Frame::ID_Options, Frame::OnOptions) // NEW: Add event handler for dialog
+		EVT_MENU(Frame::ID_Options, Frame::OnOptions)
 		END_EVENT_TABLE()
 
 #ifndef _MAC
@@ -198,6 +202,7 @@ namespace xPlatform
 #define SHORTCUT_VIEW_NO_BORDER		"Ctrl+Shift+3"
 #define SHORTCUT_VIEW_GIGASCREEN	"Ctrl+Shift+G"
 #define SHORTCUT_VIEW_SCANLINES		"Ctrl+Shift+S"
+#define SHORTCUT_VIEW_PAL			"Ctrl+Shift+P"
 #define SHORTCUT_VIEW_FULLSCREEN	"Ctrl+F"
 #else//_MAC
 #define SHORTCUT_OPEN				"Ctrl+O"
@@ -217,6 +222,7 @@ namespace xPlatform
 #define SHORTCUT_VIEW_NO_BORDER		"RawCtrl+Shift+3"
 #define SHORTCUT_VIEW_GIGASCREEN	"RawCtrl+G"
 #define SHORTCUT_VIEW_SCANLINES		"RawCtrl+S"
+#define SHORTCUT_VIEW_PAL			"RawCtrl+P"
 #define SHORTCUT_VIEW_FULLSCREEN	"RawCtrl+Ctrl+F"
 #endif//_MAC
 
@@ -265,7 +271,7 @@ namespace xPlatform
 		menuDevice->Append(ID_Reset, wxString(_("&Reset\t")) + _(SHORTCUT_RESET));
 
 		menuDevice->AppendSeparator();
-		menuDevice->Append(ID_Options, _("&Options...")); // NEW: Add "Options..." menu item
+		menuDevice->Append(ID_Options, _("&Options..."));
 
 		wxMenu* menuWindow = new wxMenu;
 #ifdef _MAC
@@ -284,6 +290,7 @@ namespace xPlatform
 		menuView->AppendSeparator();
 		menu_view.gigascreen = menuView->Append(ID_ViewGigascreenToggle, wxString(_("Gigascreen\t")) + _(SHORTCUT_VIEW_GIGASCREEN), _(""), wxITEM_CHECK);
 		menu_view.scanlines = menuView->Append(ID_ViewScanlinesToggle, wxString(_("CRT scanlines\t")) + _(SHORTCUT_VIEW_SCANLINES), _(""), wxITEM_CHECK);
+		menu_view.pal_effects = menuView->Append(ID_ViewPalEffectsToggle, wxString(_("PAL effects\t")) + _(SHORTCUT_VIEW_PAL), _(""), wxITEM_CHECK);
 		menuView->AppendSeparator();
 		menuView->Append(ID_FullScreenToggle, wxString(_("&Full screen\t")) + _(SHORTCUT_VIEW_FULLSCREEN));
 
@@ -347,6 +354,7 @@ namespace xPlatform
 		UpdateBoolOption(menu_auto_play_image, "auto play image");
 		UpdateBoolOption(menu_view.gigascreen, "gigascreen");
 		UpdateBoolOption(menu_view.scanlines, "scanlines");
+		UpdateBoolOption(menu_view.pal_effects, "pal effects");
 		UpdateViewZoomMenu();
 
 		if (!cmdline.file_to_open.empty())
@@ -613,6 +621,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.\n"
 			SetStatusText(_("CRT scanlines simulation off"));
 	}
 	//=============================================================================
+	//	Frame::OnViewPalEffectsToggle
+	//-----------------------------------------------------------------------------
+	void Frame::OnViewPalEffectsToggle(wxCommandEvent& event)
+	{
+		if (UpdateBoolOption(menu_view.pal_effects, "pal effects", true))
+			SetStatusText(_("PAL effects on"));
+		else
+			SetStatusText(_("PAL effects off"));
+	}
+	//=============================================================================
 	//	Frame::OnTrueSpeedToggle
 	//-----------------------------------------------------------------------------
 	void Frame::OnTrueSpeedToggle(wxCommandEvent& event)
@@ -758,7 +776,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.\n"
 	void Frame::OnOptions(wxCommandEvent& event)
 	{
 		OptionsDialog dialog(this);
-		dialog.ShowModal();
+		int result = dialog.ShowModal();
+		if (result == wxID_OK || result == wxID_APPLY) {
+			// Refresh menu items that are in the options dialog
+			UpdateBoolOption(menu_view.gigascreen, "gigascreen");
+			UpdateBoolOption(menu_view.scanlines, "scanlines");
+			UpdateBoolOption(menu_view.pal_effects, "pal effects");
+			// Add any other options from the dialog here
+		}
 	}
 
 	//=============================================================================

@@ -419,9 +419,9 @@ void eSpeccyHandler::AudioSetSampleRate(dword sample_rate)
 
 
 static void SetupSoundChip();
-static struct eOptionSoundChip : public xOptions::eOptionInt
+static struct eOptionSoundChip : public xOptions::eOptionEnum
 {
-	eOptionSoundChip() { Set(SC_AY); }
+	eOptionSoundChip() { Set(DEFAULT_SOUND_CHIP); }
 	enum eType { SC_FIRST, SC_AY = SC_FIRST, SC_YM, SC_LAST };
 	virtual const char* Name() const { return "sound chip"; }
 	virtual const char** Values() const
@@ -431,7 +431,7 @@ static struct eOptionSoundChip : public xOptions::eOptionInt
 	}
 	virtual void Change(bool next = true)
 	{
-		eOptionInt::Change(SC_FIRST, SC_LAST, next);
+		eOptionEnum::Change(SC_FIRST, SC_LAST, next);
 		Apply();
 	}
 	virtual void Apply()
@@ -441,10 +441,9 @@ static struct eOptionSoundChip : public xOptions::eOptionInt
 	virtual int Order() const { return 24; }
 }op_sound_chip;
 
-static struct eOptionAYStereo : public xOptions::eOptionInt
+static struct eOptionAYStereo : public xOptions::eOptionEnum
 {
-	eOptionAYStereo() { Set(AS_ABC); }
-	enum eMode { AS_FIRST, AS_ABC = AS_FIRST, AS_ACB, AS_BAC, AS_BCA, AS_CAB, AS_CBA, AS_MONO, AS_LAST };
+	eOptionAYStereo() { Set(DEFAULT_STEREO); }
 	virtual const char* Name() const { return "ay stereo"; }
 	virtual const char** Values() const
 	{
@@ -453,7 +452,7 @@ static struct eOptionAYStereo : public xOptions::eOptionInt
 	}
 	virtual void Change(bool next = true)
 	{
-		eOptionInt::Change(AS_FIRST, AS_LAST, next);
+		eOptionEnum::Change(AS_FIRST, AS_LAST, next);
 		Apply();
 	}
 	virtual void Apply()
@@ -466,19 +465,19 @@ static struct eOptionAYStereo : public xOptions::eOptionInt
 void SetupSoundChip()
 {
 	eOptionSoundChip::eType chip = (eOptionSoundChip::eType)(int)op_sound_chip;
-	eOptionAYStereo::eMode stereo = (eOptionAYStereo::eMode)(int)op_ay_stereo;
+	xPlatform::eMode stereo = (xPlatform::eMode)(int)op_ay_stereo;
 	eAY* ay = sh.speccy->Device<eAY>();
 	const SNDCHIP_PANTAB* sndr_pan = SNDR_PAN_MONO;
 	switch(stereo)
 	{
-	case eOptionAYStereo::AS_ABC: sndr_pan = SNDR_PAN_ABC; break;
-	case eOptionAYStereo::AS_ACB: sndr_pan = SNDR_PAN_ACB; break;
-	case eOptionAYStereo::AS_BAC: sndr_pan = SNDR_PAN_BAC; break;
-	case eOptionAYStereo::AS_BCA: sndr_pan = SNDR_PAN_BCA; break;
-	case eOptionAYStereo::AS_CAB: sndr_pan = SNDR_PAN_CAB; break;
-	case eOptionAYStereo::AS_CBA: sndr_pan = SNDR_PAN_CBA; break;
-	case eOptionAYStereo::AS_MONO: sndr_pan = SNDR_PAN_MONO; break;
-	case eOptionAYStereo::AS_LAST: break;
+	case xPlatform::AS_ABC: sndr_pan = SNDR_PAN_ABC; break;
+	case xPlatform::AS_ACB: sndr_pan = SNDR_PAN_ACB; break;
+	case xPlatform::AS_BAC: sndr_pan = SNDR_PAN_BAC; break;
+	case xPlatform::AS_BCA: sndr_pan = SNDR_PAN_BCA; break;
+	case xPlatform::AS_CAB: sndr_pan = SNDR_PAN_CAB; break;
+	case xPlatform::AS_CBA: sndr_pan = SNDR_PAN_CBA; break;
+	case xPlatform::AS_MONO: sndr_pan = SNDR_PAN_MONO; break;
+	case xPlatform::AS_LAST: break;
 	}
 	ay->SetChip(chip == eOptionSoundChip::SC_AY ? eAY::CHIP_AY : eAY::CHIP_YM);
 	ay->SetVolumes(0x7FFF, chip == eOptionSoundChip::SC_AY ? SNDR_VOL_AY : SNDR_VOL_YM, sndr_pan);

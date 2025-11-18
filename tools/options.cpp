@@ -18,6 +18,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "options.h"
 #include "../platform/platform.h"
+#include <string>
+#include <stdexcept>
+#include <cstdlib>
 
 #ifdef USE_CONFIG
 #include <tinyxml2.h>
@@ -36,7 +39,22 @@ eOptionB* eOptionB::Find(const char* name)
 	}
 	return NULL;
 }
-void eOptionInt::Change(int f, int l, bool next)
+
+const char* eOptionInt::Value() const
+{
+	static std::string buffer;
+	buffer = std::to_string(value);
+	return buffer.c_str();
+}
+
+void eOptionInt::Value(const char* v)
+{
+	if (!v)
+		return;
+	value = std::stoi(v);
+}
+
+void eOptionEnum::Change(int f, int l, bool next)
 {
 	if(next)
 	{
@@ -51,14 +69,14 @@ void eOptionInt::Change(int f, int l, bool next)
 			Set(l - 1);
 	}
 }
-const char*	eOptionInt::Value() const
+const char*	eOptionEnum::Value() const
 {
 	const char** vals = Values();
 	if(!vals)
 		return NULL;
 	return vals[value];
 }
-void eOptionInt::Value(const char* v)
+void eOptionEnum::Value(const char* v)
 {
 	const char** vals = Values();
 	if(!vals)

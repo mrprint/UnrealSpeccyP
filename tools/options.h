@@ -66,6 +66,14 @@ class eOptionInt : public eOption<int>
 {
 public:
 	eOptionInt() { Set(0); }
+	virtual const char* Value() const;
+	virtual void Value(const char* v);
+};
+
+class eOptionEnum : public eOption<int>
+{
+public:
+	eOptionEnum() { Set(0); }
 	virtual const char*	Value() const;
 	virtual void Value(const char* v);
 protected:

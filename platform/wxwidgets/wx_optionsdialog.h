@@ -9,6 +9,10 @@
 #include <wx/radiobut.h>
 #include <wx/combobox.h>
 #include <wx/checkbox.h>
+#include <wx/stattext.h>
+#include <wx/slider.h>
+#include <wx/bmpbuttn.h>
+#include <wx/artprov.h>
 
 class wxWindow;
 class wxCommandEvent;
@@ -19,6 +23,16 @@ namespace xPlatform {
 		ID_RADIO_SOUND = 101,
 		ID_RADIO_DRIVE,
 		ID_RADIO_JOYSTICK,
+		ID_CHECK_GIGASCREEN = 201,
+		ID_CHECK_SCANLINES,
+		ID_CHECK_PAL_EFFECTS,
+		ID_CHECK_DOT_CRAWL,
+		ID_CHECK_PHASE_MOD,
+		// Add reset button IDs
+		ID_RESET_AUDIO = 301,
+		ID_RESET_VIDEO,
+		ID_RESET_INPUT,
+		ID_RESET_DRIVE,
 	};
 
 	//=============================================================================
@@ -35,8 +49,16 @@ namespace xPlatform {
 		void OnStereoChanged(wxCommandEvent& event);
 		void OnBetaDriveChanged(wxCommandEvent& event);
 		void OnJoyTypeChanged(wxCommandEvent& event);
+		void OnCheckboxChanged(wxCommandEvent& event);
+		void OnSliderChanged(wxCommandEvent& event);
 		void OnApply(wxCommandEvent& event);
 		void OnOK(wxCommandEvent& event);
+
+		// Reset button handlers
+		void OnResetAudio(wxCommandEvent& event);
+		void OnResetVideo(wxCommandEvent& event);
+		void OnResetInput(wxCommandEvent& event);
+		void OnResetDrive(wxCommandEvent& event);
 
 		// Local state (not written to xOptions until OK/Apply)
 		int sound_chip;
@@ -58,8 +80,32 @@ namespace xPlatform {
 		wxRadioButton* radioCursor_;
 		wxRadioButton* radioQaoSpace_;
 		wxRadioButton* radioSinclair2_;
+		wxCheckBox* checkGigascreen_;
+		wxCheckBox* checkScanlines_;
+		wxCheckBox* checkPalEffects_;
+		wxCheckBox* checkDotCrawl_;
+		wxCheckBox* checkPhaseMod_;
+		wxSlider* sliderPalStrength_;
+		wxStaticText* labelPalStrength_;
+		wxSlider* sliderBeamSpread_;
+		wxStaticText* labelBeamSpread_;
 
+		bool gigascreen_enabled;
+		bool scanlines_enabled;
+		bool pal_effects_enabled;
+		bool dot_crawl_enabled;
+		bool phase_mod_enabled;
+		int pal_strength_val;
+		int beam_spread_val;
+
+		void ReflectSettings();
 		void LoadCurrentSettings();
+
+		// Reset buttons (one per section)
+		wxBitmapButton* resetAudioBtn_;
+		wxBitmapButton* resetVideoBtn_;
+		wxBitmapButton* resetInputBtn_;
+		wxBitmapButton* resetDriveBtn_;
 	};
 
 }//namespace xPlatform

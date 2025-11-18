@@ -26,7 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 namespace xPlatform
 {
 
-static struct eOptionStoreSlot : public xOptions::eOptionInt
+static struct eOptionStoreSlot : public xOptions::eOptionEnum
 {
 	virtual const char* Name() const { return "save slot"; }
 	virtual const char** Values() const
@@ -36,7 +36,7 @@ static struct eOptionStoreSlot : public xOptions::eOptionInt
 	}
 	virtual void Change(bool next = true)
 	{
-		eOptionInt::Change(0, 10, next);
+		eOptionEnum::Change(0, 10, next);
 	}
 	virtual int Order() const { return 7; }
 } op_save_slot;
@@ -142,7 +142,7 @@ static struct eOptionLoadState : public eOptionSave
 	virtual int Order() const { return 6; }
 } op_load_state;
 
-static struct eOptionTape : public xOptions::eOptionInt
+static struct eOptionTape : public xOptions::eOptionEnum
 {
 	eOptionTape() { storeable = false; }
 	virtual const char* Name() const { return "tape"; }
@@ -176,9 +176,9 @@ static struct eOptionPause : public xOptions::eOptionBool
 	virtual int Order() const { return 70; }
 } op_pause;
 
-static struct eOptionSound : public xOptions::eOptionInt
+static struct eOptionSound : public xOptions::eOptionEnum
 {
-	eOptionSound() { Set(S_AY); }
+	eOptionSound() { Set(DEFAULT_SOUND); }
 	virtual const char* Name() const { return "sound"; }
 	virtual const char** Values() const
 	{
@@ -187,14 +187,14 @@ static struct eOptionSound : public xOptions::eOptionInt
 	}
 	virtual void Change(bool next = true)
 	{
-		eOptionInt::Change(S_FIRST, S_LAST, next);
+		eOptionEnum::Change(S_FIRST, S_LAST, next);
 	}
 	virtual int Order() const { return 20; }
 } op_sound;
 
-static struct eOptionVolume : public xOptions::eOptionInt
+static struct eOptionVolume : public xOptions::eOptionEnum
 {
-	eOptionVolume() { Set(V_50); }
+	eOptionVolume() { Set(DEFAULT_VOLUME); }
 	virtual const char* Name() const { return "volume"; }
 	virtual const char** Values() const
 	{
@@ -203,14 +203,14 @@ static struct eOptionVolume : public xOptions::eOptionInt
 	}
 	virtual void Change(bool next = true)
 	{
-		eOptionInt::Change(V_FIRST, V_LAST, next);
+		eOptionEnum::Change(V_FIRST, V_LAST, next);
 	}
 	virtual int Order() const { return 30; }
 } op_volume;
 
 static struct eOptionAutoPlayImage : public xOptions::eOptionBool
 {
-	eOptionAutoPlayImage() { Set(true); }
+	eOptionAutoPlayImage() { Set(DEFAULT_AUTO_PLAY_IMAGE); }
 	virtual const char* Name() const { return "auto play image"; }
 	virtual int Order() const { return 55; }
 } op_auto_play_image;
@@ -221,9 +221,9 @@ void OpVolume(eVolume v) { op_volume.Set(v); }
 eSound	OpSound() { return (eSound)(int)op_sound; }
 void OpSound(eSound s) { op_sound.Set(s); }
 
-static struct eOptionJoy : public xOptions::eOptionInt
+static struct eOptionJoy : public xOptions::eOptionEnum
 {
-	eOptionJoy() { Set(J_FIRST); storeable = true; }
+	eOptionJoy() { Set(DEFAULT_JOYSTICK); storeable = true; }
 	virtual const char* Name() const { return "joystick"; }
 	virtual const char** Values() const
 	{
@@ -232,14 +232,14 @@ static struct eOptionJoy : public xOptions::eOptionInt
 	}
 	virtual void Change(bool next = true)
 	{
-		eOptionInt::Change(J_FIRST, J_LAST, next);
+		eOptionEnum::Change(J_FIRST, J_LAST, next);
 	}
 	virtual int Order() const { return 10; }
 } op_joy;
 
-static struct eOptionDrive : public xOptions::eOptionInt
+static struct eOptionDrive : public xOptions::eOptionEnum
 {
-	eOptionDrive() { storeable = false; Set(D_A); }
+	eOptionDrive() { storeable = false; Set(DEFAULT_DRIVE); }
 	virtual const char* Name() const { return "drive"; }
 	virtual const char** Values() const
 	{
@@ -248,7 +248,7 @@ static struct eOptionDrive : public xOptions::eOptionInt
 	}
 	virtual void Change(bool next = true)
 	{
-		eOptionInt::Change(D_FIRST, D_LAST, next);
+		eOptionEnum::Change(D_FIRST, D_LAST, next);
 	}
 	virtual int Order() const { return 60; }
 } op_drive;
@@ -315,6 +315,60 @@ dword OpJoyKeyFlags()
 
 bool OpAutoPlayImage() { return op_auto_play_image; }
 void OpAutoPlayImage(bool v) { op_auto_play_image.Set(v); }
+
+static struct eOptionPalEffects : public xOptions::eOptionBool
+{
+	eOptionPalEffects() { Set(DEFAULT_PAL_EFFECTS); }
+	virtual const char* Name() const { return "pal effects"; }
+	virtual int Order() const { return 41; } // After scanlines
+} op_pal_effects;
+
+static struct eOptionDotCrawl : public xOptions::eOptionBool
+{
+	eOptionDotCrawl() { Set(DEFAULT_DOT_CRAWL); }
+	virtual const char* Name() const { return "dot crawl"; }
+	virtual int Order() const { return 42; }
+} op_dot_crawl;
+
+static struct eOptionPhaseMod : public xOptions::eOptionBool
+{
+	eOptionPhaseMod() { Set(DEFAULT_PHASE_MODULATION); }
+	virtual const char* Name() const { return "phase modulation"; }
+	virtual int Order() const { return 43; }
+} op_phase_mod;
+
+static struct eOptionPalStrength : public xOptions::eOptionInt
+{
+	eOptionPalStrength() { Set(DEFAULT_PAL_STRENGTH); } // Default: 50%
+	virtual const char* Name() const { return "pal strength"; }
+	virtual int Min() const { return 0; }
+	virtual int Max() const { return 100; }
+	virtual int Order() const { return 44; }
+} op_pal_strength;
+
+static struct eOptionBeamSpread : public xOptions::eOptionInt
+{
+	eOptionBeamSpread() { Set(DEFAULT_BEAM_SPREAD); } // Default: 30 (0-200 -> 0.0-2.0)
+	virtual const char* Name() const { return "beam spread"; }
+	virtual int Min() const { return 0; }
+	virtual int Max() const { return 200; }
+	virtual int Order() const { return 45; }
+} op_beam_spread;
+
+bool OpPalEffects() { return op_pal_effects; }
+void OpPalEffects(bool v) { op_pal_effects.Set(v); }
+
+bool OpDotCrawl() { return op_dot_crawl; }
+void OpDotCrawl(bool v) { op_dot_crawl.Set(v); }
+
+bool OpPhaseMod() { return op_phase_mod; }
+void OpPhaseMod(bool v) { op_phase_mod.Set(v); }
+
+int OpPalStrength() { return (int)op_pal_strength; }
+void OpPalStrength(int v) { op_pal_strength.Set(v); }
+
+int OpBeamSpread() { return (int)op_beam_spread; }
+void OpBeamSpread(int v) { op_beam_spread.Set(v); }
 
 }
 //namespace xPlatform

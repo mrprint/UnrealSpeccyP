@@ -26,6 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "../../ui/ui.h"
 #include "../../tools/profiler.h"
 #include "../../tools/options.h"
+#include "../../options_common.h"
 
 #ifdef USE_GL
 
@@ -68,7 +69,7 @@ namespace xPlatform
             reportError("GLEW Initialization Failed", glewGetErrorString(err));
     }
 
-    static struct eOptionZoom : public xOptions::eOptionInt
+    static struct eOptionZoom : public xOptions::eOptionEnum
     {
         virtual const char* Name() const { return "zoom"; }
         virtual const char** Values() const
@@ -78,7 +79,7 @@ namespace xPlatform
         }
         virtual void Change(bool next = true)
         {
-            eOptionInt::Change(0, 3, next);
+            eOptionEnum::Change(0, 3, next);
         }
         virtual int Order() const { return 35; }
         float Zoom() const
@@ -87,7 +88,7 @@ namespace xPlatform
             {
             case 1: return 300.0f / 256.0f;
             case 2: return 320.0f / 256.0f;
-            default: return 1.0f;
+            default: return DEFAULT_ZOOM_VALUE;
             }
         }
     } op_zoom;
@@ -97,21 +98,21 @@ namespace xPlatform
     // to deletion
     static struct eOptionFiltering : public xOptions::eOptionBool
     {
-        eOptionFiltering() { Set(true); }
+        eOptionFiltering() { Set(DEFAULT_FILTERING); }
         virtual const char* Name() const { return "filtering"; }
         virtual int Order() const { return 36; }
     } op_filtering;
 
     static struct eOptionGigascreen : public xOptions::eOptionBool
     {
-        eOptionGigascreen() { Set(false); }
+        eOptionGigascreen() { Set(DEFAULT_GIGASCREEN); }
         virtual const char* Name() const { return "gigascreen"; }
         virtual int Order() const { return 38; }
     } op_gigascreen;
 
     static struct eOptionScanlines : public xOptions::eOptionBool
     {
-        eOptionScanlines() { Set(false); }
+        eOptionScanlines() { Set(DEFAULT_SCANLINES); }
         virtual const char* Name() const { return "scanlines"; }
         virtual int Order() const { return 39; }
     } op_scanlines;
@@ -129,7 +130,11 @@ namespace xPlatform
     static GLuint u_texture1{};
     static GLuint u_texture2{};
     static GLuint u_fb_texture{};
+    static GLuint u_enable_pal_effects{};
+    static GLuint u_enable_dot_crawl{};
+    static GLuint u_enable_phase_mod{};
     static GLuint u_pal_strength{};
+    static GLuint u_beam_spread{};
     static GLuint u_frame_count{};
 
     static int fb_width = sline_len * 4, fb_height = slines_cnt * 4;
@@ -185,9 +190,11 @@ out vec4 FragColor;
 uniform sampler2D fbTexture;
 uniform bool showScanlines;
 uniform float palStrength;
+uniform float beamSpread;
+uniform bool enablePalEffects;
+uniform bool enableDotCrawl;
+uniform bool enablePhaseModulation;
 uniform float uFrameCount;
-
-float beamSpread = 0.3;  // 0.0 – 2.0 (0.3–0.8 is recommended)
 
 #define slines_cnt 256.0
 #define sline_len 512.0
@@ -196,7 +203,7 @@ void main()
 {
     vec4 color;
 
-    if (showScanlines)
+    if (enablePalEffects)
     {
         vec2 tex_coord = TexCoord;
 
@@ -205,9 +212,12 @@ void main()
         // -------------------------------------------
 
         // Dot Crawl
-        float dot_crawl = sin(uFrameCount * 0.1 + TexCoord.x * 100.0)
-                          * palStrength * 0.0003;
-        tex_coord.x += dot_crawl;
+        if (enableDotCrawl)
+        {
+            float dot_crawl = sin(uFrameCount * 0.1 + TexCoord.x * 100.0)
+                              * palStrength * 0.0003;
+            tex_coord.x += dot_crawl;
+        }
 
         // Chromatic Aberration
         vec4 color_r = texture(fbTexture,
@@ -222,10 +232,13 @@ void main()
                           palStrength * 0.6);
 
         // Phase Modulation
-        float phase_shift =
-            sin(TexCoord.x * 314.159 + uFrameCount * 0.2) * palStrength * 0.08;
-        color_r.rgb += vec3( phase_shift, -phase_shift * 0.5, 0.0);
-        color_b.rgb -= vec3( phase_shift * 0.5, 0.0, phase_shift);
+        if (enablePhaseModulation)
+        {
+            float phase_shift =
+                sin(TexCoord.x * 314.159 + uFrameCount * 0.2) * palStrength * 0.08;
+            color_r.rgb += vec3( phase_shift, -phase_shift * 0.5, 0.0);
+            color_b.rgb -= vec3( phase_shift * 0.5, 0.0, phase_shift);
+        }
 
         // Luminance-Chrominance Crosstalk
         float luminance = dot(
@@ -257,20 +270,17 @@ void main()
             (pal_color * 0.5 + left * 0.25 + right * 0.25),
             beamSpread
         );
-        pal_color = beamResult;
-
-        // -------------------------------------------
-
-        // CRT Scanlines
-        float scanlineEffect =
-            0.92 + 0.08 * sin(TexCoord.y * slines_cnt * 2.0 * 3.14159);
-        pal_color *= scanlineEffect;
-
-        color = pal_color;
+        color = beamResult;
     }
     else
     {
         color = texture(fbTexture, TexCoord);
+    }
+    if (showScanlines)
+    {
+        float scanlineEffect =
+            0.95 + 0.05 * sin(TexCoord.y * slines_cnt * 2.0 * 3.14159);
+        color *= scanlineEffect;
     }
 
     FragColor = color;
@@ -323,10 +333,14 @@ void main()
     {
         if (scr_height != -1)
         {
-            int scale = ((scr_width > scr_height) ? scr_width : scr_height) * 2
-                / ((scr_width > scr_height) ? sline_len : slines_cnt);
-            fb_width = sline_len * scale;
-            fb_height = slines_cnt * scale;
+            float base_scale =
+                (float)((scr_width > scr_height) ? scr_width : scr_height) /
+                (float)((scr_width > scr_height) ? sline_len : slines_cnt);
+
+            base_scale *= 2.0f;
+
+            fb_width = int(sline_len * base_scale);
+            fb_height = int(slines_cnt * base_scale);
         }
 
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -355,6 +369,16 @@ void main()
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+#ifdef GLEW_EXT_texture_filter_anisotropic
+        if (GLEW_EXT_texture_filter_anisotropic)
+        {
+            GLfloat maxAniso = 0.0f;
+            glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &maxAniso);
+            GLfloat aniso = (maxAniso > 0.0f) ? maxAniso : 1.0f;
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, aniso);
+        }
+#endif
 
         float vertices[] = {
             //  pos       // tex
@@ -440,8 +464,18 @@ void main()
         u_fb_texture = glGetUniformLocation(screen_shader, "fbTexture");
         u_show_scanlines = glGetUniformLocation(screen_shader, "showScanlines");
 
+        u_enable_pal_effects = glGetUniformLocation(screen_shader, "enablePalEffects");
+        u_enable_dot_crawl = glGetUniformLocation(screen_shader, "enableDotCrawl");
+        u_enable_phase_mod = glGetUniformLocation(screen_shader, "enablePhaseModulation");
         u_pal_strength = glGetUniformLocation(screen_shader, "palStrength");
+        u_beam_spread = glGetUniformLocation(screen_shader, "beamSpread");
         u_frame_count = glGetUniformLocation(screen_shader, "uFrameCount");
+
+        if (u_enable_pal_effects == -1 || u_enable_dot_crawl == -1
+            || u_enable_phase_mod == -1 || u_pal_strength == -1 || u_beam_spread == -1)
+        {
+            reportError("Shader Uniform Error", "Failed to get uniform locations.");
+        }
     }
 
     void cleanupGraphics()
@@ -496,9 +530,9 @@ void main()
 
         if (giga_enabled && video_frame_last != Handler()->VideoFrame())
         {
-            video_frame_last = Handler()->VideoFrame();
             std::swap(p_tex1, p_tex2);
         }
+        video_frame_last = Handler()->VideoFrame();
 
         byte* data = (byte*)Handler()->VideoData();
         dword* p = p_tex1; // swap?
@@ -581,9 +615,18 @@ void main()
         glUniform2f(u_simple_scale, scale_x * opZoom(), scale_y * opZoom());
         glUniform1i(u_fb_texture, 0);
 
-        // NEW: Pass PAL strength and frame count
-        float pal_strength = 0.5f; // From user option
-        glUniform1f(u_pal_strength, pal_strength);
+        // Pass PAL options from xOptions
+        bool pal_enabled = OpPalEffects();
+        bool dot_crawl_enabled = OpDotCrawl();
+        bool phase_mod_enabled = OpPhaseMod();
+        int pal_strength_val = OpPalStrength();  // 0-100 -> convert to 0.0-1.0
+        int beam_spread_val = OpBeamSpread();    // 0-200 -> convert to 0.0-2.0
+
+        glUniform1i(u_enable_pal_effects, pal_enabled);
+        glUniform1i(u_enable_dot_crawl, dot_crawl_enabled);
+        glUniform1i(u_enable_phase_mod, phase_mod_enabled);
+        glUniform1f(u_pal_strength, static_cast<float>(pal_strength_val) / 100.0f);
+        glUniform1f(u_beam_spread, static_cast<float>(beam_spread_val) / 100.0f * 2.0f);
         glUniform1f(u_frame_count, static_cast<float>(video_frame_last)); // Animate dot crawl
 
         glActiveTexture(GL_TEXTURE0);
