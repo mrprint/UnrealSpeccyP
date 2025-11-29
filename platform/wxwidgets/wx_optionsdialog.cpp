@@ -29,9 +29,9 @@ namespace xPlatform {
 		EVT_BUTTON(ID_RESET_VIDEO, OptionsDialog::OnResetVideo)
 		EVT_BUTTON(ID_RESET_INPUT, OptionsDialog::OnResetInput)
 		EVT_BUTTON(ID_RESET_DRIVE, OptionsDialog::OnResetDrive)
-		END_EVENT_TABLE()
+	END_EVENT_TABLE()
 
-		OptionsDialog::OptionsDialog(wxWindow* parent)
+	OptionsDialog::OptionsDialog(wxWindow* parent)
 		: wxDialog(parent, wxID_ANY, _("Emulator Options"))
 	{
 		LoadCurrentSettings();
@@ -47,16 +47,21 @@ namespace xPlatform {
 		//  AUDIO GROUP (with reset button)
 		// ======================================================
 		wxStaticBoxSizer* audioSizer = new wxStaticBoxSizer(wxVERTICAL, this, _("Audio"));
+		wxWindow* audioBox = audioSizer->GetStaticBox();
 
-		wxStaticBoxSizer* soundSizer = new wxStaticBoxSizer(wxVERTICAL, this, _("Sound Chip"));
-		radioAy_ = new wxRadioButton(this, ID_RADIO_SOUND, _("AY-3-8910"), wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
-		radioYm_ = new wxRadioButton(this, ID_RADIO_SOUND, _("YM2149F"));
+		// Sound Chip Sizer
+		wxStaticBoxSizer* soundSizer = new wxStaticBoxSizer(wxVERTICAL, audioBox, _("Sound Chip"));
+		wxWindow* soundBox = soundSizer->GetStaticBox(); // Get static box for soundSizer
+		radioAy_ = new wxRadioButton(soundBox, ID_RADIO_SOUND, _("AY-3-8910"), wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+		radioYm_ = new wxRadioButton(soundBox, ID_RADIO_SOUND, _("YM2149F"));
 		soundSizer->Add(radioAy_, 0, wxALL, padding);
 		soundSizer->Add(radioYm_, 0, wxALL, padding);
 		audioSizer->Add(soundSizer, 0, wxEXPAND | wxALL, padding);
 
-		wxStaticBoxSizer* stereoSizer = new wxStaticBoxSizer(wxVERTICAL, this, _("Stereo Mode"));
-		comboStereo_ = new wxComboBox(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+		// Stereo Mode Sizer
+		wxStaticBoxSizer* stereoSizer = new wxStaticBoxSizer(wxVERTICAL, audioBox, _("Stereo Mode"));
+		wxWindow* stereoBox = stereoSizer->GetStaticBox(); // Get static box for stereoSizer
+		comboStereo_ = new wxComboBox(stereoBox, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
 			{ _("ABC"), _("ACB"), _("BAC"), _("BCA"), _("CAB"), _("CBA"), _("Mono") });
 		stereoSizer->Add(comboStereo_, 0, wxALL, padding);
 		audioSizer->Add(stereoSizer, 0, wxEXPAND | wxALL, padding);
@@ -65,7 +70,7 @@ namespace xPlatform {
 		wxBoxSizer* audioVaultSizer = new wxBoxSizer(wxHORIZONTAL);
 		audioVaultSizer->AddStretchSpacer(1); // Push button to right
 		resetAudioBtn_ = new wxBitmapButton(
-			this, ID_RESET_AUDIO,
+			audioBox, ID_RESET_AUDIO,
 			wxArtProvider::GetBitmap(wxART_UNDO, wxART_BUTTON), // Trash icon
 			wxDefaultPosition, wxSize(16, 16) // Small size (16x16 pixels)
 		);
@@ -82,32 +87,36 @@ namespace xPlatform {
 		//  VIDEO GROUP (with reset button)
 		// ======================================================
 		wxStaticBoxSizer* videoSizer = new wxStaticBoxSizer(wxVERTICAL, this, _("Video"));
-		// --- Existing Video Controls ---
-		checkGigascreen_ = new wxCheckBox(this, ID_CHECK_GIGASCREEN, _("Enable Gigascreen"));
+
+		// Video Sizer Direct Controls
+		wxWindow* videoBox = videoSizer->GetStaticBox(); // Get static box for videoSizer
+		checkGigascreen_ = new wxCheckBox(videoBox, ID_CHECK_GIGASCREEN, _("Enable Gigascreen"));
 		videoSizer->Add(checkGigascreen_, 0, wxALL, padding);
 
-		checkScanlines_ = new wxCheckBox(this, ID_CHECK_SCANLINES, _("Enable CRT Scanlines"));
+		checkScanlines_ = new wxCheckBox(videoBox, ID_CHECK_SCANLINES, _("Enable CRT Scanlines"));
 		videoSizer->Add(checkScanlines_, 0, wxALL, padding);
 
-		wxStaticBoxSizer* palSubSizer = new wxStaticBoxSizer(wxVERTICAL, this, _("PAL Effects"));
-		checkPalEffects_ = new wxCheckBox(this, ID_CHECK_PAL_EFFECTS, _("Enable PAL effects"));
+		// PAL Effects Sub-Sizer
+		wxStaticBoxSizer* palSubSizer = new wxStaticBoxSizer(wxVERTICAL, videoBox, _("PAL Effects"));
+		wxWindow* palBox = palSubSizer->GetStaticBox(); // Get static box for palSubSizer
+		checkPalEffects_ = new wxCheckBox(palBox, ID_CHECK_PAL_EFFECTS, _("Enable PAL effects"));
 		palSubSizer->Add(checkPalEffects_, 0, wxALL, padding);
 
-		checkDotCrawl_ = new wxCheckBox(this, ID_CHECK_DOT_CRAWL, _("Enable Dot Crawl"));
+		checkDotCrawl_ = new wxCheckBox(palBox, ID_CHECK_DOT_CRAWL, _("Enable Dot Crawl"));
 		palSubSizer->Add(checkDotCrawl_, 0, wxLEFT | wxRIGHT | wxBOTTOM, padding);
 
-		checkPhaseMod_ = new wxCheckBox(this, ID_CHECK_PHASE_MOD, _("Enable Phase Modulation"));
+		checkPhaseMod_ = new wxCheckBox(palBox, ID_CHECK_PHASE_MOD, _("Enable Phase Modulation"));
 		palSubSizer->Add(checkPhaseMod_, 0, wxLEFT | wxRIGHT | wxBOTTOM, padding);
 
-		palSubSizer->Add(new wxStaticText(this, wxID_ANY, _("PAL Strength")), 0, wxALL, padding / 2);
-		sliderPalStrength_ = new wxSlider(this, wxID_ANY, pal_strength_val, 0, 100, wxDefaultPosition, wxSize(200, -1));
-		labelPalStrength_ = new wxStaticText(this, wxID_ANY, wxString::Format(_("%d%%"), pal_strength_val));
+		palSubSizer->Add(new wxStaticText(palBox, wxID_ANY, _("PAL Strength")), 0, wxALL, padding / 2);
+		sliderPalStrength_ = new wxSlider(palBox, wxID_ANY, pal_strength_val, 0, 100, wxDefaultPosition, wxSize(200, -1));
+		labelPalStrength_ = new wxStaticText(palBox, wxID_ANY, wxString::Format(_("%d%%"), pal_strength_val));
 		palSubSizer->Add(sliderPalStrength_, 0, wxALL, padding / 2);
 		palSubSizer->Add(labelPalStrength_, 0, wxALIGN_CENTER_HORIZONTAL | wxBOTTOM, padding);
 
-		palSubSizer->Add(new wxStaticText(this, wxID_ANY, _("Beam Spread")), 0, wxALL, padding / 2);
-		sliderBeamSpread_ = new wxSlider(this, wxID_ANY, beam_spread_val, 0, 200, wxDefaultPosition, wxSize(200, -1));
-		labelBeamSpread_ = new wxStaticText(this, wxID_ANY, wxString::Format(_("%.1f"), (float)beam_spread_val / 100 * 2.0f));
+		palSubSizer->Add(new wxStaticText(palBox, wxID_ANY, _("Beam Spread")), 0, wxALL, padding / 2);
+		sliderBeamSpread_ = new wxSlider(palBox, wxID_ANY, beam_spread_val, 0, 200, wxDefaultPosition, wxSize(200, -1));
+		labelBeamSpread_ = new wxStaticText(palBox, wxID_ANY, wxString::Format(_("%.1f"), (float)beam_spread_val / 100 * 2.0f));
 		palSubSizer->Add(sliderBeamSpread_, 0, wxALL, padding / 2);
 		palSubSizer->Add(labelBeamSpread_, 0, wxALIGN_CENTER_HORIZONTAL | wxBOTTOM, padding);
 
@@ -117,7 +126,7 @@ namespace xPlatform {
 		wxBoxSizer* videoVaultSizer = new wxBoxSizer(wxHORIZONTAL);
 		videoVaultSizer->AddStretchSpacer(1); // Push button to right
 		resetVideoBtn_ = new wxBitmapButton(
-			this, ID_RESET_VIDEO,
+			videoBox, ID_RESET_VIDEO,
 			wxArtProvider::GetBitmap(wxART_UNDO, wxART_BUTTON), // Trash icon
 			wxDefaultPosition, wxSize(16, 16) // Small size (16x16 pixels)
 		);
@@ -137,12 +146,15 @@ namespace xPlatform {
 
 		// --- INPUT GROUP (with reset button) ---
 		wxStaticBoxSizer* inputSizer = new wxStaticBoxSizer(wxVERTICAL, this, _("Input"));
-		// --- Existing Input Controls ---
-		wxStaticBoxSizer* joySizer = new wxStaticBoxSizer(wxVERTICAL, this, _("Joystick Type"));
-		radioKempston_ = new wxRadioButton(this, ID_RADIO_JOYSTICK, _("Kempston"), wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
-		radioCursor_ = new wxRadioButton(this, ID_RADIO_JOYSTICK, _("Cursor"));
-		radioQaoSpace_ = new wxRadioButton(this, ID_RADIO_JOYSTICK, _("QAOPSpace"));
-		radioSinclair2_ = new wxRadioButton(this, ID_RADIO_JOYSTICK, _("Sinclair 2"));
+		wxWindow* inputBox = inputSizer->GetStaticBox();
+
+		// Joystick Type Sizer
+		wxStaticBoxSizer* joySizer = new wxStaticBoxSizer(wxVERTICAL, inputBox, _("Joystick Type"));
+		wxWindow* joyBox = joySizer->GetStaticBox(); // Get static box for joySizer
+		radioKempston_ = new wxRadioButton(joyBox, ID_RADIO_JOYSTICK, _("Kempston"), wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+		radioCursor_ = new wxRadioButton(joyBox, ID_RADIO_JOYSTICK, _("Cursor"));
+		radioQaoSpace_ = new wxRadioButton(joyBox, ID_RADIO_JOYSTICK, _("QAOPSpace"));
+		radioSinclair2_ = new wxRadioButton(joyBox, ID_RADIO_JOYSTICK, _("Sinclair 2"));
 		joySizer->Add(radioKempston_, 0, wxALL, padding);
 		joySizer->Add(radioCursor_, 0, wxALL, padding);
 		joySizer->Add(radioQaoSpace_, 0, wxALL, padding);
@@ -153,7 +165,7 @@ namespace xPlatform {
 		wxBoxSizer* inputVaultSizer = new wxBoxSizer(wxHORIZONTAL);
 		inputVaultSizer->AddStretchSpacer(1); // Push button to right
 		resetInputBtn_ = new wxBitmapButton(
-			this, ID_RESET_INPUT,
+			inputBox, ID_RESET_INPUT,
 			wxArtProvider::GetBitmap(wxART_UNDO, wxART_BUTTON), // Trash icon
 			wxDefaultPosition, wxSize(16, 16) // Small size (16x16 pixels)
 		);
@@ -167,11 +179,13 @@ namespace xPlatform {
 
 		// --- STORAGE GROUP (with reset button) ---
 		wxStaticBoxSizer* storageSizer = new wxStaticBoxSizer(wxVERTICAL, this, _("Disk Drives"));
-		// --- Existing Storage Controls ---
-		radioA_ = new wxRadioButton(this, ID_RADIO_DRIVE, _("A"), wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
-		radioB_ = new wxRadioButton(this, ID_RADIO_DRIVE, _("B"));
-		radioC_ = new wxRadioButton(this, ID_RADIO_DRIVE, _("C"));
-		radioD_ = new wxRadioButton(this, ID_RADIO_DRIVE, _("D"));
+
+		// Disk Drives Sizer
+		wxWindow* driveBox = storageSizer->GetStaticBox(); // Get static box for storageSizer
+		radioA_ = new wxRadioButton(driveBox, ID_RADIO_DRIVE, _("A"), wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+		radioB_ = new wxRadioButton(driveBox, ID_RADIO_DRIVE, _("B"));
+		radioC_ = new wxRadioButton(driveBox, ID_RADIO_DRIVE, _("C"));
+		radioD_ = new wxRadioButton(driveBox, ID_RADIO_DRIVE, _("D"));
 		storageSizer->Add(radioA_, 0, wxALL, padding);
 		storageSizer->Add(radioB_, 0, wxALL, padding);
 		storageSizer->Add(radioC_, 0, wxALL, padding);
@@ -181,7 +195,7 @@ namespace xPlatform {
 		wxBoxSizer* driveVaultSizer = new wxBoxSizer(wxHORIZONTAL);
 		driveVaultSizer->AddStretchSpacer(1); // Push button to right
 		resetDriveBtn_ = new wxBitmapButton(
-			this, ID_RESET_DRIVE,
+			driveBox, ID_RESET_DRIVE,
 			wxArtProvider::GetBitmap(wxART_UNDO, wxART_BUTTON), // Trash icon
 			wxDefaultPosition, wxSize(16, 16) // Small size (16x16 pixels)
 		);
