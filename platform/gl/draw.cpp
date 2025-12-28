@@ -350,21 +350,21 @@ void main()
         glGenTextures(1, &fb_texture);
 
         glBindTexture(GL_TEXTURE_2D, texture_id1);
-        glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, sline_len, slines_cnt);
+        glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA16F, sline_len, slines_cnt);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
         glBindTexture(GL_TEXTURE_2D, texture_id2);
-        glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, sline_len, slines_cnt);
+        glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA16F, sline_len, slines_cnt);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
         glBindTexture(GL_TEXTURE_2D, fb_texture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, fb_width, fb_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, fb_width, fb_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -522,7 +522,7 @@ void main()
     }
     color_cache;
 
-    void DrawGL(int vport_width, int wport_height)
+    void DrawGL(int vport_width, int vport_height)
     {
         PROFILER_BEGIN(draw_p);
 
@@ -569,7 +569,7 @@ void main()
         PROFILER_SECTION(draw);
 
         float aspect_src = 320.0f / 240.0f;
-        float aspect_dst = (float)vport_width / (float)wport_height;
+        float aspect_dst = (float)vport_width / (float)vport_height;
         float scale_x = 1.0f, scale_y = 1.0f;
 
         if (aspect_dst > aspect_src) {
@@ -605,13 +605,13 @@ void main()
 
         // 2nd pass: render FBO texture to screen (downsampled)
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glViewport(0, 0, vport_width, wport_height);
+        glViewport(0, 0, vport_width, vport_height);
 
         glClear(GL_COLOR_BUFFER_BIT);
 
         // In the screen shader section of DrawGL():
         glUseProgram(screen_shader);
-        glUniform1f(u_show_scanlines, op_scanlines && wport_height > slines_cnt + slines_cnt / 2);
+        glUniform1f(u_show_scanlines, op_scanlines && vport_height > slines_cnt + slines_cnt / 2);
         glUniform2f(u_simple_scale, scale_x * opZoom(), scale_y * opZoom());
         glUniform1i(u_fb_texture, 0);
 
