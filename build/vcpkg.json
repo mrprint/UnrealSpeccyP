@@ -1,0 +1,14 @@
+{
+  "name": "unrealspeccydesktop",
+  "version": "0.0.90",
+  "dependencies": [
+    "wxwidgets",
+    "glew",
+    "openal-soft",
+    "fmt",
+    "tinyxml2",
+    "minizip",
+    "zlib",
+    "libpng"
+  ]
+}
