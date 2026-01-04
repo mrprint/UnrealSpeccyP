@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.10)
 
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
 
+# Add option for static linking with dynamic CRT (Windows only)
+option(USE_STATIC_LIBS_WITH_DLL_CRT "Use static libraries with dynamically linked CRT (Windows only)" OFF)
+
 option(USE_SYS_LIBS "use system libraries instead of supplied ones" ON)
 option(USE_WX_WIDGETS "wxWidgets + OpenAL + OpenGL version" ON)
 option(USE_SDL "SDL version" OFF)
@@ -179,23 +182,51 @@ if(USE_SDL2 OR APPLE_IOS OR ANDROID)
 	source_group("platform\\gles2" FILES ${SRCCXX_PLATFORM_GLES2} ${SRCH_PLATFORM_GLES2})
 endif(USE_SDL2 OR APPLE_IOS OR ANDROID)
 
-if(MSVC)
-	if(NOT USE_WX_WIDGETS)
-		add_definitions(-DWIN32_LEAN_AND_MEAN -DVC_EXTRALEAN -DNOCOLOR)
-	endif(NOT USE_WX_WIDGETS)
+# Windows CRT Linkage Configuration - Static Libs with Dynamic CRT
+if(MSVC AND NOT UWP)
+    if(USE_STATIC_LIBS_WITH_DLL_CRT)
+        message(STATUS "Configuring static libraries with dynamic CRT linkage")
 
-	add_definitions("/wd4244 /wd4996 /wd4800 /wd4267")
+        # Set compiler flags - static libs but dynamic CRT
+        set(variables CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE
+                     CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE)
 
-	if(NOT UWP)
-		set(variables CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE)
+        foreach(variable ${variables})
+            if(${variable} MATCHES "/MD")
+                string(REGEX REPLACE "/MD" "/MT" ${variable} "${${variable}}")
+            endif()
 
-		foreach(variable ${variables})
-			if(${variable} MATCHES "/MD")
-				string(REGEX REPLACE "/MD" "/MT" ${variable} "${${variable}}")
-			endif()
-		endforeach()
-	endif(NOT UWP)
-endif(MSVC)
+            # Ensure dynamic CRT version instead of full static
+            if(${variable} MATCHES "/MTd?")
+                string(REPLACE "/MT" "/MD" ${variable} "${${variable}}")
+                set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} /INCREMENTAL:NO")
+                set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /INCREMENTAL:NO")
+            endif()
+        endforeach()
+
+        # Add global definition
+        add_definitions(-DSTATIC_LIBS_WITH_DLL_CRT)
+
+    else()
+        # Keep original static CRT settings
+        set(variables CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE
+                     CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE)
+
+        foreach(variable ${variables})
+            if(${variable} MATCHES "/MD")
+                string(REGEX REPLACE "/MD" "/MT" ${variable} "${${variable}}")
+            endif()
+        endforeach()
+    endif()
+
+    # Windows-specific definitions - should always apply when building for Windows
+    if(NOT USE_WX_WIDGETS)
+        add_definitions(-DWIN32_LEAN_AND_MEAN -DVC_EXTRALEAN -DNOCOLOR)
+    endif(NOT USE_WX_WIDGETS)
+
+    # Suppress compiler warnings - always applicable
+    add_definitions("/wd4244 /wd4996 /wd4800 /wd4267")
+endif(MSVC AND NOT UWP)
 
 macro(add_platform_io_stuff)
 	if(WIN32)
