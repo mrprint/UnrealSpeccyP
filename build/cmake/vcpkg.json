@@ -1,9 +1,0 @@
-{
-	"name": "unreal-speccy-portable",
-	"version-string": "0.0.91-dev",
-	"dependencies": [
-		"sdl2",
-		"angle",
-		"curl"
-	]
-}
