@@ -17,6 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <utility>
+#include <array>
 
 #include "../platform.h"
 #ifdef USE_WXWIDGETS
@@ -117,27 +118,62 @@ namespace xPlatform
         virtual int Order() const { return 39; }
     } op_scanlines;
 
+    template<typename T>
+    struct CachedUniform
+    {
+        GLint location = -1;
+        T value{};
+        bool valid = false;
+        bool first_update = true;
+
+        void set(GLint loc)
+        {
+            location = loc;
+            valid = true;
+        }
+
+        void update(const T& new_val)
+        {
+            if (first_update || value != new_val)
+            {
+                value = new_val;
+                if (location != -1)
+                {
+                    setUniform(new_val);
+                }
+                valid = true;
+                first_update = false;
+            }
+        }
+
+    private:
+        void setUniform(const float& v) { glUniform1f(location, v); }
+        void setUniform(const int& v) { glUniform1i(location, v); }
+        void setUniform(const std::array<float, 2>& v) { glUniform2f(location, v[0], v[1]); }
+    };
+
     static GLuint fb_texture{}, texture_id1{}, texture_id2{};
     static GLuint ebo{};
     static GLuint vao1{}, vbo1{};
     static GLuint vao2{}, vbo2{};
     static GLuint fbo{};
     static GLuint fb_shader{}, screen_shader{};
-    static GLuint u_blend_factor{};
-    static GLuint u_scale{};
-    static GLuint u_simple_scale{};
-    static GLuint u_show_scanlines{};
-    static GLuint u_texture1{};
-    static GLuint u_texture2{};
-    static GLuint u_fb_texture{};
-    static GLuint u_enable_pal_effects{};
-    static GLuint u_enable_dot_crawl{};
-    static GLuint u_enable_phase_mod{};
-    static GLuint u_pal_strength{};
-    static GLuint u_beam_spread{};
-    static GLuint u_frame_count{};
-    static GLuint u_fb_size{};
-    static GLuint u_mask_scale{};
+
+    CachedUniform<float> u_blend_factor_cached;
+    CachedUniform<std::array<float, 2>> u_scale_cached;
+    CachedUniform<int> u_texture1_cached;
+    CachedUniform<int> u_texture2_cached;
+    CachedUniform<int> u_show_scanlines_cached;
+    CachedUniform<std::array<float, 2>> u_simple_scale_cached;
+    CachedUniform<int> u_fb_texture_cached;
+    CachedUniform<std::array<float, 2>> u_fb_size_cached;
+    CachedUniform<int> u_mask_scale_cached;
+    CachedUniform<int> u_enable_pal_effects_cached;
+    CachedUniform<int> u_enable_dot_crawl_cached;
+    CachedUniform<int> u_enable_phase_mod_cached;
+    CachedUniform<float> u_pal_strength_cached;
+    CachedUniform<float> u_beam_spread_cached;
+    CachedUniform<float> u_frame_count_cached;
 
     static int fb_width = sline_len * 4, fb_height = slines_cnt * 4;
 
@@ -191,15 +227,15 @@ in vec2 TexCoord;
 out vec4 FragColor;
 
 uniform sampler2D fbTexture;
-uniform bool  showScanlines;
-uniform bool  enablePalEffects;
-uniform bool  enableDotCrawl;
-uniform bool  enablePhaseModulation;
+uniform int  showScanlines;
+uniform int  enablePalEffects;
+uniform int  enableDotCrawl;
+uniform int  enablePhaseModulation;
 
 uniform float palStrength;   // 0.0 - 1.0
 uniform float beamSpread;    // 0.0 - 2.0
 uniform float uFrameCount;
-uniform float maskScale;
+uniform int maskScale;
 uniform vec2 fbSize;
 
 #define slines_cnt 256.0
@@ -213,7 +249,7 @@ void main()
 
     vec4 color = texture(fbTexture, uv);
 
-    if (enablePalEffects)
+    if (enablePalEffects != 0)
     {
         // -------------------------------------------
         // PAL artifacts
@@ -222,7 +258,7 @@ void main()
         vec2 zxTexel = 1.0 / vec2(sline_len, slines_cnt);
 
         // Dot Crawl
-        if (enableDotCrawl)
+        if (enableDotCrawl != 0)
         {
             float crawl =
                 sin(uFrameCount * 0.15 + uv.x * sline_len * 0.25) *
@@ -245,7 +281,7 @@ void main()
         );
 
         // Phase Modulation
-        if (enablePhaseModulation)
+        if (enablePhaseModulation != 0)
         {
             float phase =
                 sin(uv.x * sline_len * 0.5 + uFrameCount * 0.2) *
@@ -300,10 +336,10 @@ void main()
 
     color.rgb *= mix(vec3(1.0), mask, maskStrength * 0.35);
 
-    if (showScanlines)
+    if (showScanlines != 0)
     {
         float scan =
-        0.97 + 0.03 *
+        0.95 + 0.05 *
         sin(TexCoord.y * slines_cnt * 2.0 * PI);
 
         color.rgb *= scan;
@@ -311,7 +347,7 @@ void main()
 
     const vec3 whiteBalance = vec3(
         1.02,  // R+
-        0.985,  // G-
+        0.985, // G-
         1.03   // B+
     );
     color.rgb *= whiteBalance;
@@ -379,25 +415,24 @@ void main()
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
         glGenTextures(1, &texture_id1);
-        glGenTextures(1, &texture_id2);
-        glGenTextures(1, &fb_texture);
-
         glBindTexture(GL_TEXTURE_2D, texture_id1);
-        glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA16F, sline_len, slines_cnt);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sline_len, slines_cnt, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
+        glGenTextures(1, &texture_id2);
         glBindTexture(GL_TEXTURE_2D, texture_id2);
-        glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA16F, sline_len, slines_cnt);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sline_len, slines_cnt, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
+        glGenTextures(1, &fb_texture);
         glBindTexture(GL_TEXTURE_2D, fb_texture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, fb_width, fb_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, fb_width, fb_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -485,31 +520,42 @@ void main()
         glDeleteShader(simpleFragmentShader);
 
         glUseProgram(fb_shader);
-        u_scale = glGetUniformLocation(fb_shader, "scale");
-
-        u_blend_factor = glGetUniformLocation(fb_shader, "blendFactor");
-        u_texture1 = glGetUniformLocation(fb_shader, "texture1");
-        u_texture2 = glGetUniformLocation(fb_shader, "texture2");
+        u_scale_cached.set(glGetUniformLocation(fb_shader, "scale"));
+        u_blend_factor_cached.set(glGetUniformLocation(fb_shader, "blendFactor"));
+        u_texture1_cached.set(glGetUniformLocation(fb_shader, "texture1"));
+        u_texture2_cached.set(glGetUniformLocation(fb_shader, "texture2"));
 
         glUseProgram(screen_shader);
-        u_simple_scale = glGetUniformLocation(screen_shader, "scale");
+        u_simple_scale_cached.set(glGetUniformLocation(screen_shader, "scale"));
+        u_fb_texture_cached.set(glGetUniformLocation(screen_shader, "fbTexture"));
+        u_show_scanlines_cached.set(glGetUniformLocation(screen_shader, "showScanlines"));
+        u_fb_size_cached.set(glGetUniformLocation(screen_shader, "fbSize"));
+        u_mask_scale_cached.set(glGetUniformLocation(screen_shader, "maskScale"));
 
-        u_fb_texture = glGetUniformLocation(screen_shader, "fbTexture");
-        u_show_scanlines = glGetUniformLocation(screen_shader, "showScanlines");
+        u_enable_pal_effects_cached.set(glGetUniformLocation(screen_shader, "enablePalEffects"));
+        u_enable_dot_crawl_cached.set(glGetUniformLocation(screen_shader, "enableDotCrawl"));
+        u_enable_phase_mod_cached.set(glGetUniformLocation(screen_shader, "enablePhaseModulation"));
+        u_pal_strength_cached.set(glGetUniformLocation(screen_shader, "palStrength"));
+        u_beam_spread_cached.set(glGetUniformLocation(screen_shader, "beamSpread"));
+        u_frame_count_cached.set(glGetUniformLocation(screen_shader, "uFrameCount"));
 
-        u_enable_pal_effects = glGetUniformLocation(screen_shader, "enablePalEffects");
-        u_enable_dot_crawl = glGetUniformLocation(screen_shader, "enableDotCrawl");
-        u_enable_phase_mod = glGetUniformLocation(screen_shader, "enablePhaseModulation");
-        u_pal_strength = glGetUniformLocation(screen_shader, "palStrength");
-        u_beam_spread = glGetUniformLocation(screen_shader, "beamSpread");
-        u_frame_count = glGetUniformLocation(screen_shader, "uFrameCount");
-        u_fb_size = glGetUniformLocation(screen_shader, "fbSize");
-        u_mask_scale = glGetUniformLocation(screen_shader, "maskScale");
-
-        if (u_enable_pal_effects == -1 || u_enable_dot_crawl == -1
-            || u_enable_phase_mod == -1 || u_pal_strength == -1 || u_beam_spread == -1)
+        if (u_scale_cached.location == -1 ||
+            u_blend_factor_cached.location == -1 ||
+            u_texture1_cached.location == -1 ||
+            u_texture2_cached.location == -1 ||
+            u_simple_scale_cached.location == -1 ||
+            u_fb_texture_cached.location == -1 ||
+            u_show_scanlines_cached.location == -1 ||
+            u_fb_size_cached.location == -1 ||
+            u_mask_scale_cached.location == -1 ||
+            u_enable_pal_effects_cached.location == -1 ||
+            u_enable_dot_crawl_cached.location == -1 ||
+            u_enable_phase_mod_cached.location == -1 ||
+            u_pal_strength_cached.location == -1 ||
+            u_beam_spread_cached.location == -1 ||
+            u_frame_count_cached.location == -1)
         {
-            reportError("Shader Uniform Error", "Failed to get uniform locations.");
+            xPlatform::reportError("Shader Uniform Error", "Failed to get uniform locations.");
         }
     }
 
@@ -622,18 +668,18 @@ void main()
         glClear(GL_COLOR_BUFFER_BIT);
 
         glUseProgram(fb_shader);
-        glUniform1f(u_blend_factor, (giga_enabled) ? 0.5f : 0.0f);
-        glUniform2f(u_scale, 1.0f, 1.0f);
+        u_blend_factor_cached.update(giga_enabled ? 0.5f : 0.0f);
+        u_scale_cached.update({ 1.0f, 1.0f });
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texture_id1);
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sline_len, slines_cnt, GL_RGBA, GL_UNSIGNED_BYTE, p_tex1);
-        glUniform1i(u_texture1, 0);
+        u_texture1_cached.update(0);
 
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, texture_id2);
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sline_len, slines_cnt, GL_RGBA, GL_UNSIGNED_BYTE, p_tex2);
-        glUniform1i(u_texture2, 1);
+        u_texture2_cached.update(1);
 
         glBindVertexArray(vao2);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -646,25 +692,18 @@ void main()
 
         // In the screen shader section of DrawGL():
         glUseProgram(screen_shader);
-        glUniform1f(u_show_scanlines, op_scanlines && vport_height > slines_cnt + slines_cnt / 2);
-        glUniform2f(u_simple_scale, scale_x * opZoom(), scale_y * opZoom());
-        glUniform1i(u_fb_texture, 0);
-        glUniform2f(u_fb_size, float(fb_width), float(fb_height));
-        glUniform1f(u_mask_scale, 2.0);
+        u_show_scanlines_cached.update(op_scanlines && vport_height > slines_cnt + slines_cnt / 2 ? 1 : 0);
+        u_simple_scale_cached.update({ scale_x * opZoom(), scale_y * opZoom() });
+        u_fb_texture_cached.update(0);
+        u_fb_size_cached.update({ float(fb_width), float(fb_height) });
+        u_mask_scale_cached.update(2);
 
-        // Pass PAL options from xOptions
-        bool pal_enabled = OpPalEffects();
-        bool dot_crawl_enabled = OpDotCrawl();
-        bool phase_mod_enabled = OpPhaseMod();
-        int pal_strength_val = OpPalStrength();  // 0-100 -> convert to 0.0-1.0
-        int beam_spread_val = OpBeamSpread();    // 0-200 -> convert to 0.0-2.0
-
-        glUniform1i(u_enable_pal_effects, pal_enabled);
-        glUniform1i(u_enable_dot_crawl, dot_crawl_enabled);
-        glUniform1i(u_enable_phase_mod, phase_mod_enabled);
-        glUniform1f(u_pal_strength, static_cast<float>(pal_strength_val) / 100.0f);
-        glUniform1f(u_beam_spread, static_cast<float>(beam_spread_val) / 100.0f * 2.0f);
-        glUniform1f(u_frame_count, static_cast<float>(video_frame_last)); // Animate dot crawl
+        u_enable_pal_effects_cached.update(OpPalEffects() ? 1 : 0);
+        u_enable_dot_crawl_cached.update(OpDotCrawl() ? 1 : 0);
+        u_enable_phase_mod_cached.update(OpPhaseMod() ? 1 : 0);
+        u_pal_strength_cached.update(static_cast<float>(OpPalStrength()) / 100.0f);
+        u_beam_spread_cached.update(static_cast<float>(OpBeamSpread()) / 100.0f * 2.0f);
+        u_frame_count_cached.update(static_cast<float>(video_frame_last));
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, fb_texture);
