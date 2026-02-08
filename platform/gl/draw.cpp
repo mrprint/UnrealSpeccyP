@@ -136,6 +136,8 @@ namespace xPlatform
     static GLuint u_pal_strength{};
     static GLuint u_beam_spread{};
     static GLuint u_frame_count{};
+    static GLuint u_fb_size{};
+    static GLuint u_mask_scale{};
 
     static int fb_width = sline_len * 4, fb_height = slines_cnt * 4;
 
@@ -187,101 +189,132 @@ void main()
 
 in vec2 TexCoord;
 out vec4 FragColor;
+
 uniform sampler2D fbTexture;
-uniform bool showScanlines;
-uniform float palStrength;
-uniform float beamSpread;
-uniform bool enablePalEffects;
-uniform bool enableDotCrawl;
-uniform bool enablePhaseModulation;
+uniform bool  showScanlines;
+uniform bool  enablePalEffects;
+uniform bool  enableDotCrawl;
+uniform bool  enablePhaseModulation;
+
+uniform float palStrength;   // 0.0 - 1.0
+uniform float beamSpread;    // 0.0 - 2.0
 uniform float uFrameCount;
+uniform float maskScale;
+uniform vec2 fbSize;
 
 #define slines_cnt 256.0
 #define sline_len 512.0
+#define PI 3.14159265359
 
 void main()
 {
-    vec4 color;
+    vec2 texel = 1.0 / fbSize;
+    vec2 uv = TexCoord;
+
+    vec4 color = texture(fbTexture, uv);
 
     if (enablePalEffects)
     {
-        vec2 tex_coord = TexCoord;
-
         // -------------------------------------------
         // PAL artifacts
         // -------------------------------------------
 
+        vec2 zxTexel = 1.0 / vec2(sline_len, slines_cnt);
+
         // Dot Crawl
         if (enableDotCrawl)
         {
-            float dot_crawl = sin(uFrameCount * 0.1 + TexCoord.x * 100.0)
-                              * palStrength * 0.0003;
-            tex_coord.x += dot_crawl;
+            float crawl =
+                sin(uFrameCount * 0.15 + uv.x * sline_len * 0.25) *
+                palStrength * zxTexel.x * 0.4;
+            uv.x += crawl;
         }
 
         // Chromatic Aberration
-        vec4 color_r = texture(fbTexture,
-            vec2(tex_coord.x - palStrength * 0.0015, tex_coord.y));
-        vec4 color_g = texture(fbTexture, tex_coord);
-        vec4 color_b = texture(fbTexture,
-            vec2(tex_coord.x + palStrength * 0.003, tex_coord.y));
+        float chromaShift = palStrength * zxTexel.x;
+
+        vec4 cr = texture(fbTexture, uv - vec2(chromaShift, 0.0));
+        vec4 cg = texture(fbTexture, uv);
+        vec4 cb = texture(fbTexture, uv + vec2(chromaShift * 1.25, 0.0));
 
         // Green Dot Artifact
-        color_r.rgb = mix(color_r.rgb,
-                          vec3(color_r.g * 1.1, color_r.g, color_r.b * 0.9),
-                          palStrength * 0.6);
+        cr.rgb = mix(
+            cr.rgb,
+            vec3(cr.g * 1.1, cr.g, cr.b * 0.9),
+            palStrength * 0.6
+        );
 
         // Phase Modulation
         if (enablePhaseModulation)
         {
-            float phase_shift =
-                sin(TexCoord.x * 314.159 + uFrameCount * 0.2) * palStrength * 0.08;
-            color_r.rgb += vec3( phase_shift, -phase_shift * 0.5, 0.0);
-            color_b.rgb -= vec3( phase_shift * 0.5, 0.0, phase_shift);
+            float phase =
+                sin(uv.x * sline_len * 0.5 + uFrameCount * 0.2) *
+                palStrength * 0.04;
+
+            cr.rgb += vec3( phase, -phase * 0.4, 0.0);
+            cb.rgb -= vec3( phase * 0.4, 0.0, phase);
         }
 
         // Luminance-Chrominance Crosstalk
-        float luminance = dot(
-            vec3(color_r.r, color_g.g, color_b.b),
+        float luma = dot(
+            vec3(cr.r, cg.g, cb.b),
             vec3(0.299, 0.587, 0.114)
         );
 
-        vec3 chroma_crosstalk =
-            (luminance - vec3(color_r.r, color_g.g, color_b.b))
-            * palStrength * 0.03;
+        vec3 crosstalk =
+            (luma - vec3(cr.r, cg.g, cb.b)) *
+            palStrength * 0.025;
 
-        color_r.rgb += chroma_crosstalk;
-        color_g.rgb += chroma_crosstalk;
-        color_b.rgb += chroma_crosstalk;
+        cr.rgb += crosstalk;
+        cg.rgb += crosstalk;
+        cb.rgb += crosstalk;
 
-        vec4 pal_color =
-            vec4(color_r.r, color_g.g, color_b.b, color_r.a);
+        vec4 palColor = vec4(cr.r, cg.g, cb.b, color.a);
 
         // CRT beam spread
-        float px = 1.0 / sline_len;
-        float intensity = dot(pal_color.rgb, vec3(0.299,0.587,0.114));
+        float intensity = dot(palColor.rgb, vec3(0.299, 0.587, 0.114));
         float spread = beamSpread * (0.3 + intensity * 0.7);
 
-        vec4 left  = texture(fbTexture, tex_coord + vec2(-px * spread, 0.0));
-        vec4 right = texture(fbTexture, tex_coord + vec2(+px * spread, 0.0));
+        vec4 left  = texture(fbTexture, uv - vec2(texel.x * spread, 0.0));
+        vec4 right = texture(fbTexture, uv + vec2(texel.x * spread, 0.0));
 
-        vec4 beamResult = mix(
-            pal_color,
-            (pal_color * 0.5 + left * 0.25 + right * 0.25),
+        color = mix(
+            palColor,
+            palColor * 0.5 + left * 0.25 + right * 0.25,
             beamSpread
         );
-        color = beamResult;
     }
-    else
-    {
-        color = texture(fbTexture, TexCoord);
-    }
+
+    // CRT phosphor mask (UKTV-style)
+
+    float x = floor(gl_FragCoord.x / maskScale);
+    float phase = x * 2.0 * PI / 3.0;
+
+    vec3 mask;
+    mask.r = 0.90 + 0.10 * sin(phase);
+    mask.g = 0.95 + 0.05 * sin(phase + 2.0 * PI / 3.0);
+    mask.b = 0.85 + 0.15 * sin(phase + 4.0 * PI / 3.0);
+
+    float luma = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+    float maskStrength = smoothstep(0.2, 0.8, luma);
+
+    color.rgb *= mix(vec3(1.0), mask, maskStrength * 0.35);
+
     if (showScanlines)
     {
-        float scanlineEffect =
-            0.95 + 0.05 * sin(TexCoord.y * slines_cnt * 2.0 * 3.14159);
-        color *= scanlineEffect;
+        float scan =
+        0.97 + 0.03 *
+        sin(TexCoord.y * slines_cnt * 2.0 * PI);
+
+        color.rgb *= scan;
     }
+
+    const vec3 whiteBalance = vec3(
+        1.02,  // R+
+        0.985,  // G-
+        1.03   // B+
+    );
+    color.rgb *= whiteBalance;
 
     FragColor = color;
 }
@@ -470,6 +503,8 @@ void main()
         u_pal_strength = glGetUniformLocation(screen_shader, "palStrength");
         u_beam_spread = glGetUniformLocation(screen_shader, "beamSpread");
         u_frame_count = glGetUniformLocation(screen_shader, "uFrameCount");
+        u_fb_size = glGetUniformLocation(screen_shader, "fbSize");
+        u_mask_scale = glGetUniformLocation(screen_shader, "maskScale");
 
         if (u_enable_pal_effects == -1 || u_enable_dot_crawl == -1
             || u_enable_phase_mod == -1 || u_pal_strength == -1 || u_beam_spread == -1)
@@ -614,6 +649,8 @@ void main()
         glUniform1f(u_show_scanlines, op_scanlines && vport_height > slines_cnt + slines_cnt / 2);
         glUniform2f(u_simple_scale, scale_x * opZoom(), scale_y * opZoom());
         glUniform1i(u_fb_texture, 0);
+        glUniform2f(u_fb_size, float(fb_width), float(fb_height));
+        glUniform1f(u_mask_scale, 2.0);
 
         // Pass PAL options from xOptions
         bool pal_enabled = OpPalEffects();
