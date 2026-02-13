@@ -242,6 +242,24 @@ uniform vec2 fbSize;
 #define sline_len 512.0
 #define PI 3.14159265359
 
+vec3 rgb2yuv(vec3 rgb)
+{
+    return vec3(
+        dot(rgb, vec3(0.299, 0.587, 0.114)),       // Y
+        dot(rgb, vec3(-0.14713, -0.28886, 0.436)), // U
+        dot(rgb, vec3(0.615, -0.51499, -0.10001))  // V
+    );
+}
+
+vec3 yuv2rgb(vec3 yuv)
+{
+    return vec3(
+        yuv.x + 1.13983 * yuv.z,
+        yuv.x - 0.39465 * yuv.y - 0.58060 * yuv.z,
+        yuv.x + 2.03211 * yuv.y
+    );
+}
+
 void main()
 {
     vec2 texel = 1.0 / fbSize;
@@ -251,32 +269,59 @@ void main()
 
     if (enablePalEffects != 0)
     {
-        // -------------------------------------------
         // PAL artifacts
-        // -------------------------------------------
 
         vec2 zxTexel = 1.0 / vec2(sline_len, slines_cnt);
+
+        vec3 base = texture(fbTexture, uv).rgb;
+        vec3 yuv  = rgb2yuv(base);
 
         // Dot Crawl
         if (enableDotCrawl != 0)
         {
-            float crawl =
-                sin(uFrameCount * 0.15 + uv.x * sline_len * 0.25) *
-                palStrength * zxTexel.x * 0.4;
-            uv.x += crawl;
+            float line = floor(gl_FragCoord.y);
+
+            float subcarrier =
+                uv.x * fbSize.x * 0.5 * PI +
+                uFrameCount * 0.3;
+
+            float crawl = sin(subcarrier);
+
+            // PAL alternates V phase each line
+            float vSign = mod(line, 2.0) == 0.0 ? 1.0 : -1.0;
+
+            yuv.y += crawl * 0.02 * palStrength;        // U
+            yuv.z += crawl * 0.02 * vSign * palStrength; // V (phase flipped)
         }
 
-        // Chromatic Aberration
-        float chromaShift = palStrength * zxTexel.x;
+        // PAL chroma horizontal bandwidth limit
+        float zxPixels = 320.0;
+        float radiusZxPx = 0.5;
+        float chromaRadius = (fbSize.x / zxPixels) * radiusZxPx;  // в FBO пикселях
+        float step = texel.x * chromaRadius;
 
-        vec4 cr = texture(fbTexture, uv - vec2(chromaShift, 0.0));
-        vec4 cg = texture(fbTexture, uv);
-        vec4 cb = texture(fbTexture, uv + vec2(chromaShift * 1.25, 0.0));
+        vec3 yuv0 = rgb2yuv(texture(fbTexture, uv - vec2(step * 1.5, 0.0)).rgb);
+        vec3 yuv1 = rgb2yuv(texture(fbTexture, uv - vec2(step * 0.75, 0.0)).rgb);
+        vec3 yuv2 = rgb2yuv(texture(fbTexture, uv).rgb);
+        vec3 yuv3 = rgb2yuv(texture(fbTexture, uv + vec2(step * 0.75, 0.0)).rgb);
+        vec3 yuv4 = rgb2yuv(texture(fbTexture, uv + vec2(step * 1.5, 0.0)).rgb);
+
+        vec2 chromaFiltered =
+              yuv0.yz * 0.08 +
+              yuv1.yz * 0.22 +
+              yuv2.yz * 0.40 +
+              yuv3.yz * 0.22 +
+              yuv4.yz * 0.08;
+
+        yuv.yz = mix(yuv.yz, chromaFiltered, clamp(palStrength * 2.0,0.0,1.0));
+
+        vec3 palRgb = yuv2rgb(yuv);
+        vec4 palColor = vec4(palRgb, color.a);
 
         // Green Dot Artifact
-        cr.rgb = mix(
-            cr.rgb,
-            vec3(cr.g * 1.1, cr.g, cr.b * 0.9),
+        palRgb.rgb = mix(
+            palRgb.rgb,
+            vec3(palRgb.g * 1.1, palRgb.g, palRgb.b * 0.9),
             palStrength * 0.6
         );
 
@@ -287,37 +332,40 @@ void main()
                 sin(uv.x * sline_len * 0.5 + uFrameCount * 0.2) *
                 palStrength * 0.04;
 
-            cr.rgb += vec3( phase, -phase * 0.4, 0.0);
-            cb.rgb -= vec3( phase * 0.4, 0.0, phase);
+            palRgb.rgb += vec3( phase, -phase * 0.4, 0.0);
+            palRgb.rgb -= vec3( phase * 0.4, 0.0, phase);
         }
 
         // Luminance-Chrominance Crosstalk
         float luma = dot(
-            vec3(cr.r, cg.g, cb.b),
+            vec3(palRgb.r, palRgb.g, palRgb.b),
             vec3(0.299, 0.587, 0.114)
         );
 
         vec3 crosstalk =
-            (luma - vec3(cr.r, cg.g, cb.b)) *
-            palStrength * 0.025;
+            (luma - vec3(palRgb.r, palRgb.g, palRgb.b)) *
+            palStrength * 0.05;
 
-        cr.rgb += crosstalk;
-        cg.rgb += crosstalk;
-        cb.rgb += crosstalk;
+        palRgb.rgb += crosstalk;
 
-        vec4 palColor = vec4(cr.r, cg.g, cb.b, color.a);
+        palColor = vec4(palRgb.r, palRgb.g, palRgb.b, color.a);
 
         // CRT beam spread
-        float intensity = dot(palColor.rgb, vec3(0.299, 0.587, 0.114));
-        float spread = beamSpread * (0.3 + intensity * 0.7);
+        float spread = beamSpread * 2.0;
 
-        vec4 left  = texture(fbTexture, uv - vec2(texel.x * spread, 0.0));
-        vec4 right = texture(fbTexture, uv + vec2(texel.x * spread, 0.0));
+        vec3 left  = texture(fbTexture, uv - vec2(texel.x * spread, 0.0)).rgb;
+        vec3 right = texture(fbTexture, uv + vec2(texel.x * spread, 0.0)).rgb;
 
-        color = mix(
-            palColor,
-            palColor * 0.5 + left * 0.25 + right * 0.25,
-            beamSpread
+        left  = yuv2rgb(rgb2yuv(left));
+        right = yuv2rgb(rgb2yuv(right));
+
+        vec3 spreadColor =
+            palRgb * 0.6 +
+            (left + right) * 0.2;
+
+        color = vec4(
+            mix(palRgb, spreadColor, beamSpread),
+            color.a
         );
     }
 
