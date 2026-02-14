@@ -19,8 +19,7 @@ namespace xPlatform {
 		EVT_CHECKBOX(ID_CHECK_GIGASCREEN, OptionsDialog::OnCheckboxChanged)
 		EVT_CHECKBOX(ID_CHECK_SCANLINES, OptionsDialog::OnCheckboxChanged)
 		EVT_CHECKBOX(ID_CHECK_PAL_EFFECTS, OptionsDialog::OnCheckboxChanged)
-		EVT_CHECKBOX(ID_CHECK_DOT_CRAWL, OptionsDialog::OnCheckboxChanged)
-		EVT_CHECKBOX(ID_CHECK_PHASE_MOD, OptionsDialog::OnCheckboxChanged)
+		EVT_CHECKBOX(ID_CHECK_MIPMAPPING, OptionsDialog::OnCheckboxChanged)
 		EVT_SLIDER(wxID_ANY, OptionsDialog::OnSliderChanged)
 		EVT_BUTTON(wxID_APPLY, OptionsDialog::OnApply)
 		EVT_BUTTON(wxID_OK, OptionsDialog::OnOK)
@@ -33,6 +32,8 @@ namespace xPlatform {
 
 	OptionsDialog::OptionsDialog(wxWindow* parent)
 		: wxDialog(parent, wxID_ANY, _("Emulator Options"))
+		, mipmap_enabled(DEFAULT_MIPMAPING)
+		, mask_scale_val(DEFAULT_MASK_SCALE)
 	{
 		LoadCurrentSettings();
 
@@ -96,17 +97,24 @@ namespace xPlatform {
 		checkScanlines_ = new wxCheckBox(videoBox, ID_CHECK_SCANLINES, _("Enable CRT Scanlines"));
 		videoSizer->Add(checkScanlines_, 0, wxALL, padding);
 
+		// Mipmapping checkbox
+		checkMipmaping_ = new wxCheckBox(videoBox, ID_CHECK_MIPMAPPING, _("Enable Mipmapping"));
+		videoSizer->Add(checkMipmaping_, 0, wxALL, padding);
+
+		// Mask scale slider section
+		wxStaticText* maskScaleLabel = new wxStaticText(videoBox, wxID_ANY, _("CRT Mask Scale:"));
+
+		videoSizer->Add(new wxStaticText(videoBox, wxID_ANY, _("CRT Mask Scale")), 0, wxALL, padding / 2);
+		sliderMaskScale_ = new wxSlider(videoBox, wxID_ANY, DEFAULT_MASK_SCALE, 0, 4, wxDefaultPosition, wxSize(250, -1));
+		labelMaskScale_ = new wxStaticText(videoBox, wxID_ANY, _("1"));
+		videoSizer->Add(sliderMaskScale_, 0, wxALIGN_CENTER_HORIZONTAL | wxBOTTOM, padding / 2);
+		videoSizer->Add(labelMaskScale_, 0, wxALIGN_CENTER_HORIZONTAL | wxBOTTOM, padding);
+
 		// PAL Effects Sub-Sizer
 		wxStaticBoxSizer* palSubSizer = new wxStaticBoxSizer(wxVERTICAL, videoBox, _("PAL Effects"));
 		wxWindow* palBox = palSubSizer->GetStaticBox(); // Get static box for palSubSizer
 		checkPalEffects_ = new wxCheckBox(palBox, ID_CHECK_PAL_EFFECTS, _("Enable PAL effects"));
 		palSubSizer->Add(checkPalEffects_, 0, wxALL, padding);
-
-		checkDotCrawl_ = new wxCheckBox(palBox, ID_CHECK_DOT_CRAWL, _("Enable Dot Crawl"));
-		palSubSizer->Add(checkDotCrawl_, 0, wxLEFT | wxRIGHT | wxBOTTOM, padding);
-
-		checkPhaseMod_ = new wxCheckBox(palBox, ID_CHECK_PHASE_MOD, _("Enable Phase Modulation"));
-		palSubSizer->Add(checkPhaseMod_, 0, wxLEFT | wxRIGHT | wxBOTTOM, padding);
 
 		palSubSizer->Add(new wxStaticText(palBox, wxID_ANY, _("PAL Strength")), 0, wxALL, padding / 2);
 		sliderPalStrength_ = new wxSlider(palBox, wxID_ANY, pal_strength_val, 0, 100, wxDefaultPosition, wxSize(200, -1));
@@ -246,8 +254,6 @@ namespace xPlatform {
 		radioSinclair2_->SetValue(joy_type == J_SINCLAIR2);
 
 		checkPalEffects_->SetValue(pal_effects_enabled);
-		checkDotCrawl_->SetValue(dot_crawl_enabled);
-		checkPhaseMod_->SetValue(phase_mod_enabled);
 		checkGigascreen_->SetValue(gigascreen_enabled);
 		checkScanlines_->SetValue(scanlines_enabled);
 
@@ -257,6 +263,13 @@ namespace xPlatform {
 		sliderBeamSpread_->SetValue(beam_spread_val);
 		float beam_val = static_cast<float>(beam_spread_val) / 100.0f * 2.0f;
 		labelBeamSpread_->SetLabel(wxString::Format(_("%.1f"), beam_val));
+
+		checkMipmaping_->SetValue(mipmap_enabled);
+		sliderMaskScale_->SetValue(mask_scale_val);
+
+		wxString label;
+		label.Printf(wxT("%d"), mask_scale_val);
+		labelMaskScale_->SetLabel(label);
 	}
 
 	void OptionsDialog::LoadCurrentSettings()
@@ -278,11 +291,17 @@ namespace xPlatform {
 		gigascreen_enabled = *xOptions::eOption<bool>::Find("gigascreen");
 		scanlines_enabled = *xOptions::eOption<bool>::Find("scanlines");
 		pal_effects_enabled = *xOptions::eOption<bool>::Find("pal effects");
-		dot_crawl_enabled = *xOptions::eOption<bool>::Find("dot crawl");
-		phase_mod_enabled = *xOptions::eOption<bool>::Find("phase modulation");
 		pal_strength_val = *xOptions::eOption<int>::Find("pal strength");
 		beam_spread_val = *xOptions::eOption<int>::Find("beam spread");
-	}
+
+		// Mipmapping option
+		xOptions::eOption<bool>* op_mipmap = xOptions::eOption<bool>::Find("mipmaping");
+		mipmap_enabled = op_mipmap ? *op_mipmap : DEFAULT_MIPMAPING;
+
+		// Mask scale option
+		xOptions::eOption<int>* op_mask = xOptions::eOption<int>::Find("mask scale");
+		mask_scale_val = op_mask ? *op_mask : DEFAULT_MASK_SCALE;
+		}
 
 	void OptionsDialog::OnSoundChipChanged(wxCommandEvent& event)
 	{
@@ -319,11 +338,8 @@ namespace xPlatform {
 		case ID_CHECK_PAL_EFFECTS:
 			pal_effects_enabled = event.IsChecked();
 			break;
-		case ID_CHECK_DOT_CRAWL:
-			dot_crawl_enabled = event.IsChecked();
-			break;
-		case ID_CHECK_PHASE_MOD:
-			phase_mod_enabled = event.IsChecked();
+		case ID_CHECK_MIPMAPPING:
+			mipmap_enabled = event.IsChecked();
 			break;
 		default:
 			// Handle unexpected IDs (e.g., log a warning)
@@ -333,7 +349,11 @@ namespace xPlatform {
 
 	void OptionsDialog::OnSliderChanged(wxCommandEvent& event)
 	{
-		if (event.GetId() == sliderPalStrength_->GetId()) {
+		if (event.GetId() == sliderMaskScale_->GetId()) {
+			mask_scale_val = sliderMaskScale_->GetValue();
+			labelMaskScale_->SetLabel(wxString::Format(_("%d"), mask_scale_val));
+		}
+		else if (event.GetId() == sliderPalStrength_->GetId()) {
 			pal_strength_val = sliderPalStrength_->GetValue();
 			labelPalStrength_->SetLabel(wxString::Format(_("%d%%"), pal_strength_val));
 		}
@@ -368,17 +388,17 @@ namespace xPlatform {
 		xOptions::eOption<bool>* op_pal_effects = xOptions::eOption<bool>::Find("pal effects");
 		if (op_pal_effects) { op_pal_effects->Set(pal_effects_enabled); op_pal_effects->Apply(); }
 
-		xOptions::eOption<bool>* op_dot_crawl = xOptions::eOption<bool>::Find("dot crawl");
-		if (op_dot_crawl) { op_dot_crawl->Set(dot_crawl_enabled); op_dot_crawl->Apply(); }
-
-		xOptions::eOption<bool>* op_phase_mod = xOptions::eOption<bool>::Find("phase modulation");
-		if (op_phase_mod) { op_phase_mod->Set(phase_mod_enabled); op_phase_mod->Apply(); }
-
 		xOptions::eOption<int>* op_pal_strength = xOptions::eOption<int>::Find("pal strength");
 		if (op_pal_strength) { op_pal_strength->Set(pal_strength_val); op_pal_strength->Apply(); }
 
 		xOptions::eOption<int>* op_beam_spread = xOptions::eOption<int>::Find("beam spread");
 		if (op_beam_spread) { op_beam_spread->Set(beam_spread_val); op_beam_spread->Apply(); }
+
+		xOptions::eOption<bool>* op_mipmap = xOptions::eOption<bool>::Find("mipmaping");
+		if (op_mipmap) { op_mipmap->Set(mipmap_enabled); op_mipmap->Apply();}
+
+		xOptions::eOption<int>* op_mask = xOptions::eOption<int>::Find("mask scale");
+		if (op_mask) { op_mask->Set(mask_scale_val); op_mask->Apply(); }
 	}
 
 	void OptionsDialog::OnOK(wxCommandEvent& event)
@@ -399,10 +419,10 @@ namespace xPlatform {
 		gigascreen_enabled = DEFAULT_GIGASCREEN;
 		scanlines_enabled = DEFAULT_SCANLINES;
 		pal_effects_enabled = DEFAULT_PAL_EFFECTS;
-		dot_crawl_enabled = DEFAULT_DOT_CRAWL;
-		phase_mod_enabled = DEFAULT_PHASE_MODULATION;
 		pal_strength_val = DEFAULT_PAL_STRENGTH;
 		beam_spread_val = DEFAULT_BEAM_SPREAD;
+		mipmap_enabled = DEFAULT_MIPMAPING;
+		mask_scale_val = DEFAULT_MASK_SCALE;
 		ReflectSettings();
 	}
 

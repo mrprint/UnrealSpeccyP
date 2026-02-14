@@ -275,6 +275,17 @@ static struct eOptionLastFile : public xOptions::eOptionString
 	virtual const char* Name() const { return "last file"; }
 } op_last_file;
 
+static struct eOptionMaskScale : public xOptions::eOptionInt {
+    eOptionMaskScale() { Set(DEFAULT_MASK_SCALE); }
+    virtual const char* Name() const { return "mask scale"; }
+    virtual int Min() const { return 0; }   // 0 = disable mask
+    virtual int Max() const { return 4; }   // Reasonable range (1-4 visible)
+    virtual int Order() const { return 47; }
+} op_mask_scale;
+
+int OpMaskScale() { return static_cast<int>(op_mask_scale); }
+void OpMaskScale(int v) { op_mask_scale.Set(v); }
+
 const char* OpLastFile() { return op_last_file; }
 const char* OpLastFolder()
 {
@@ -323,20 +334,6 @@ static struct eOptionPalEffects : public xOptions::eOptionBool
 	virtual int Order() const { return 41; } // After scanlines
 } op_pal_effects;
 
-static struct eOptionDotCrawl : public xOptions::eOptionBool
-{
-	eOptionDotCrawl() { Set(DEFAULT_DOT_CRAWL); }
-	virtual const char* Name() const { return "dot crawl"; }
-	virtual int Order() const { return 42; }
-} op_dot_crawl;
-
-static struct eOptionPhaseMod : public xOptions::eOptionBool
-{
-	eOptionPhaseMod() { Set(DEFAULT_PHASE_MODULATION); }
-	virtual const char* Name() const { return "phase modulation"; }
-	virtual int Order() const { return 43; }
-} op_phase_mod;
-
 static struct eOptionPalStrength : public xOptions::eOptionInt
 {
 	eOptionPalStrength() { Set(DEFAULT_PAL_STRENGTH); } // Default: 50%
@@ -357,12 +354,6 @@ static struct eOptionBeamSpread : public xOptions::eOptionInt
 
 bool OpPalEffects() { return op_pal_effects; }
 void OpPalEffects(bool v) { op_pal_effects.Set(v); }
-
-bool OpDotCrawl() { return op_dot_crawl; }
-void OpDotCrawl(bool v) { op_dot_crawl.Set(v); }
-
-bool OpPhaseMod() { return op_phase_mod; }
-void OpPhaseMod(bool v) { op_phase_mod.Set(v); }
 
 int OpPalStrength() { return (int)op_pal_strength; }
 void OpPalStrength(int v) { op_pal_strength.Set(v); }

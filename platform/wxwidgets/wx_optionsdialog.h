@@ -26,8 +26,7 @@ namespace xPlatform {
 		ID_CHECK_GIGASCREEN = 201,
 		ID_CHECK_SCANLINES,
 		ID_CHECK_PAL_EFFECTS,
-		ID_CHECK_DOT_CRAWL,
-		ID_CHECK_PHASE_MOD,
+		ID_CHECK_MIPMAPPING = 251,
 		// Add reset button IDs
 		ID_RESET_AUDIO = 301,
 		ID_RESET_VIDEO,
@@ -83,20 +82,21 @@ namespace xPlatform {
 		wxCheckBox* checkGigascreen_;
 		wxCheckBox* checkScanlines_;
 		wxCheckBox* checkPalEffects_;
-		wxCheckBox* checkDotCrawl_;
-		wxCheckBox* checkPhaseMod_;
 		wxSlider* sliderPalStrength_;
 		wxStaticText* labelPalStrength_;
 		wxSlider* sliderBeamSpread_;
 		wxStaticText* labelBeamSpread_;
+		wxCheckBox* checkMipmaping_;
+		wxSlider* sliderMaskScale_;
+		wxStaticText* labelMaskScale_;
 
 		bool gigascreen_enabled;
 		bool scanlines_enabled;
 		bool pal_effects_enabled;
-		bool dot_crawl_enabled;
-		bool phase_mod_enabled;
 		int pal_strength_val;
 		int beam_spread_val;
+		bool mipmap_enabled;
+		int mask_scale_val;
 
 		void ReflectSettings();
 		void LoadCurrentSettings();

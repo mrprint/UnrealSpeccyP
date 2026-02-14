@@ -118,6 +118,13 @@ namespace xPlatform
         virtual int Order() const { return 39; }
     } op_scanlines;
 
+    static struct eOptionMipmaping : public xOptions::eOptionBool
+    {
+        eOptionMipmaping() { Set(DEFAULT_MIPMAPING); }
+        virtual const char* Name() const { return "mipmaping"; }
+        virtual int Order() const { return 46; }
+    } op_mipmaping;
+
     template<typename T>
     struct CachedUniform
     {
@@ -169,11 +176,8 @@ namespace xPlatform
     CachedUniform<std::array<float, 2>> u_fb_size_cached;
     CachedUniform<int> u_mask_scale_cached;
     CachedUniform<int> u_enable_pal_effects_cached;
-    CachedUniform<int> u_enable_dot_crawl_cached;
-    CachedUniform<int> u_enable_phase_mod_cached;
     CachedUniform<float> u_pal_strength_cached;
     CachedUniform<float> u_beam_spread_cached;
-    CachedUniform<float> u_frame_count_cached;
 
     static int fb_width = sline_len * 4, fb_height = slines_cnt * 4;
 
@@ -229,12 +233,9 @@ out vec4 FragColor;
 uniform sampler2D fbTexture;
 uniform int showScanlines;
 uniform int enablePalEffects;
-uniform int enableDotCrawl;
-uniform int enablePhaseModulation;
 
 uniform float palStrength;    // 0.0 - 1.0 (PAL effect intensity)
 uniform float beamSpread;     // 0.0 - 2.0 (CRT beam spread amount)
-uniform float uFrameCount;    // Frame counter for animation effects
 uniform int maskScale;        // Phosphor mask column width (pixels per phase)
 uniform vec2 fbSize;          // Size of input framebuffer
 
@@ -317,18 +318,6 @@ void main() {
         // --- PAL Chroma Processing ---
         vec3 yuv = rgb2yuv(color.rgb);         // Convert initial color to YUV
 
-        // Dot Crawl: Vertical phase shift (alternates V phase per line)
-        if (enableDotCrawl != 0) {
-            float line = floor(fragPos.y);                      // Current scanline
-            float subcarrier = uv.x * fbSize.x * DOT_CRAWL_SUB_MULT * PI;
-            float frameAnim = uFrameCount * DOT_CRAWL_FRAME_SPEED;
-            float crawl = sin(subcarrier + frameAnim);          // Combine frequency/time
-
-            yuv.y += crawl * DOT_CRAWL_STRENGTH * palStrength;        // U channel (blue)
-            yuv.z += crawl * DOT_CRAWL_STRENGTH *
-                     (mod(line, 2.0) == 0.0 ? 1.0 : -1.0) * palStrength; // V channel (red, flipped phase)
-        }
-
         // Chroma Bandwidth Limit: Low-pass filter on U/V to simulate PAL's limited bandwidth
         float chromaScale = (fbSize.x / CHROMA_REF_PIXELS) * CHROMA_RADIUS;
         float sampleStep = texelSize.x * chromaScale;             // Step between samples
@@ -360,15 +349,6 @@ void main() {
         vec3 greenDotTint = vec3(palRgb.g * 1.1, palRgb.g, palRgb.b * 0.9);
         palRgb = mix(palRgb, greenDotTint, GREEN_DOT_MIX * palStrength);
 
-        // Phase Modulation: Horizontal color interference (simplified math)
-        if (enablePhaseModulation != 0) {
-            float spatialPhase = uv.x * SLINE_LEN * PHASE_MOD_X_FREQ * PI;
-            float temporalPhase = uFrameCount * PHASE_MOD_FRAME_SPEED;
-            float phase = sin(spatialPhase + temporalPhase) * palStrength * PHASE_MOD_STRENGTH;
-
-            palRgb += phase * PHASE_MOD_PATTERN; // Single operation (was two adds/subtracts)
-        }
-
         // Luminance-Chrominance Crosstalk: Leak luma into chroma channels
         float luma = dot(palRgb, LUMINANCE_COEFF);
         vec3 crosstalk = (luma - palRgb) * CROSSTALK_STRENGTH * palStrength;
@@ -388,21 +368,24 @@ void main() {
     }
 
     // --- CRT Phosphor Mask: UKTV-style columnar shading ---
-    float maskCol = floor(fragPos.x / maskScale);            // Which phase this pixel is in
-    float angle = maskCol * 2.0 * PI / 3.0;                  // 120° phase shifts per channel
-    vec3 maskTint = MASK_BASE + MASK_AMPLITUDE * sin(vec3(   // Sine wave per RGB (phase-shifted)
-        angle,
-        angle + 2.0 * PI / 3.0,                              // Green: +120°
-        angle + 4.0 * PI / 3.0                               // Blue: +240°
-    ));
+    if (maskScale > 0)
+    {
+        float maskCol = floor(fragPos.x / maskScale);            // Which phase this pixel is in
+        float angle = maskCol * 2.0 * PI / 3.0;                  // 120° phase shifts per channel
+        vec3 maskTint = MASK_BASE + MASK_AMPLITUDE * sin(vec3(   // Sine wave per RGB (phase-shifted)
+            angle,
+            angle + 2.0 * PI / 3.0,                              // Green: +120°
+            angle + 4.0 * PI / 3.0                               // Blue: +240°
+        ));
 
-    float maskStrength = smoothstep(                         // Stronger in bright areas
-        MASK_LUMINANCE_RANGE.x,
-        MASK_LUMINANCE_RANGE.y,
-        dot(color.rgb, LUMINANCE_COEFF)
-    );
+        float maskStrength = smoothstep(                         // Stronger in bright areas
+            MASK_LUMINANCE_RANGE.x,
+            MASK_LUMINANCE_RANGE.y,
+            dot(color.rgb, LUMINANCE_COEFF)
+        );
 
-    color.rgb *= mix(vec3(1.0), maskTint, maskStrength * MASK_MIX_STRENGTH);
+        color.rgb *= mix(vec3(1.0), maskTint, maskStrength * MASK_MIX_STRENGTH);
+    }
 
     // --- Scanlines: Vertical intensity variation ---
     if (showScanlines != 0) {
@@ -412,7 +395,10 @@ void main() {
     }
 
     // --- Final White Balance: Correct PAL RGB output ---
-    color.rgb *= WHITE_BALANCE;
+    if (maskScale > 0)
+    {
+        color.rgb *= WHITE_BALANCE;
+    }
 
     FragColor = color;
 }
@@ -495,8 +481,7 @@ void main() {
         glGenTextures(1, &fb_texture);
         glBindTexture(GL_TEXTURE_2D, fb_texture);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, fb_width, fb_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
@@ -595,11 +580,8 @@ void main() {
         u_mask_scale_cached.set(glGetUniformLocation(screen_shader, "maskScale"));
 
         u_enable_pal_effects_cached.set(glGetUniformLocation(screen_shader, "enablePalEffects"));
-        u_enable_dot_crawl_cached.set(glGetUniformLocation(screen_shader, "enableDotCrawl"));
-        u_enable_phase_mod_cached.set(glGetUniformLocation(screen_shader, "enablePhaseModulation"));
         u_pal_strength_cached.set(glGetUniformLocation(screen_shader, "palStrength"));
         u_beam_spread_cached.set(glGetUniformLocation(screen_shader, "beamSpread"));
-        u_frame_count_cached.set(glGetUniformLocation(screen_shader, "uFrameCount"));
 
         if (u_scale_cached.location == -1 ||
             u_blend_factor_cached.location == -1 ||
@@ -611,11 +593,8 @@ void main() {
             u_fb_size_cached.location == -1 ||
             u_mask_scale_cached.location == -1 ||
             u_enable_pal_effects_cached.location == -1 ||
-            u_enable_dot_crawl_cached.location == -1 ||
-            u_enable_phase_mod_cached.location == -1 ||
             u_pal_strength_cached.location == -1 ||
-            u_beam_spread_cached.location == -1 ||
-            u_frame_count_cached.location == -1)
+            u_beam_spread_cached.location == -1)
         {
             xPlatform::reportError("Shader Uniform Error", "Failed to get uniform locations.");
         }
@@ -758,18 +737,26 @@ void main() {
         u_simple_scale_cached.update({ scale_x * opZoom(), scale_y * opZoom() });
         u_fb_texture_cached.update(0);
         u_fb_size_cached.update({ float(fb_width), float(fb_height) });
-        u_mask_scale_cached.update(2);
+        u_mask_scale_cached.update(OpMaskScale());
 
         u_enable_pal_effects_cached.update(OpPalEffects() ? 1 : 0);
-        u_enable_dot_crawl_cached.update(OpDotCrawl() ? 1 : 0);
-        u_enable_phase_mod_cached.update(OpPhaseMod() ? 1 : 0);
         u_pal_strength_cached.update(static_cast<float>(OpPalStrength()) / 100.0f);
         u_beam_spread_cached.update(static_cast<float>(OpBeamSpread()) / 100.0f * 2.0f);
-        u_frame_count_cached.update(static_cast<float>(video_frame_last));
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, fb_texture);
-        glGenerateMipmap(GL_TEXTURE_2D);
+        if (op_mipmaping)
+        {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glGenerateMipmap(GL_TEXTURE_2D);
+        }
+        else
+        {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        }
 
         glBindVertexArray(vao1);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);

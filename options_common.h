@@ -30,12 +30,11 @@ enum eSoundChipType { SC_FIRST, SC_AY = SC_FIRST, SC_YM, SC_LAST };
 enum eMode { AS_FIRST, AS_ABC = AS_FIRST, AS_ACB, AS_BAC, AS_BCA, AS_CAB, AS_CBA, AS_MONO, AS_LAST };
 enum eVolume { V_FIRST, V_MUTE = V_FIRST, V_10, V_20, V_30, V_40, V_50, V_60, V_70, V_80, V_90, V_100, V_LAST };
 enum eDrive { D_FIRST, D_A = D_FIRST, D_B, D_C, D_D, D_LAST };
+enum eMaskScale { MS_FIRST, MS_MIN = 0, MS_MAX = 4, MS_DEFAULT = 2 };
 
 enum ePalEffects {
     PE_FIRST,
     PE_PAL_EFFECTS = PE_FIRST,
-    PE_DOT_CRAWL,
-    PE_PHASE_MODULATION,
     PE_LAST
 };
 
@@ -48,8 +47,6 @@ const eDrive DEFAULT_DRIVE = D_A;
 
 const bool DEFAULT_AUTO_PLAY_IMAGE = true;
 const bool DEFAULT_PAL_EFFECTS = true;
-const bool DEFAULT_DOT_CRAWL = false;
-const bool DEFAULT_PHASE_MODULATION = false;
 const int DEFAULT_PAL_STRENGTH = 40; // 0-100 range
 const int DEFAULT_BEAM_SPREAD = 15; // 0-200 range
 
@@ -57,6 +54,8 @@ const bool DEFAULT_FILTERING = true;
 const bool DEFAULT_GIGASCREEN = false;
 const bool DEFAULT_SCANLINES = false;
 const float DEFAULT_ZOOM_VALUE = 1.0f;
+const bool DEFAULT_MIPMAPING = true;
+const int DEFAULT_MASK_SCALE = 1; // CRT mask scale (0=disabled, 1-4=visible)
 
 const char* OpLastFolder();
 const char* OpLastFile();
@@ -81,6 +80,9 @@ void OpSound(eSound s);
 bool OpAutoPlayImage();
 void OpAutoPlayImage(bool v);
 
+int OpMaskScale();    // CRT mask scale control
+void OpMaskScale(int v);
+
 bool OpPalEffects();
 void OpPalEffects(bool v);
 bool OpDotCrawl();
@@ -89,7 +91,7 @@ bool OpPhaseMod();
 void OpPhaseMod(bool v);
 int OpPalStrength(); // 0-100 range
 void OpPalStrength(int v);
-int OpBeamSpread(); // 0-200 range  
+int OpBeamSpread(); // 0-200 range
 void OpBeamSpread(int v);
 
 }
