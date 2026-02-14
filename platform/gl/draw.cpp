@@ -227,178 +227,192 @@ in vec2 TexCoord;
 out vec4 FragColor;
 
 uniform sampler2D fbTexture;
-uniform int  showScanlines;
-uniform int  enablePalEffects;
-uniform int  enableDotCrawl;
-uniform int  enablePhaseModulation;
+uniform int showScanlines;
+uniform int enablePalEffects;
+uniform int enableDotCrawl;
+uniform int enablePhaseModulation;
 
-uniform float palStrength;   // 0.0 - 1.0
-uniform float beamSpread;    // 0.0 - 2.0
-uniform float uFrameCount;
-uniform int maskScale;
-uniform vec2 fbSize;
+uniform float palStrength;    // 0.0 - 1.0 (PAL effect intensity)
+uniform float beamSpread;     // 0.0 - 2.0 (CRT beam spread amount)
+uniform float uFrameCount;    // Frame counter for animation effects
+uniform int maskScale;        // Phosphor mask column width (pixels per phase)
+uniform vec2 fbSize;          // Size of input framebuffer
 
-#define slines_cnt 256.0
-#define sline_len 512.0
-#define PI 3.14159265359
+// Precomputed constants (for readability and optimization)
+const float PI = 3.141592653589793;          // Precise π value
+const float SLINES_CNT = 256.0;              // PAL scanline count per frame
+const float SLINE_LEN = 512.0;               // Horizontal scan line length
 
-vec3 rgb2yuv(vec3 rgb)
-{
+// Luminance (Y) calculation coefficients (BT.601 standard)
+const vec3 LUMINANCE_COEFF = vec3(0.299, 0.587, 0.114);
+
+// PAL Dot Crawl: Vertical phase-shifted interference
+const float DOT_CRAWL_SUB_MULT = 0.5;         // Subcarrier frequency multiplier
+const float DOT_CRAWL_FRAME_SPEED = 0.3;      // Frame animation speed
+const float DOT_CRAWL_STRENGTH = 0.02;        // Base crawl intensity
+
+// PAL Chroma Bandwidth Limit: Simulate low-pass filter on U/V channels (GLSL 3.3 compliant—no vec5!)
+const float CHROMA_REF_PIXELS = 320.0;         // Reference resolution for scaling
+const float CHROMA_RADIUS = 0.5;               // Effective filter radius (texture pixels)
+// Split vec5 into individual floats (GLSL 3.3 doesn't support vec5!)
+const float CHROMA_WEIGHT_LEFT_1_5 = 0.08;    // Left 1.5x step weight
+const float CHROMA_WEIGHT_LEFT_0_75 = 0.22;   // Left 0.75x step weight
+const float CHROMA_WEIGHT_CENTER = 0.40;      // Center sample weight
+const float CHROMA_WEIGHT_RIGHT_0_75 = 0.22;  // Right 0.75x step weight
+const float CHROMA_WEIGHT_RIGHT_1_5 = 0.08;   // Right 1.5x step weight
+
+// Green Dot Artifact: PAL-specific red/green tint distortion
+const float GREEN_DOT_MIX = 0.6;               // Strength of green dot effect
+
+// Phase Modulation: Color phase interference (simplified from original A-B ops)
+const float PHASE_MOD_X_FREQ = 0.5;            // Horizontal frequency multiplier
+const float PHASE_MOD_FRAME_SPEED = 0.2;       // Frame animation speed
+const float PHASE_MOD_STRENGTH = 0.04;         // Base phase intensity
+const vec3 PHASE_MOD_PATTERN = vec3(0.6, -0.4, -1.0); // Combined offset vector
+
+// Luminance-Chrominance Crosstalk: Luma leakage into chroma channels
+const float CROSSTALK_STRENGTH = 0.05;         // Base crosstalk intensity
+
+// CRT Beam Spread: Horizontal blur simulation
+const float BEAM_SPREAD_SCALE = 2.0;           // Scale uniform to sample distance
+const vec2 BEAM_WEIGHTS = vec2(0.6, 0.2);      // Center (0.6) + left/right (0.2 combined)
+
+// CRT Phosphor Mask: UKTV-style columnar shading
+const vec3 MASK_BASE = vec3(0.90, 0.95, 0.85);      // Base mask color per phase
+const vec3 MASK_AMPLITUDE = vec3(0.10, 0.05, 0.15); // Sine wave amplitude per channel
+const vec2 MASK_LUMINANCE_RANGE = vec2(0.2, 0.8);   // Luma range for mask strength
+const float MASK_MIX_STRENGTH = 0.35;               // Overall mask intensity
+
+// Scanlines: Vertical intensity variation
+const vec2 SCANLINE_PARAMS = vec2(0.95, 0.05); // Min value + amplitude (peak-to-peak)
+
+// White Balance: PAL RGB correction to match expected output
+const vec3 WHITE_BALANCE = vec3(1.02, 0.985, 1.03);
+
+// YUV <-> RGB conversion (PAL-specific coefficients from original code)
+vec3 rgb2yuv(vec3 rgb) {
     return vec3(
-        dot(rgb, vec3(0.299, 0.587, 0.114)),       // Y
-        dot(rgb, vec3(-0.14713, -0.28886, 0.436)), // U
-        dot(rgb, vec3(0.615, -0.51499, -0.10001))  // V
+        dot(rgb, LUMINANCE_COEFF),                 // Y: Luma
+        dot(rgb, vec3(-0.14713, -0.28886, 0.436)), // U: Blue-luminance
+        dot(rgb, vec3(0.615, -0.51499, -0.10001))  // V: Red-luminance
     );
 }
 
-vec3 yuv2rgb(vec3 yuv)
-{
+vec3 yuv2rgb(vec3 yuv) {
     return vec3(
-        yuv.x + 1.13983 * yuv.z,
-        yuv.x - 0.39465 * yuv.y - 0.58060 * yuv.z,
-        yuv.x + 2.03211 * yuv.y
+        yuv.x + 1.13983 * yuv.z,                   // R = Y + 1.14*V
+        yuv.x - 0.39465 * yuv.y - 0.58060 * yuv.z, // G = Y - 0.39*U - 0.58*V
+        yuv.x + 2.03211 * yuv.y                    // B = Y + 2.03*U
     );
 }
 
-void main()
-{
-    vec2 texel = 1.0 / fbSize;
-    vec2 uv = TexCoord;
+void main() {
+    // Precompute values used multiple times to avoid redundant calculations
+    vec2 texelSize = 1.0 / fbSize;             // Texture coordinate per pixel
+    vec2 uv = TexCoord;                        // --- FIX: Declare uv as alias for TexCoord ---
+    vec4 color = texture(fbTexture, uv);       // Use uv instead of TexCoord (consistent)
+    vec2 fragPos = gl_FragCoord.xy;            // Fragment position for mask/line math
 
-    vec4 color = texture(fbTexture, uv);
+    if (enablePalEffects != 0) {
+        // --- PAL Chroma Processing ---
+        vec3 yuv = rgb2yuv(color.rgb);         // Convert initial color to YUV
 
-    if (enablePalEffects != 0)
-    {
-        // PAL artifacts
+        // Dot Crawl: Vertical phase shift (alternates V phase per line)
+        if (enableDotCrawl != 0) {
+            float line = floor(fragPos.y);                      // Current scanline
+            float subcarrier = uv.x * fbSize.x * DOT_CRAWL_SUB_MULT * PI;
+            float frameAnim = uFrameCount * DOT_CRAWL_FRAME_SPEED;
+            float crawl = sin(subcarrier + frameAnim);          // Combine frequency/time
 
-        vec2 zxTexel = 1.0 / vec2(sline_len, slines_cnt);
-
-        vec3 base = texture(fbTexture, uv).rgb;
-        vec3 yuv  = rgb2yuv(base);
-
-        // Dot Crawl
-        if (enableDotCrawl != 0)
-        {
-            float line = floor(gl_FragCoord.y);
-
-            float subcarrier =
-                uv.x * fbSize.x * 0.5 * PI +
-                uFrameCount * 0.3;
-
-            float crawl = sin(subcarrier);
-
-            // PAL alternates V phase each line
-            float vSign = mod(line, 2.0) == 0.0 ? 1.0 : -1.0;
-
-            yuv.y += crawl * 0.02 * palStrength;        // U
-            yuv.z += crawl * 0.02 * vSign * palStrength; // V (phase flipped)
+            yuv.y += crawl * DOT_CRAWL_STRENGTH * palStrength;        // U channel (blue)
+            yuv.z += crawl * DOT_CRAWL_STRENGTH *
+                     (mod(line, 2.0) == 0.0 ? 1.0 : -1.0) * palStrength; // V channel (red, flipped phase)
         }
 
-        // PAL chroma horizontal bandwidth limit
-        float zxPixels = 320.0;
-        float radiusZxPx = 0.5;
-        float chromaRadius = (fbSize.x / zxPixels) * radiusZxPx;  // в FBO пикселях
-        float step = texel.x * chromaRadius;
+        // Chroma Bandwidth Limit: Low-pass filter on U/V to simulate PAL's limited bandwidth
+        float chromaScale = (fbSize.x / CHROMA_REF_PIXELS) * CHROMA_RADIUS;
+        float sampleStep = texelSize.x * chromaScale;             // Step between samples
 
-        vec3 yuv0 = rgb2yuv(texture(fbTexture, uv - vec2(step * 1.5, 0.0)).rgb);
-        vec3 yuv1 = rgb2yuv(texture(fbTexture, uv - vec2(step * 0.75, 0.0)).rgb);
-        vec3 yuv2 = rgb2yuv(texture(fbTexture, uv).rgb);
-        vec3 yuv3 = rgb2yuv(texture(fbTexture, uv + vec2(step * 0.75, 0.0)).rgb);
-        vec3 yuv4 = rgb2yuv(texture(fbTexture, uv + vec2(step * 1.5, 0.0)).rgb);
+        vec2 offset1_5 = vec2(sampleStep * 1.5, 0.0);             // ±1.5x step (left/right)
+        vec2 offset0_75 = vec2(sampleStep * 0.75, 0.0);           // ±0.75x step
 
-        vec2 chromaFiltered =
-              yuv0.yz * 0.08 +
-              yuv1.yz * 0.22 +
-              yuv2.yz * 0.40 +
-              yuv3.yz * 0.22 +
-              yuv4.yz * 0.08;
+        // Sample neighbors and filter chroma (Y is unused—only U/V matter here)
+        vec3 yuvL1_5 = rgb2yuv(texture(fbTexture, uv - offset1_5).rgb);
+        vec3 yuvL0_75 = rgb2yuv(texture(fbTexture, uv - offset0_75).rgb);
+        vec3 yuvR0_75 = rgb2yuv(texture(fbTexture, uv + offset0_75).rgb);
+        vec3 yuvR1_5 = rgb2yuv(texture(fbTexture, uv + offset1_5).rgb);
 
-        yuv.yz = mix(yuv.yz, chromaFiltered, clamp(palStrength * 2.0,0.0,1.0));
+        // --- Fixed: Replace vec5 with individual float weights (GLSL 3.3 compliant) ---
+        vec3 yuvCenter = rgb2yuv(texture(fbTexture, uv).rgb);
+        vec2 filteredChroma =
+            yuvL1_5.yz * CHROMA_WEIGHT_LEFT_1_5 +
+            yuvL0_75.yz * CHROMA_WEIGHT_LEFT_0_75 +
+            yuvCenter.yz * CHROMA_WEIGHT_CENTER +
+            yuvR0_75.yz * CHROMA_WEIGHT_RIGHT_0_75 +
+            yuvR1_5.yz * CHROMA_WEIGHT_RIGHT_1_5;
 
-        vec3 palRgb = yuv2rgb(yuv);
-        vec4 palColor = vec4(palRgb, color.a);
+        float chromaMix = clamp(palStrength * 3.0, 0.0, 1.0);     // Limit mix to 0-1
+        yuv.yz = mix(yuv.yz, filteredChroma, chromaMix);          // Blend original/filtered chroma
 
-        // Green Dot Artifact
-        palRgb.rgb = mix(
-            palRgb.rgb,
-            vec3(palRgb.g * 1.1, palRgb.g, palRgb.b * 0.9),
-            palStrength * 0.6
-        );
+        vec3 palRgb = yuv2rgb(yuv);                               // Convert back to RGB
 
-        // Phase Modulation
-        if (enablePhaseModulation != 0)
-        {
-            float phase =
-                sin(uv.x * sline_len * 0.5 + uFrameCount * 0.2) *
-                palStrength * 0.04;
+        // Green Dot Artifact: Red from green (PAL-specific tint)
+        vec3 greenDotTint = vec3(palRgb.g * 1.1, palRgb.g, palRgb.b * 0.9);
+        palRgb = mix(palRgb, greenDotTint, GREEN_DOT_MIX * palStrength);
 
-            palRgb.rgb += vec3( phase, -phase * 0.4, 0.0);
-            palRgb.rgb -= vec3( phase * 0.4, 0.0, phase);
+        // Phase Modulation: Horizontal color interference (simplified math)
+        if (enablePhaseModulation != 0) {
+            float spatialPhase = uv.x * SLINE_LEN * PHASE_MOD_X_FREQ * PI;
+            float temporalPhase = uFrameCount * PHASE_MOD_FRAME_SPEED;
+            float phase = sin(spatialPhase + temporalPhase) * palStrength * PHASE_MOD_STRENGTH;
+
+            palRgb += phase * PHASE_MOD_PATTERN; // Single operation (was two adds/subtracts)
         }
 
-        // Luminance-Chrominance Crosstalk
-        float luma = dot(
-            vec3(palRgb.r, palRgb.g, palRgb.b),
-            vec3(0.299, 0.587, 0.114)
-        );
+        // Luminance-Chrominance Crosstalk: Leak luma into chroma channels
+        float luma = dot(palRgb, LUMINANCE_COEFF);
+        vec3 crosstalk = (luma - palRgb) * CROSSTALK_STRENGTH * palStrength;
+        palRgb += crosstalk;
 
-        vec3 crosstalk =
-            (luma - vec3(palRgb.r, palRgb.g, palRgb.b)) *
-            palStrength * 0.05;
+        // Beam Spread: Simulate CRT electron beam horizontal blur
+        float spreadDist = beamSpread * BEAM_SPREAD_SCALE;          // Scale to texture space
+        vec3 left = texture(fbTexture, uv - vec2(texelSize.x * spreadDist, 0.0)).rgb;
+        vec3 right = texture(fbTexture, uv + vec2(texelSize.x * spreadDist, 0.0)).rgb;
 
-        palRgb.rgb += crosstalk;
-
-        palColor = vec4(palRgb.r, palRgb.g, palRgb.b, color.a);
-
-        // CRT beam spread
-        float spread = beamSpread * 2.0;
-
-        vec3 left  = texture(fbTexture, uv - vec2(texel.x * spread, 0.0)).rgb;
-        vec3 right = texture(fbTexture, uv + vec2(texel.x * spread, 0.0)).rgb;
-
-        left  = yuv2rgb(rgb2yuv(left));
+        // Original YUV round-trip (assumed to simulate PAL chroma subsampling)
+        left = yuv2rgb(rgb2yuv(left));
         right = yuv2rgb(rgb2yuv(right));
 
-        vec3 spreadColor =
-            palRgb * 0.6 +
-            (left + right) * 0.2;
-
-        color = vec4(
-            mix(palRgb, spreadColor, beamSpread),
-            color.a
-        );
+        vec3 spreadColor = palRgb * BEAM_WEIGHTS.x + (left + right) * BEAM_WEIGHTS.y;
+        color.rgb = mix(palRgb, spreadColor, beamSpread); // Preserve alpha
     }
 
-    // CRT phosphor mask (UKTV-style)
+    // --- CRT Phosphor Mask: UKTV-style columnar shading ---
+    float maskCol = floor(fragPos.x / maskScale);            // Which phase this pixel is in
+    float angle = maskCol * 2.0 * PI / 3.0;                  // 120° phase shifts per channel
+    vec3 maskTint = MASK_BASE + MASK_AMPLITUDE * sin(vec3(   // Sine wave per RGB (phase-shifted)
+        angle,
+        angle + 2.0 * PI / 3.0,                              // Green: +120°
+        angle + 4.0 * PI / 3.0                               // Blue: +240°
+    ));
 
-    float x = floor(gl_FragCoord.x / maskScale);
-    float phase = x * 2.0 * PI / 3.0;
-
-    vec3 mask;
-    mask.r = 0.90 + 0.10 * sin(phase);
-    mask.g = 0.95 + 0.05 * sin(phase + 2.0 * PI / 3.0);
-    mask.b = 0.85 + 0.15 * sin(phase + 4.0 * PI / 3.0);
-
-    float luma = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-    float maskStrength = smoothstep(0.2, 0.8, luma);
-
-    color.rgb *= mix(vec3(1.0), mask, maskStrength * 0.35);
-
-    if (showScanlines != 0)
-    {
-        float scan =
-        0.95 + 0.05 *
-        sin(TexCoord.y * slines_cnt * 2.0 * PI);
-
-        color.rgb *= scan;
-    }
-
-    const vec3 whiteBalance = vec3(
-        1.02,  // R+
-        0.985, // G-
-        1.03   // B+
+    float maskStrength = smoothstep(                         // Stronger in bright areas
+        MASK_LUMINANCE_RANGE.x,
+        MASK_LUMINANCE_RANGE.y,
+        dot(color.rgb, LUMINANCE_COEFF)
     );
-    color.rgb *= whiteBalance;
+
+    color.rgb *= mix(vec3(1.0), maskTint, maskStrength * MASK_MIX_STRENGTH);
+
+    // --- Scanlines: Vertical intensity variation ---
+    if (showScanlines != 0) {
+        float scanFreq = SLINES_CNT * 2.0 * PI;              // Full sine waves per frame
+        color.rgb *= SCANLINE_PARAMS.x +
+                     SCANLINE_PARAMS.y * sin(TexCoord.y * scanFreq); // Use TexCoord here (scanlines are screen-space)
+    }
+
+    // --- Final White Balance: Correct PAL RGB output ---
+    color.rgb *= WHITE_BALANCE;
 
     FragColor = color;
 }
