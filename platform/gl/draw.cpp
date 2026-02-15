@@ -288,7 +288,7 @@ const float MASK_MIX_STRENGTH = 0.35;               // Overall mask intensity
 const vec2 SCANLINE_PARAMS = vec2(0.95, 0.05); // Min value + amplitude (peak-to-peak)
 
 // White Balance: PAL RGB correction to match expected output
-const vec3 WHITE_BALANCE = vec3(1.02, 0.985, 1.03);
+const vec3 WHITE_BALANCE = vec3(1.0, 0.985, 1.03);
 
 // YUV <-> RGB conversion (PAL-specific coefficients from original code)
 vec3 rgb2yuv(vec3 rgb) {
