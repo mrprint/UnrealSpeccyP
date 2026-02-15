@@ -252,10 +252,10 @@ const float DOT_CRAWL_SUB_MULT = 0.5;         // Subcarrier frequency multiplier
 const float DOT_CRAWL_FRAME_SPEED = 0.3;      // Frame animation speed
 const float DOT_CRAWL_STRENGTH = 0.02;        // Base crawl intensity
 
-// PAL Chroma Bandwidth Limit: Simulate low-pass filter on U/V channels (GLSL 3.3 compliant—no vec5!)
+// PAL Chroma Bandwidth Limit: Simulate low-pass filter on U/V channels
 const float CHROMA_REF_PIXELS = 320.0;         // Reference resolution for scaling
 const float CHROMA_RADIUS = 0.5;               // Effective filter radius (texture pixels)
-// Split vec5 into individual floats (GLSL 3.3 doesn't support vec5!)
+
 const float CHROMA_WEIGHT_LEFT_1_5 = 0.08;    // Left 1.5x step weight
 const float CHROMA_WEIGHT_LEFT_0_75 = 0.22;   // Left 0.75x step weight
 const float CHROMA_WEIGHT_CENTER = 0.40;      // Center sample weight
@@ -310,7 +310,7 @@ vec3 yuv2rgb(vec3 yuv) {
 void main() {
     // Precompute values used multiple times to avoid redundant calculations
     vec2 texelSize = 1.0 / fbSize;             // Texture coordinate per pixel
-    vec2 uv = TexCoord;                        // --- FIX: Declare uv as alias for TexCoord ---
+    vec2 uv = TexCoord;
     vec4 color = texture(fbTexture, uv);       // Use uv instead of TexCoord (consistent)
     vec2 fragPos = gl_FragCoord.xy;            // Fragment position for mask/line math
 
@@ -331,7 +331,6 @@ void main() {
         vec3 yuvR0_75 = rgb2yuv(texture(fbTexture, uv + offset0_75).rgb);
         vec3 yuvR1_5 = rgb2yuv(texture(fbTexture, uv + offset1_5).rgb);
 
-        // --- Fixed: Replace vec5 with individual float weights (GLSL 3.3 compliant) ---
         vec3 yuvCenter = rgb2yuv(texture(fbTexture, uv).rgb);
         vec2 filteredChroma =
             yuvL1_5.yz * CHROMA_WEIGHT_LEFT_1_5 +
@@ -391,7 +390,7 @@ void main() {
     if (showScanlines != 0) {
         float scanFreq = SLINES_CNT * 2.0 * PI;              // Full sine waves per frame
         color.rgb *= SCANLINE_PARAMS.x +
-                     SCANLINE_PARAMS.y * sin(TexCoord.y * scanFreq); // Use TexCoord here (scanlines are screen-space)
+                     SCANLINE_PARAMS.y * sin(TexCoord.y * scanFreq);
     }
 
     // --- Final White Balance: Correct PAL RGB output ---
