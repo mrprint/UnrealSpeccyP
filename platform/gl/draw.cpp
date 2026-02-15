@@ -118,12 +118,12 @@ namespace xPlatform
         virtual int Order() const { return 39; }
     } op_scanlines;
 
-    static struct eOptionMipmaping : public xOptions::eOptionBool
+    static struct eOptionMipmapping : public xOptions::eOptionBool
     {
-        eOptionMipmaping() { Set(DEFAULT_MIPMAPING); }
-        virtual const char* Name() const { return "mipmaping"; }
+        eOptionMipmapping() { Set(DEFAULT_MIPMAPPING); }
+        virtual const char* Name() const { return "mipmapping"; }
         virtual int Order() const { return 46; }
-    } op_mipmaping;
+    } op_mipmapping;
 
     template<typename T>
     struct CachedUniform
@@ -187,10 +187,10 @@ namespace xPlatform
 
     const char* vertex_src = // vertex shader:
         R"(
-#version 330 core
+#version 130
 
-layout (location = 0) in vec2 aPos;
-layout (location = 1) in vec2 aTexCoord;
+in vec2 aPos;
+in vec2 aTexCoord;
 out vec2 TexCoord;
 
 uniform vec2 scale;
@@ -205,7 +205,7 @@ void main()
 
     const char* fb_fragment_src = // fragment shader:
         R"(
-#version 330 core
+#version 130
 
 out vec4 FragColor;
 in vec2 TexCoord;
@@ -225,7 +225,7 @@ void main()
 
     const char* screen_fragment_src =  // fragment shader:
         R"(
-#version 330 core
+#version 130
 
 in vec2 TexCoord;
 out vec4 FragColor;
@@ -430,6 +430,8 @@ void main() {
         GLuint program = glCreateProgram();
         glAttachShader(program, vert);
         glAttachShader(program, frag);
+        glBindAttribLocation(program, 0, "aPos");
+        glBindAttribLocation(program, 1, "aTexCoord");
         glLinkProgram(program);
 
         GLint success;
@@ -744,7 +746,7 @@ void main() {
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, fb_texture);
-        if (op_mipmaping)
+        if (op_mipmapping)
         {
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);

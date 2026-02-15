@@ -32,7 +32,7 @@ namespace xPlatform {
 
 	OptionsDialog::OptionsDialog(wxWindow* parent)
 		: wxDialog(parent, wxID_ANY, _("Emulator Options"))
-		, mipmap_enabled(DEFAULT_MIPMAPING)
+		, mipmap_enabled(DEFAULT_MIPMAPPING)
 		, mask_scale_val(DEFAULT_MASK_SCALE)
 	{
 		LoadCurrentSettings();
@@ -91,18 +91,14 @@ namespace xPlatform {
 
 		// Video Sizer Direct Controls
 		wxWindow* videoBox = videoSizer->GetStaticBox(); // Get static box for videoSizer
+		checkMipmapping_ = new wxCheckBox(videoBox, ID_CHECK_MIPMAPPING, _("Enable Mipmapping"));
+		videoSizer->Add(checkMipmapping_, 0, wxALL, padding);
+
 		checkGigascreen_ = new wxCheckBox(videoBox, ID_CHECK_GIGASCREEN, _("Enable Gigascreen"));
 		videoSizer->Add(checkGigascreen_, 0, wxALL, padding);
 
 		checkScanlines_ = new wxCheckBox(videoBox, ID_CHECK_SCANLINES, _("Enable CRT Scanlines"));
 		videoSizer->Add(checkScanlines_, 0, wxALL, padding);
-
-		// Mipmapping checkbox
-		checkMipmaping_ = new wxCheckBox(videoBox, ID_CHECK_MIPMAPPING, _("Enable Mipmapping"));
-		videoSizer->Add(checkMipmaping_, 0, wxALL, padding);
-
-		// Mask scale slider section
-		wxStaticText* maskScaleLabel = new wxStaticText(videoBox, wxID_ANY, _("CRT Mask Scale:"));
 
 		videoSizer->Add(new wxStaticText(videoBox, wxID_ANY, _("CRT Mask Scale")), 0, wxALL, padding / 2);
 		sliderMaskScale_ = new wxSlider(videoBox, wxID_ANY, DEFAULT_MASK_SCALE, 0, 4, wxDefaultPosition, wxSize(250, -1));
@@ -264,7 +260,7 @@ namespace xPlatform {
 		float beam_val = static_cast<float>(beam_spread_val) / 100.0f * 2.0f;
 		labelBeamSpread_->SetLabel(wxString::Format(_("%.1f"), beam_val));
 
-		checkMipmaping_->SetValue(mipmap_enabled);
+		checkMipmapping_->SetValue(mipmap_enabled);
 		sliderMaskScale_->SetValue(mask_scale_val);
 
 		wxString label;
@@ -295,8 +291,8 @@ namespace xPlatform {
 		beam_spread_val = *xOptions::eOption<int>::Find("beam spread");
 
 		// Mipmapping option
-		xOptions::eOption<bool>* op_mipmap = xOptions::eOption<bool>::Find("mipmaping");
-		mipmap_enabled = op_mipmap ? *op_mipmap : DEFAULT_MIPMAPING;
+		xOptions::eOption<bool>* op_mipmap = xOptions::eOption<bool>::Find("mipmapping");
+		mipmap_enabled = op_mipmap ? *op_mipmap : DEFAULT_MIPMAPPING;
 
 		// Mask scale option
 		xOptions::eOption<int>* op_mask = xOptions::eOption<int>::Find("mask scale");
@@ -394,7 +390,7 @@ namespace xPlatform {
 		xOptions::eOption<int>* op_beam_spread = xOptions::eOption<int>::Find("beam spread");
 		if (op_beam_spread) { op_beam_spread->Set(beam_spread_val); op_beam_spread->Apply(); }
 
-		xOptions::eOption<bool>* op_mipmap = xOptions::eOption<bool>::Find("mipmaping");
+		xOptions::eOption<bool>* op_mipmap = xOptions::eOption<bool>::Find("mipmapping");
 		if (op_mipmap) { op_mipmap->Set(mipmap_enabled); op_mipmap->Apply();}
 
 		xOptions::eOption<int>* op_mask = xOptions::eOption<int>::Find("mask scale");
@@ -421,7 +417,7 @@ namespace xPlatform {
 		pal_effects_enabled = DEFAULT_PAL_EFFECTS;
 		pal_strength_val = DEFAULT_PAL_STRENGTH;
 		beam_spread_val = DEFAULT_BEAM_SPREAD;
-		mipmap_enabled = DEFAULT_MIPMAPING;
+		mipmap_enabled = DEFAULT_MIPMAPPING;
 		mask_scale_val = DEFAULT_MASK_SCALE;
 		ReflectSettings();
 	}

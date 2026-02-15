@@ -86,7 +86,7 @@ namespace xPlatform {
 		wxStaticText* labelPalStrength_;
 		wxSlider* sliderBeamSpread_;
 		wxStaticText* labelBeamSpread_;
-		wxCheckBox* checkMipmaping_;
+		wxCheckBox* checkMipmapping_;
 		wxSlider* sliderMaskScale_;
 		wxStaticText* labelMaskScale_;
 

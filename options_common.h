@@ -54,7 +54,7 @@ const bool DEFAULT_FILTERING = true;
 const bool DEFAULT_GIGASCREEN = false;
 const bool DEFAULT_SCANLINES = false;
 const float DEFAULT_ZOOM_VALUE = 1.0f;
-const bool DEFAULT_MIPMAPING = true;
+const bool DEFAULT_MIPMAPPING = true;
 const int DEFAULT_MASK_SCALE = 1; // CRT mask scale (0=disabled, 1-4=visible)
 
 const char* OpLastFolder();
