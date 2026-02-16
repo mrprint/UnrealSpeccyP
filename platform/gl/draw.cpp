@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <utility>
 #include <array>
+#include <cstring>
 
 #include "../platform.h"
 #ifdef USE_WXWIDGETS
@@ -159,6 +160,42 @@ namespace xPlatform
         void setUniform(const std::array<float, 2>& v) { glUniform2f(location, v[0], v[1]); }
     };
 
+    struct PingPbo
+    {
+        GLuint pbo[2] = { 0, 0 };
+        int index = 0;
+        GLsizeiptr size = 0;
+
+        void Init(GLsizeiptr buffer_size)
+        {
+            size = buffer_size;
+
+            glGenBuffers(2, pbo);
+
+            for (int i = 0; i < 2; ++i)
+            {
+                glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo[i]);
+                glBufferData(GL_PIXEL_UNPACK_BUFFER, size, nullptr, GL_STREAM_DRAW);
+            }
+
+            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+        }
+
+        void Destroy()
+        {
+            glDeleteBuffers(2, pbo);
+            pbo[0] = pbo[1] = 0;
+        }
+
+        GLuint WritePBO() const { return pbo[index]; }
+        GLuint ReadPBO()  const { return pbo[(index + 1) % 2]; }
+
+        void Swap()
+        {
+            index = (index + 1) % 2;
+        }
+    };
+
     static GLuint fb_texture{}, texture_id1{}, texture_id2{};
     static GLuint ebo{};
     static GLuint vao1{}, vbo1{};
@@ -178,6 +215,17 @@ namespace xPlatform
     CachedUniform<int> u_enable_pal_effects_cached;
     CachedUniform<float> u_pal_strength_cached;
     CachedUniform<float> u_beam_spread_cached;
+
+    // Global state cache to reduce driver calls
+    static GLuint current_program = 0;
+    bool mip_enabled_current = false;
+    bool mip_dirty = true;
+    static GLuint bound_tex[2] = { 0, 0 }; // TEXTURE0/TEXTURE1 binding cache
+    static const size_t tex_pixel_size = sline_len * slines_cnt * sizeof(dword); // 512x256 RGBA8
+
+    // PBOs for texture_id1/texture_id2 (reduces CPU-GPU sync)
+    PingPbo pbo_tex1;
+    PingPbo pbo_tex2;
 
     static int fb_width = sline_len * 4, fb_height = slines_cnt * 4;
 
@@ -447,6 +495,68 @@ void main() {
         return program;
     }
 
+    inline void UseProgram(GLuint program) {
+        if (current_program != program) {
+            glUseProgram(program);
+            current_program = program;
+        }
+    }
+
+    inline void BindTextureUnit(GLenum unit, GLuint tex) {
+        int unit_idx = (unit == GL_TEXTURE0) ? 0 : (unit == GL_TEXTURE1) ? 1 : -1;
+        if (unit_idx < 0) return;
+
+        glActiveTexture(unit);
+        if (bound_tex[unit_idx] != tex) {
+            glBindTexture(GL_TEXTURE_2D, tex);
+            bound_tex[unit_idx] = tex;
+        }
+    }
+
+    inline void UploadTexturePingPong(
+        PingPbo& ppbo,
+        GLuint texture,
+        const void* src,
+        GLsizei width,
+        GLsizei height,
+        GLsizeiptr data_size)
+    {
+        const GLuint read_pbo = ppbo.ReadPBO();
+        const GLuint write_pbo = ppbo.WritePBO();
+
+        // --- 1. GPU reads from previous buffer ---
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, read_pbo);
+
+        glTexSubImage2D(GL_TEXTURE_2D,
+            0,
+            0, 0,
+            width,
+            height,
+            GL_RGBA,
+            GL_UNSIGNED_BYTE,
+            nullptr);
+
+        // --- 2. CPU writes into new buffer ---
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, write_pbo);
+
+        // orphaning
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, data_size, nullptr, GL_STREAM_DRAW);
+
+        void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER,
+            0,
+            data_size,
+            GL_MAP_WRITE_BIT |
+            GL_MAP_INVALIDATE_BUFFER_BIT);
+
+        if (ptr)
+        {
+            std::memcpy(ptr, src, data_size);
+            glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+        }
+
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    }
+
     void initGraphics(int scr_width, int scr_height)
     {
         if (scr_height != -1)
@@ -461,7 +571,7 @@ void main() {
             fb_height = int(slines_cnt * base_scale);
         }
 
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 
         glGenTextures(1, &texture_id1);
         glBindTexture(GL_TEXTURE_2D, texture_id1);
@@ -599,6 +709,10 @@ void main() {
         {
             xPlatform::reportError("Shader Uniform Error", "Failed to get uniform locations.");
         }
+
+        // Initialize PBOs for texture uploads (reduces CPU-GPU sync)
+        pbo_tex1.Init(tex_pixel_size);
+        pbo_tex2.Init(tex_pixel_size);
     }
 
     void cleanupGraphics()
@@ -614,6 +728,10 @@ void main() {
         glDeleteVertexArrays(1, &vao2);
         glDeleteProgram(fb_shader);
         glDeleteProgram(screen_shader);
+
+        // Cleanup PBOs
+        pbo_tex1.Destroy();
+        pbo_tex2.Destroy();
     }
 
 #ifdef USE_BIG_ENDIAN
@@ -692,7 +810,7 @@ void main() {
         PROFILER_SECTION(draw);
 
         float aspect_src = 320.0f / 240.0f;
-        float aspect_dst = (float)vport_width / (float)vport_height;
+        float aspect_dst = (float)vport_width / vport_height;
         float scale_x = 1.0f, scale_y = 1.0f;
 
         if (aspect_dst > aspect_src) {
@@ -702,38 +820,54 @@ void main() {
             scale_y = aspect_dst / aspect_src;
         }
 
-        // 1st pass: render to FBO
+        if (op_mipmapping != mip_enabled_current)
+        {
+            mip_enabled_current = op_mipmapping;
+            mip_dirty = true;
+        }
 
+        // --- First Pass: Render to FBO ---
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
         glViewport(0, 0, fb_width, fb_height);
 
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        glUseProgram(fb_shader);
+        UseProgram(fb_shader); // Minimize program switches
         u_blend_factor_cached.update(giga_enabled ? 0.5f : 0.0f);
         u_scale_cached.update({ 1.0f, 1.0f });
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, texture_id1);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sline_len, slines_cnt, GL_RGBA, GL_UNSIGNED_BYTE, p_tex1);
+        // --- texture 1 ---
+        BindTextureUnit(GL_TEXTURE0, texture_id1);
+        UploadTexturePingPong(
+            pbo_tex1,
+            texture_id1,
+            p_tex1,
+            sline_len,
+            slines_cnt,
+            tex_pixel_size);
         u_texture1_cached.update(0);
 
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, texture_id2);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sline_len, slines_cnt, GL_RGBA, GL_UNSIGNED_BYTE, p_tex2);
-        u_texture2_cached.update(1);
+        // --- texture 2 ---
+        if (giga_enabled)
+        {
+            BindTextureUnit(GL_TEXTURE1, texture_id2);
+            UploadTexturePingPong(
+                pbo_tex2,
+                texture_id2,
+                p_tex2,
+                sline_len,
+                slines_cnt,
+                tex_pixel_size);
+            u_texture2_cached.update(1);
+        }
 
         glBindVertexArray(vao2);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-        // 2nd pass: render FBO texture to screen (downsampled)
+        // --- Second Pass: Render FBO to Screen ---
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, vport_width, vport_height);
-
         glClear(GL_COLOR_BUFFER_BIT);
 
-        // In the screen shader section of DrawGL():
-        glUseProgram(screen_shader);
+        UseProgram(screen_shader); // Minimize program switches
         u_show_scanlines_cached.update(op_scanlines && vport_height > slines_cnt + slines_cnt / 2 ? 1 : 0);
         u_simple_scale_cached.update({ scale_x * opZoom(), scale_y * opZoom() });
         u_fb_texture_cached.update(0);
@@ -744,25 +878,33 @@ void main() {
         u_pal_strength_cached.update(static_cast<float>(OpPalStrength()) / 100.0f);
         u_beam_spread_cached.update(static_cast<float>(OpBeamSpread()) / 100.0f * 2.0f);
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, fb_texture);
-        if (op_mipmapping)
+        BindTextureUnit(GL_TEXTURE0, fb_texture);
+        if (mip_enabled_current)
         {
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            if (mip_dirty)
+            {
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                mip_dirty = false;
+            }
             glGenerateMipmap(GL_TEXTURE_2D);
         }
         else
         {
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
+            if (mip_dirty)
+            {
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                mip_dirty = false;
+            }
         }
 
         glBindVertexArray(vao1);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-    }
 
+        pbo_tex1.Swap();
+        pbo_tex2.Swap();
+    }
 }
 //namespace xPlatform
 
