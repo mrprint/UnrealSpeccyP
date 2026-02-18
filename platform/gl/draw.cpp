@@ -18,7 +18,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <utility>
 #include <array>
-#include <cstring>
 
 #include "../platform.h"
 #ifdef USE_WXWIDGETS
@@ -160,42 +159,6 @@ namespace xPlatform
         void setUniform(const std::array<float, 2>& v) { glUniform2f(location, v[0], v[1]); }
     };
 
-    struct PingPbo
-    {
-        GLuint pbo[2] = { 0, 0 };
-        int index = 0;
-        GLsizeiptr size = 0;
-
-        void Init(GLsizeiptr buffer_size)
-        {
-            size = buffer_size;
-
-            glGenBuffers(2, pbo);
-
-            for (int i = 0; i < 2; ++i)
-            {
-                glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo[i]);
-                glBufferData(GL_PIXEL_UNPACK_BUFFER, size, nullptr, GL_STREAM_DRAW);
-            }
-
-            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-        }
-
-        void Destroy()
-        {
-            glDeleteBuffers(2, pbo);
-            pbo[0] = pbo[1] = 0;
-        }
-
-        GLuint WritePBO() const { return pbo[index]; }
-        GLuint ReadPBO()  const { return pbo[(index + 1) % 2]; }
-
-        void Swap()
-        {
-            index = (index + 1) % 2;
-        }
-    };
-
     static GLuint fb_texture{}, texture_id1{}, texture_id2{};
     static GLuint ebo{};
     static GLuint vao1{}, vbo1{};
@@ -221,17 +184,23 @@ namespace xPlatform
     bool mip_enabled_current = false;
     bool mip_dirty = true;
     static GLuint bound_tex[2] = { 0, 0 }; // TEXTURE0/TEXTURE1 binding cache
-    static const size_t tex_pixel_size = sline_len * slines_cnt * sizeof(dword); // 512x256 RGBA8
-
-    // PBOs for texture_id1/texture_id2 (reduces CPU-GPU sync)
-    PingPbo pbo_tex1;
-    PingPbo pbo_tex2;
 
     static int fb_width = sline_len * 4, fb_height = slines_cnt * 4;
 
     static dword tex1[sline_len * slines_cnt], * p_tex1 = tex1;
     static dword tex2[sline_len * slines_cnt], * p_tex2 = tex2;
     static int video_frame_last = -1;
+    // FIX: track whether gigascreen was enabled last frame so we can detect
+    // the transition and avoid suppressing the swap incorrectly on re-enable.
+    static bool giga_was_enabled = false;
+
+    // Track viewport and scale state so we only glClear when letterbox/pillarbox
+    // regions actually change.  Clearing every frame wastes fillrate and causes a
+    // one-frame black flash whenever the driver forces a buffer swap.
+    static int  last_vport_width = -1;
+    static int  last_vport_height = -1;
+    static int  last_zoom = -1;   // op_zoom ordinal
+    static bool pending_clear = false; // need to clear the second buffer next frame
 
     const char* vertex_src = // vertex shader:
         R"(
@@ -513,19 +482,16 @@ void main() {
         }
     }
 
-    inline void UploadTexturePingPong(
-        PingPbo& ppbo,
+    // Upload CPU-side pixel data directly to a texture.
+    inline void UploadTexture(
         GLuint texture,
         const void* src,
         GLsizei width,
-        GLsizei height,
-        GLsizeiptr data_size)
+        GLsizei height)
     {
-        const GLuint read_pbo = ppbo.ReadPBO();
-        const GLuint write_pbo = ppbo.WritePBO();
-
-        // --- 1. GPU reads from previous buffer ---
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, read_pbo);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        bound_tex[0] = texture;
 
         glTexSubImage2D(GL_TEXTURE_2D,
             0,
@@ -534,41 +500,25 @@ void main() {
             height,
             GL_RGBA,
             GL_UNSIGNED_BYTE,
-            nullptr);
-
-        // --- 2. CPU writes into new buffer ---
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, write_pbo);
-
-        // orphaning
-        glBufferData(GL_PIXEL_UNPACK_BUFFER, data_size, nullptr, GL_STREAM_DRAW);
-
-        void* ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER,
-            0,
-            data_size,
-            GL_MAP_WRITE_BIT |
-            GL_MAP_INVALIDATE_BUFFER_BIT);
-
-        if (ptr)
-        {
-            std::memcpy(ptr, src, data_size);
-            glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-        }
-
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+            src);
     }
 
     void initGraphics(int scr_width, int scr_height)
     {
         if (scr_height != -1)
         {
-            float base_scale =
-                (float)((scr_width > scr_height) ? scr_width : scr_height) /
-                (float)((scr_width > scr_height) ? sline_len : slines_cnt);
+            // How many whole source pixels fit along each axis at the target viewport size,
+            // rounded up to the nearest integer multiple of the source resolution.
+            int scale_x = (scr_width + sline_len - 1) / sline_len;   // ceil(scr_w / src_w)
+            int scale_y = (scr_height + slines_cnt - 1) / slines_cnt;  // ceil(scr_h / src_h)
 
-            base_scale *= 2.0f;
+            // Use the same integer scale on both axes to keep pixels square.
+            int scale = (scale_x > scale_y) ? scale_x : scale_y;
+            // Clamp to at least 1x.
+            if (scale < 1) scale = 1;
 
-            fb_width = int(sline_len * base_scale);
-            fb_height = int(slines_cnt * base_scale);
+            fb_width = sline_len * scale;
+            fb_height = slines_cnt * scale;
         }
 
         glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
@@ -623,17 +573,21 @@ void main() {
 
         unsigned int indices[] = { 0, 1, 2, 0, 2, 3 };
 
+        glGenBuffers(1, &ebo);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
         glGenVertexArrays(1, &vao1);
         glGenBuffers(1, &vbo1);
-        glGenBuffers(1, &ebo);
 
         glBindVertexArray(vao1);
 
         glBindBuffer(GL_ARRAY_BUFFER, vbo1);
         glBufferData(GL_ARRAY_BUFFER, sizeof(vertices_scaled), vertices_scaled, GL_STATIC_DRAW);
 
+        // Bind the shared EBO into this VAO's state.
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
         glEnableVertexAttribArray(0);
@@ -648,13 +602,15 @@ void main() {
         glBindBuffer(GL_ARRAY_BUFFER, vbo2);
         glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
+        // Bind the same EBO into vao2's state (no re-upload needed).
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
         glEnableVertexAttribArray(1);
+
+        glBindVertexArray(0);
 
         // Create and attach framebuffer
         glGenFramebuffers(1, &fbo);
@@ -709,10 +665,6 @@ void main() {
         {
             xPlatform::reportError("Shader Uniform Error", "Failed to get uniform locations.");
         }
-
-        // Initialize PBOs for texture uploads (reduces CPU-GPU sync)
-        pbo_tex1.Init(tex_pixel_size);
-        pbo_tex2.Init(tex_pixel_size);
     }
 
     void cleanupGraphics()
@@ -728,10 +680,6 @@ void main() {
         glDeleteVertexArrays(1, &vao2);
         glDeleteProgram(fb_shader);
         glDeleteProgram(screen_shader);
-
-        // Cleanup PBOs
-        pbo_tex1.Destroy();
-        pbo_tex2.Destroy();
     }
 
 #ifdef USE_BIG_ENDIAN
@@ -769,6 +717,10 @@ void main() {
 
         bool giga_enabled = op_gigascreen;
 
+        if (giga_enabled && !giga_was_enabled)
+            video_frame_last = -1;
+        giga_was_enabled = giga_enabled;
+
         if (giga_enabled && video_frame_last != Handler()->VideoFrame())
         {
             std::swap(p_tex1, p_tex2);
@@ -776,7 +728,7 @@ void main() {
         video_frame_last = Handler()->VideoFrame();
 
         byte* data = (byte*)Handler()->VideoData();
-        dword* p = p_tex1; // swap?
+        dword* p = p_tex1;
 
 #ifdef USE_UI
         byte* data_ui = (byte*)Handler()->VideoDataUI();
@@ -830,34 +782,27 @@ void main() {
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
         glViewport(0, 0, fb_width, fb_height);
 
-        UseProgram(fb_shader); // Minimize program switches
+        UseProgram(fb_shader);
         u_blend_factor_cached.update(giga_enabled ? 0.5f : 0.0f);
         u_scale_cached.update({ 1.0f, 1.0f });
 
         // --- texture 1 ---
-        BindTextureUnit(GL_TEXTURE0, texture_id1);
-        UploadTexturePingPong(
-            pbo_tex1,
-            texture_id1,
-            p_tex1,
-            sline_len,
-            slines_cnt,
-            tex_pixel_size);
+        UploadTexture(texture_id1, p_tex1, sline_len, slines_cnt);
         u_texture1_cached.update(0);
 
         // --- texture 2 ---
         if (giga_enabled)
         {
+            UploadTexture(texture_id2, p_tex2, sline_len, slines_cnt);
+
+            // Restore TEXTURE1 binding so the shader sampler is correct.
             BindTextureUnit(GL_TEXTURE1, texture_id2);
-            UploadTexturePingPong(
-                pbo_tex2,
-                texture_id2,
-                p_tex2,
-                sline_len,
-                slines_cnt,
-                tex_pixel_size);
             u_texture2_cached.update(1);
         }
+
+        // Restore TEXTURE0 binding for the draw call (upload fn may have
+        // left the active unit pointing elsewhere).
+        BindTextureUnit(GL_TEXTURE0, texture_id1);
 
         glBindVertexArray(vao2);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -865,9 +810,39 @@ void main() {
         // --- Second Pass: Render FBO to Screen ---
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, vport_width, vport_height);
-        glClear(GL_COLOR_BUFFER_BIT);
 
-        UseProgram(screen_shader); // Minimize program switches
+        // Only clear when the letterbox/pillarbox regions have actually changed
+        // (viewport resize or zoom mode change).  Clearing every frame wastes
+        // fillrate and can produce a one-frame black flash on some drivers.
+        {
+            int cur_zoom = static_cast<int>(op_zoom);
+            bool layout_changed = (vport_width != last_vport_width ||
+                vport_height != last_vport_height ||
+                cur_zoom != last_zoom);
+            if (layout_changed)
+            {
+                // Clear both buffers in the swap chain so neither the front
+                // nor the back buffer retains stale content from the old
+                // layout.  Without this, double-buffering causes a one-frame
+                // black or wrongly-bordered flash when zoom mode changes.
+                glClear(GL_COLOR_BUFFER_BIT);
+                // The platform's swap-buffers call will happen after DrawGL
+                // returns, so we mark that we need a second clear next frame
+                // to cover the other buffer.
+                pending_clear = true;
+
+                last_vport_width = vport_width;
+                last_vport_height = vport_height;
+                last_zoom = cur_zoom;
+            }
+            else if (pending_clear)
+            {
+                glClear(GL_COLOR_BUFFER_BIT);
+                pending_clear = false;
+            }
+        }
+
+        UseProgram(screen_shader);
         u_show_scanlines_cached.update(op_scanlines && vport_height > slines_cnt + slines_cnt / 2 ? 1 : 0);
         u_simple_scale_cached.update({ scale_x * opZoom(), scale_y * opZoom() });
         u_fb_texture_cached.update(0);
@@ -901,9 +876,6 @@ void main() {
 
         glBindVertexArray(vao1);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-        pbo_tex1.Swap();
-        pbo_tex2.Swap();
     }
 }
 //namespace xPlatform
