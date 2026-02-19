@@ -51,15 +51,12 @@ namespace xPlatform
     {
 #ifdef USE_WXWIDGETS
         wxMessageBox(wxString::Format("%s\n\n%s", title, message),
-            title,
-            wxOK | wxICON_ERROR);
+            title, wxOK | wxICON_ERROR);
 #else
         fprintf(stderr, "%s: %s\n", title, message);
 #endif
-
-        if (exit_on_error) {
+        if (exit_on_error)
             exit(EXIT_FAILURE);
-        }
     }
 
     void initGlew()
@@ -78,17 +75,14 @@ namespace xPlatform
             static const char* values[] = { "fill screen", "small border", "no border", NULL };
             return values;
         }
-        virtual void Change(bool next = true)
-        {
-            eOptionEnum::Change(0, 3, next);
-        }
+        virtual void Change(bool next = true) { eOptionEnum::Change(0, 3, next); }
         virtual int Order() const { return 35; }
         float Zoom() const
         {
             switch (*this)
             {
-            case 1: return 300.0f / 256.0f;
-            case 2: return 320.0f / 256.0f;
+            case 1:  return 300.0f / 256.0f;
+            case 2:  return 320.0f / 256.0f;
             default: return DEFAULT_ZOOM_VALUE;
             }
         }
@@ -125,19 +119,19 @@ namespace xPlatform
         virtual int Order() const { return 46; }
     } op_mipmapping;
 
+    // -------------------------------------------------------------------------
+    // CachedUniform
+    // -------------------------------------------------------------------------
+
     template<typename T>
     struct CachedUniform
     {
         GLint location = -1;
-        T value{};
-        bool valid = false;
-        bool first_update = true;
+        T     value{};
+        bool  valid = false;
+        bool  first_update = true;
 
-        void set(GLint loc)
-        {
-            location = loc;
-            valid = true;
-        }
+        void set(GLint loc) { location = loc; valid = true; }
 
         void update(const T& new_val)
         {
@@ -145,9 +139,7 @@ namespace xPlatform
             {
                 value = new_val;
                 if (location != -1)
-                {
                     setUniform(new_val);
-                }
                 valid = true;
                 first_update = false;
             }
@@ -159,88 +151,94 @@ namespace xPlatform
         void setUniform(const std::array<float, 2>& v) { glUniform2f(location, v[0], v[1]); }
     };
 
+    // -------------------------------------------------------------------------
+    // GL objects
+    // -------------------------------------------------------------------------
+
     static GLuint fb_texture{}, texture_id1{}, texture_id2{};
     static GLuint ebo{};
-    static GLuint vao1{}, vbo1{};
-    static GLuint vao2{}, vbo2{};
+    static GLuint vao1{}, vbo1{};   // cropped quad (320x240 visible area)
+    static GLuint vao2{}, vbo2{};   // full NDC quad (FBO / screen pass)
     static GLuint fbo{};
-    static GLuint fb_shader{}, screen_shader{};
+    static GLuint fb_shader{}, screen_shader{}, lw_shader{};
 
-    CachedUniform<float> u_blend_factor_cached;
+    // Full-quality uniforms
+    CachedUniform<float>               u_blend_factor_cached;
     CachedUniform<std::array<float, 2>> u_scale_cached;
-    CachedUniform<int> u_texture1_cached;
-    CachedUniform<int> u_texture2_cached;
-    CachedUniform<int> u_show_scanlines_cached;
+    CachedUniform<int>                 u_texture1_cached;
+    CachedUniform<int>                 u_texture2_cached;
+    CachedUniform<int>                 u_show_scanlines_cached;
     CachedUniform<std::array<float, 2>> u_simple_scale_cached;
-    CachedUniform<int> u_fb_texture_cached;
+    CachedUniform<int>                 u_fb_texture_cached;
     CachedUniform<std::array<float, 2>> u_fb_size_cached;
-    CachedUniform<int> u_mask_scale_cached;
-    CachedUniform<int> u_enable_pal_effects_cached;
-    CachedUniform<float> u_pal_strength_cached;
-    CachedUniform<float> u_beam_spread_cached;
+    CachedUniform<int>                 u_mask_scale_cached;
+    CachedUniform<int>                 u_enable_pal_effects_cached;
+    CachedUniform<float>               u_pal_strength_cached;
+    CachedUniform<float>               u_beam_spread_cached;
 
-    // Global state cache to reduce driver calls
+    // Lightweight uniforms
+    CachedUniform<std::array<float, 2>> u_lw_scale;
+    CachedUniform<float>               u_lw_blend_factor;
+    CachedUniform<int>                 u_lw_texture1;
+    CachedUniform<int>                 u_lw_texture2;
+    CachedUniform<int>                 u_lw_show_scanlines;
+    CachedUniform<int>                 u_lw_mask_scale; // same value uploaded to both shaders
+
+    // Driver-call reduction
     static GLuint current_program = 0;
-    bool mip_enabled_current = false;
-    bool mip_dirty = true;
-    static GLuint bound_tex[2] = { 0, 0 }; // TEXTURE0/TEXTURE1 binding cache
+    bool          mip_enabled_current = false;
+    bool          mip_dirty = true;
+    static GLuint bound_tex[2] = { 0, 0 }; // TEXTURE0/TEXTURE1 cache
 
-    static int fb_width = sline_len * 4, fb_height = slines_cnt * 4;
+    static int fb_width = sline_len * 4;
+    static int fb_height = slines_cnt * 4;
 
     static dword tex1[sline_len * slines_cnt], * p_tex1 = tex1;
     static dword tex2[sline_len * slines_cnt], * p_tex2 = tex2;
-    static int video_frame_last = -1;
-    // FIX: track whether gigascreen was enabled last frame so we can detect
-    // the transition and avoid suppressing the swap incorrectly on re-enable.
-    static bool giga_was_enabled = false;
+    static int   video_frame_last = -1;
+    static bool  giga_was_enabled = false;
 
-    // Track viewport and scale state so we only glClear when letterbox/pillarbox
-    // regions actually change.  Clearing every frame wastes fillrate and causes a
-    // one-frame black flash whenever the driver forces a buffer swap.
+    // Layout-change tracking for glClear
     static int  last_vport_width = -1;
     static int  last_vport_height = -1;
-    static int  last_zoom = -1;   // op_zoom ordinal
-    static bool pending_clear = false; // need to clear the second buffer next frame
+    static int  last_zoom = -1;
+    static bool pending_clear = false;
 
-    const char* vertex_src = // vertex shader:
+    // -------------------------------------------------------------------------
+    // Shaders
+    // -------------------------------------------------------------------------
+
+    const char* vertex_src =
         R"(
 #version 130
-
 in vec2 aPos;
 in vec2 aTexCoord;
 out vec2 TexCoord;
-
 uniform vec2 scale;
-
 void main()
 {
-    vec2 pos = aPos * scale;
-    gl_Position = vec4(pos, 0.0, 1.0);
+    gl_Position = vec4(aPos * scale, 0.0, 1.0);
     TexCoord = aTexCoord;
 }
 )";
 
-    const char* fb_fragment_src = // fragment shader:
+    // First pass: gigascreen blend into FBO
+    const char* fb_fragment_src =
         R"(
 #version 130
-
 out vec4 FragColor;
 in vec2 TexCoord;
-
 uniform sampler2D texture1;
 uniform sampler2D texture2;
 uniform float blendFactor;
-
 void main()
 {
-    vec4 color1 = texture(texture1, TexCoord);
-    vec4 color2 = texture(texture2, TexCoord);
-    vec4 color = mix(color1, color2, blendFactor);
-    FragColor = color;
+    FragColor = mix(texture(texture1, TexCoord), texture(texture2, TexCoord), blendFactor);
 }
 )";
 
-    const char* screen_fragment_src =  // fragment shader:
+    // Second pass: post-processing (PAL, mask, scanlines) on FBO output
+    const char* screen_fragment_src =
         R"(
 #version 130
 
@@ -421,22 +419,86 @@ void main() {
 }
 )";
 
+    // -------------------------------------------------------------------------
+    // Lightweight single-pass shader.
+    //
+    // No FBO, no PAL YUV pipeline.  One draw call: Speccy texture (with
+    // optional gigascreen blend) → screen, with scanlines and phosphor mask.
+    //
+    // Phosphor mask is in screen space (gl_FragCoord) for physically consistent
+    // column width.  srcScreenWidth is the screen-pixel span of the 320 source
+    // columns after zoom + aspect correction, uploaded each frame from the CPU.
+    // -------------------------------------------------------------------------
+    const char* lw_fragment_src =
+        R"(
+#version 130
+
+in vec2 TexCoord;
+out vec4 FragColor;
+
+uniform sampler2D texture1;
+uniform sampler2D texture2;
+uniform float blendFactor;
+uniform int   showScanlines;
+uniform int   maskScale; // same value as the full-quality pass — screen pixels per phase column
+
+const float SLINES_CNT = 256.0;
+const vec3  LUMINANCE  = vec3(0.299, 0.587, 0.114);
+
+// tri() gives a sharp V-shape — more CRT-like than sine, zero transcendental cost.
+// Scanline range: [SCAN_BASE - SCAN_AMP, SCAN_BASE + SCAN_AMP] = [0.79, 1.00]
+const float SCAN_BASE = 0.895;
+const float SCAN_AMP  = 0.105;
+
+float tri(float x) { return abs(fract(x) * 2.0 - 1.0); }
+
+void main()
+{
+    vec3 color = mix(
+        texture(texture1, TexCoord).rgb,
+        texture(texture2, TexCoord).rgb,
+        blendFactor);
+
+    // Scanlines in normalised texture space — resolution independent.
+    if (showScanlines != 0)
+        color *= SCAN_BASE + SCAN_AMP * tri(TexCoord.y * SLINES_CNT);
+
+    if (maskScale > 0)
+    {
+        float maskCol = floor(gl_FragCoord.x / float(maskScale));
+        float phase   = mod(maskCol, 3.0);
+
+        vec3 mask = vec3(
+            (phase < 1.0)                 ? 1.00 : 0.72,
+            (phase >= 1.0 && phase < 2.0) ? 1.00 : 0.72,
+            (phase >= 2.0)                ? 1.00 : 0.72);
+
+        float lum      = dot(color, LUMINANCE);
+        float strength = clamp((lum - 0.12) / 0.65, 0.0, 1.0) * 0.55;
+        color *= mix(vec3(1.0), mask, strength);
+    }
+
+    FragColor = vec4(color, 1.0);
+}
+)";
+
+    // -------------------------------------------------------------------------
+    // GL helpers
+    // -------------------------------------------------------------------------
+
     GLuint compileShader(GLenum type, const char* src)
     {
         GLuint shader = glCreateShader(type);
         glShaderSource(shader, 1, &src, nullptr);
         glCompileShader(shader);
-
-        GLint success;
-        glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-        if (!success)
+        GLint ok;
+        glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
+        if (!ok)
         {
             char log[512];
             glGetShaderInfoLog(shader, 512, nullptr, log);
-            reportError(
-                (type == GL_VERTEX_SHADER) ? "Vertex Shader Error" : "Fragment Shader Error",
-                log
-            );
+            reportError(type == GL_VERTEX_SHADER ? "Vertex Shader Error"
+                : "Fragment Shader Error", log);
             glDeleteShader(shader);
             return 0;
         }
@@ -445,105 +507,120 @@ void main() {
 
     GLuint linkProgram(GLuint vert, GLuint frag)
     {
-        GLuint program = glCreateProgram();
-        glAttachShader(program, vert);
-        glAttachShader(program, frag);
-        glBindAttribLocation(program, 0, "aPos");
-        glBindAttribLocation(program, 1, "aTexCoord");
-        glLinkProgram(program);
-
-        GLint success;
-        glGetProgramiv(program, GL_LINK_STATUS, &success);
-        if (!success)
+        GLuint prog = glCreateProgram();
+        glAttachShader(prog, vert);
+        glAttachShader(prog, frag);
+        glBindAttribLocation(prog, 0, "aPos");
+        glBindAttribLocation(prog, 1, "aTexCoord");
+        glLinkProgram(prog);
+        GLint ok;
+        glGetProgramiv(prog, GL_LINK_STATUS, &ok);
+        if (!ok)
         {
             char log[512];
-            glGetProgramInfoLog(program, 512, nullptr, log);
+            glGetProgramInfoLog(prog, 512, nullptr, log);
             reportError("Program Link Error", log);
-            glDeleteProgram(program);
+            glDeleteProgram(prog);
             return 0;
         }
-        return program;
+        return prog;
     }
 
-    inline void UseProgram(GLuint program) {
-        if (current_program != program) {
+    inline void UseProgram(GLuint program)
+    {
+        if (current_program != program)
+        {
             glUseProgram(program);
             current_program = program;
         }
     }
 
-    inline void BindTextureUnit(GLenum unit, GLuint tex) {
-        int unit_idx = (unit == GL_TEXTURE0) ? 0 : (unit == GL_TEXTURE1) ? 1 : -1;
-        if (unit_idx < 0) return;
-
+    inline void BindTextureUnit(GLenum unit, GLuint tex)
+    {
+        int idx = (unit == GL_TEXTURE0) ? 0 : (unit == GL_TEXTURE1) ? 1 : -1;
+        if (idx < 0) return;
         glActiveTexture(unit);
-        if (bound_tex[unit_idx] != tex) {
+        if (bound_tex[idx] != tex)
+        {
             glBindTexture(GL_TEXTURE_2D, tex);
-            bound_tex[unit_idx] = tex;
+            bound_tex[idx] = tex;
         }
     }
 
-    // Upload CPU-side pixel data directly to a texture.
-    inline void UploadTexture(
-        GLuint texture,
-        const void* src,
-        GLsizei width,
-        GLsizei height)
+    // Upload CPU pixel data directly.  Optimal for low-end GPUs where PBO
+    // async DMA stalls as badly as a direct glTexSubImage2D call.
+    inline void UploadTexture(GLuint texture, const void* src,
+        GLsizei width, GLsizei height)
     {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texture);
         bound_tex[0] = texture;
-
-        glTexSubImage2D(GL_TEXTURE_2D,
-            0,
-            0, 0,
-            width,
-            height,
-            GL_RGBA,
-            GL_UNSIGNED_BYTE,
-            src);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+            width, height, GL_RGBA, GL_UNSIGNED_BYTE, src);
     }
+
+    // Issue glClear only when the viewport or zoom mode changes, covering both
+    // swap-chain buffers over two consecutive frames to avoid double-buffer flicker.
+    void HandleLayoutClear(int vport_width, int vport_height)
+    {
+        int  cur_zoom = static_cast<int>(op_zoom);
+        bool layout_changed = (vport_width != last_vport_width ||
+            vport_height != last_vport_height ||
+            cur_zoom != last_zoom);
+        if (layout_changed)
+        {
+            glClear(GL_COLOR_BUFFER_BIT);
+            pending_clear = true;
+            last_vport_width = vport_width;
+            last_vport_height = vport_height;
+            last_zoom = cur_zoom;
+        }
+        else if (pending_clear)
+        {
+            glClear(GL_COLOR_BUFFER_BIT);
+            pending_clear = false;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // initGraphics
+    // -------------------------------------------------------------------------
 
     void initGraphics(int scr_width, int scr_height)
     {
         if (scr_height != -1)
         {
-            // How many whole source pixels fit along each axis at the target viewport size,
-            // rounded up to the nearest integer multiple of the source resolution.
-            int scale_x = (scr_width + sline_len - 1) / sline_len;   // ceil(scr_w / src_w)
-            int scale_y = (scr_height + slines_cnt - 1) / slines_cnt;  // ceil(scr_h / src_h)
-
-            // Use the same integer scale on both axes to keep pixels square.
-            int scale = (scale_x > scale_y) ? scale_x : scale_y;
-            // Clamp to at least 1x.
-            if (scale < 1) scale = 1;
-
-            fb_width = sline_len * scale;
-            fb_height = slines_cnt * scale;
+            // Smallest integer scale that covers the viewport on both axes,
+            // keeping pixels square.  Guarantees scanline/mask apertures land
+            // on whole FBO texel boundaries.
+            int sx = (scr_width + sline_len - 1) / sline_len;
+            int sy = (scr_height + slines_cnt - 1) / slines_cnt;
+            int s = (sx > sy) ? sx : sy;
+            if (s < 1) s = 1;
+            fb_width = sline_len * s;
+            fb_height = slines_cnt * s;
         }
 
         glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 
-        glGenTextures(1, &texture_id1);
-        glBindTexture(GL_TEXTURE_2D, texture_id1);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sline_len, slines_cnt, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        // Source textures (Speccy frame data)
+        for (GLuint* tid : { &texture_id1, &texture_id2 })
+        {
+            glGenTextures(1, tid);
+            glBindTexture(GL_TEXTURE_2D, *tid);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+                sline_len, slines_cnt, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        }
 
-        glGenTextures(1, &texture_id2);
-        glBindTexture(GL_TEXTURE_2D, texture_id2);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sline_len, slines_cnt, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
+        // FBO texture (intermediate render target for the full-quality path)
         glGenTextures(1, &fb_texture);
         glBindTexture(GL_TEXTURE_2D, fb_texture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, fb_width, fb_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+            fb_width, fb_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
@@ -552,88 +629,81 @@ void main() {
         {
             GLfloat maxAniso = 0.0f;
             glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &maxAniso);
-            GLfloat aniso = (maxAniso > 0.0f) ? maxAniso : 1.0f;
-            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, aniso);
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT,
+                maxAniso > 0.0f ? maxAniso : 1.0f);
         }
 #endif
 
-        float vertices[] = {
-            //  pos       // tex
+        // vao1: cropped quad — maps only the 320x240 visible area of the 512x256 texture.
+        // Used for the FBO blit pass and the lightweight single-pass draw.
+        float vertices_cropped[] = {
+            -1.0f,  1.0f, 0.0f,             0.0f,
+            -1.0f, -1.0f, 0.0f,             240.0f / 256.0f,
+             1.0f, -1.0f, 320.0f / 512.0f,  240.0f / 256.0f,
+             1.0f,  1.0f, 320.0f / 512.0f,  0.0f
+        };
+
+        // vao2: full NDC quad — maps [0,1]x[0,1] texture to the whole screen.
+        // Used for the screen post-processing pass.
+        float vertices_full[] = {
             -1.0f,  1.0f,  0.0f, 1.0f,
             -1.0f, -1.0f,  0.0f, 0.0f,
              1.0f, -1.0f,  1.0f, 0.0f,
              1.0f,  1.0f,  1.0f, 1.0f
         };
 
-        float vertices_scaled[] = {
-            -1.0f,  1.0f, 0.0f,            0.0f,
-            -1.0f, -1.0f, 0.0f,            240.0f / 256.0f,
-             1.0f, -1.0f, 320.0f / 512.0f, 240.0f / 256.0f,
-             1.0f,  1.0f, 320.0f / 512.0f, 0.0f
-        };
-
         unsigned int indices[] = { 0, 1, 2, 0, 2, 3 };
 
+        // Shared EBO — uploaded once, bound into both VAOs.
         glGenBuffers(1, &ebo);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-        glGenVertexArrays(1, &vao1);
-        glGenBuffers(1, &vbo1);
+        auto buildVAO = [](GLuint& vao, GLuint& vbo, float* verts, size_t vsize, GLuint ebo_)
+            {
+                glGenVertexArrays(1, &vao);
+                glGenBuffers(1, &vbo);
+                glBindVertexArray(vao);
+                glBindBuffer(GL_ARRAY_BUFFER, vbo);
+                glBufferData(GL_ARRAY_BUFFER, vsize, verts, GL_STATIC_DRAW);
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_);
+                glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+                glEnableVertexAttribArray(0);
+                glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
+                    (void*)(2 * sizeof(float)));
+                glEnableVertexAttribArray(1);
+            };
 
-        glBindVertexArray(vao1);
-
-        glBindBuffer(GL_ARRAY_BUFFER, vbo1);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices_scaled), vertices_scaled, GL_STATIC_DRAW);
-
-        // Bind the shared EBO into this VAO's state.
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-        glEnableVertexAttribArray(1);
-
-        glGenVertexArrays(1, &vao2);
-        glGenBuffers(1, &vbo2);
-
-        glBindVertexArray(vao2);
-
-        glBindBuffer(GL_ARRAY_BUFFER, vbo2);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-        // Bind the same EBO into vao2's state (no re-upload needed).
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-        glEnableVertexAttribArray(1);
-
+        buildVAO(vao1, vbo1, vertices_cropped, sizeof(vertices_cropped), ebo);
+        buildVAO(vao2, vbo2, vertices_full, sizeof(vertices_full), ebo);
         glBindVertexArray(0);
 
-        // Create and attach framebuffer
         glGenFramebuffers(1, &fbo);
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fb_texture, 0);
-
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+            GL_TEXTURE_2D, fb_texture, 0);
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-            reportError("Framebuffer Not Complete", "The framebuffer is not properly configured.");
-
+            reportError("Framebuffer Not Complete",
+                "The framebuffer is not properly configured.");
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-        GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertex_src);
-        GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fb_fragment_src);
-        GLuint simpleFragmentShader = compileShader(GL_FRAGMENT_SHADER, screen_fragment_src);
+        // Compile shaders
+        GLuint vs = compileShader(GL_VERTEX_SHADER, vertex_src);
+        GLuint fs_fb = compileShader(GL_FRAGMENT_SHADER, fb_fragment_src);
+        GLuint fs_screen = compileShader(GL_FRAGMENT_SHADER, screen_fragment_src);
+        GLuint fs_lw = compileShader(GL_FRAGMENT_SHADER, lw_fragment_src);
 
-        fb_shader = linkProgram(vertexShader, fragmentShader);
-        screen_shader = linkProgram(vertexShader, simpleFragmentShader);
+        fb_shader = linkProgram(vs, fs_fb);
+        screen_shader = linkProgram(vs, fs_screen);
+        lw_shader = linkProgram(vs, fs_lw);
 
-        glDeleteShader(vertexShader);
-        glDeleteShader(fragmentShader);
-        glDeleteShader(simpleFragmentShader);
+        glDeleteShader(vs);
+        glDeleteShader(fs_fb);
+        glDeleteShader(fs_screen);
+        glDeleteShader(fs_lw);
 
+        // Full-quality uniforms
         glUseProgram(fb_shader);
         u_scale_cached.set(glGetUniformLocation(fb_shader, "scale"));
         u_blend_factor_cached.set(glGetUniformLocation(fb_shader, "blendFactor"));
@@ -646,7 +716,6 @@ void main() {
         u_show_scanlines_cached.set(glGetUniformLocation(screen_shader, "showScanlines"));
         u_fb_size_cached.set(glGetUniformLocation(screen_shader, "fbSize"));
         u_mask_scale_cached.set(glGetUniformLocation(screen_shader, "maskScale"));
-
         u_enable_pal_effects_cached.set(glGetUniformLocation(screen_shader, "enablePalEffects"));
         u_pal_strength_cached.set(glGetUniformLocation(screen_shader, "palStrength"));
         u_beam_spread_cached.set(glGetUniformLocation(screen_shader, "beamSpread"));
@@ -664,9 +733,34 @@ void main() {
             u_pal_strength_cached.location == -1 ||
             u_beam_spread_cached.location == -1)
         {
-            xPlatform::reportError("Shader Uniform Error", "Failed to get uniform locations.");
+            xPlatform::reportError("Shader Uniform Error",
+                "Failed to get uniform locations (full-quality).");
+        }
+
+        // Lightweight uniforms
+        glUseProgram(lw_shader);
+        u_lw_scale.set(glGetUniformLocation(lw_shader, "scale"));
+        u_lw_blend_factor.set(glGetUniformLocation(lw_shader, "blendFactor"));
+        u_lw_texture1.set(glGetUniformLocation(lw_shader, "texture1"));
+        u_lw_texture2.set(glGetUniformLocation(lw_shader, "texture2"));
+        u_lw_show_scanlines.set(glGetUniformLocation(lw_shader, "showScanlines"));
+        u_lw_mask_scale.set(glGetUniformLocation(lw_shader, "maskScale"));
+
+        if (u_lw_scale.location == -1 ||
+            u_lw_blend_factor.location == -1 ||
+            u_lw_texture1.location == -1 ||
+            u_lw_texture2.location == -1 ||
+            u_lw_show_scanlines.location == -1 ||
+            u_lw_mask_scale.location == -1)
+        {
+            xPlatform::reportError("Shader Uniform Error",
+                "Failed to get uniform locations (lightweight).");
         }
     }
+
+    // -------------------------------------------------------------------------
+    // cleanupGraphics
+    // -------------------------------------------------------------------------
 
     void cleanupGraphics()
     {
@@ -681,17 +775,18 @@ void main() {
         glDeleteVertexArrays(1, &vao2);
         glDeleteProgram(fb_shader);
         glDeleteProgram(screen_shader);
+        glDeleteProgram(lw_shader);
     }
 
 #ifdef USE_BIG_ENDIAN
 #define RGBX(r, g, b) (((r) << 24)|((g) << 16)|((b) << 8))
-#else//USE_BIG_ENDIAN
+#else
 #define RGBX(r, g, b) (((b) << 16)|((g) << 8)|(r))
-#endif//USE_BIG_ENDIAN
+#endif
 
     //=============================================================================
-    //	DrawGL
-    //-----------------------------------------------------------------------------
+    //  eCachedColors
+    //=============================================================================
 
     static struct eCachedColors
     {
@@ -709,8 +804,11 @@ void main() {
             }
         }
         dword items[16];
-    }
-    color_cache;
+    } color_cache;
+
+    //=============================================================================
+    //  DrawGL
+    //=============================================================================
 
     void DrawGL(int vport_width, int vport_height)
     {
@@ -723,11 +821,10 @@ void main() {
         giga_was_enabled = giga_enabled;
 
         if (giga_enabled && video_frame_last != Handler()->VideoFrame())
-        {
             std::swap(p_tex1, p_tex2);
-        }
         video_frame_last = Handler()->VideoFrame();
 
+        // CPU-side colour conversion into p_tex1
         byte* data = (byte*)Handler()->VideoData();
         dword* p = p_tex1;
 
@@ -741,7 +838,9 @@ void main() {
                 {
                     xUi::eRGBAColor c_ui = xUi::palette[*data_ui++];
                     xUi::eRGBAColor c = color_cache.items[*data++];
-                    *p++ = RGBX((c.r >> c_ui.a) + c_ui.r, (c.g >> c_ui.a) + c_ui.g, (c.b >> c_ui.a) + c_ui.b);
+                    *p++ = RGBX((c.r >> c_ui.a) + c_ui.r,
+                        (c.g >> c_ui.a) + c_ui.g,
+                        (c.b >> c_ui.a) + c_ui.b);
                 }
                 p += 512 - 320;
             }
@@ -752,9 +851,7 @@ void main() {
             for (int y = 0; y < 240; ++y)
             {
                 for (int x = 0; x < 320; ++x)
-                {
                     *p++ = color_cache.items[*data++];
-                }
                 p += 512 - 320;
             }
         }
@@ -762,16 +859,62 @@ void main() {
 
         PROFILER_SECTION(draw);
 
-        float aspect_src = 320.0f / 240.0f;
-        float aspect_dst = (float)vport_width / vport_height;
+        // Aspect-correction scale (identical for both render paths)
+        const float aspect_src = 320.0f / 240.0f;
+        const float aspect_dst = (float)vport_width / (float)vport_height;
         float scale_x = 1.0f, scale_y = 1.0f;
-
-        if (aspect_dst > aspect_src) {
+        if (aspect_dst > aspect_src)
             scale_x = aspect_src / aspect_dst;
-        }
-        else {
+        else
             scale_y = aspect_dst / aspect_src;
+
+        // =====================================================================
+        //  LIGHTWEIGHT PATH
+        //  No FBO, no PAL pipeline.  Single draw call directly to screen.
+        //  Gigascreen, scanlines, and screen-space phosphor mask still work.
+        // =====================================================================
+        if (!OpPalEffects() && !op_mipmapping)
+        {
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glViewport(0, 0, vport_width, vport_height);
+            HandleLayoutClear(vport_width, vport_height);
+
+            UseProgram(lw_shader);
+
+            // Upload and configure source texture(s)
+            UploadTexture(texture_id1, p_tex1, sline_len, slines_cnt);
+            // Nearest-neighbour keeps pixel-art look crisp on integer scales.
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+            u_lw_texture1.update(0);
+            u_lw_blend_factor.update(0.0f);
+
+            if (giga_enabled)
+            {
+                UploadTexture(texture_id2, p_tex2, sline_len, slines_cnt);
+                BindTextureUnit(GL_TEXTURE1, texture_id2);
+                u_lw_texture2.update(1);
+                u_lw_blend_factor.update(0.5f);
+            }
+
+            // Restore TEXTURE0 after possible texture2 upload side-effect.
+            BindTextureUnit(GL_TEXTURE0, texture_id1);
+
+            u_lw_scale.update({ scale_x * opZoom(), scale_y * opZoom() });
+            u_lw_show_scanlines.update(
+                op_scanlines && vport_height > slines_cnt + slines_cnt / 2 ? 1 : 0);
+            u_lw_mask_scale.update(OpMaskScale());
+
+            glBindVertexArray(vao1); // cropped quad — only the 320x240 visible area
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            return;
         }
+
+        // =====================================================================
+        //  FULL-QUALITY PATH
+        //  Two-pass: FBO blit/blend → screen post-processing (PAL, mask, lines)
+        // =====================================================================
 
         if (op_mipmapping != mip_enabled_current)
         {
@@ -779,7 +922,7 @@ void main() {
             mip_dirty = true;
         }
 
-        // --- First Pass: Render to FBO ---
+        // --- First pass: render into FBO ---
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
         glViewport(0, 0, fb_width, fb_height);
 
@@ -787,72 +930,36 @@ void main() {
         u_blend_factor_cached.update(giga_enabled ? 0.5f : 0.0f);
         u_scale_cached.update({ 1.0f, 1.0f });
 
-        // --- texture 1 ---
         UploadTexture(texture_id1, p_tex1, sline_len, slines_cnt);
         u_texture1_cached.update(0);
 
-        // --- texture 2 ---
         if (giga_enabled)
         {
             UploadTexture(texture_id2, p_tex2, sline_len, slines_cnt);
-
-            // Restore TEXTURE1 binding so the shader sampler is correct.
             BindTextureUnit(GL_TEXTURE1, texture_id2);
             u_texture2_cached.update(1);
         }
 
-        // Restore TEXTURE0 binding for the draw call (upload fn may have
-        // left the active unit pointing elsewhere).
         BindTextureUnit(GL_TEXTURE0, texture_id1);
 
-        glBindVertexArray(vao2);
+        glBindVertexArray(vao1); // cropped quad
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-        // --- Second Pass: Render FBO to Screen ---
+        // --- Second pass: FBO → screen ---
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, vport_width, vport_height);
-
-        // Only clear when the letterbox/pillarbox regions have actually changed
-        // (viewport resize or zoom mode change).  Clearing every frame wastes
-        // fillrate and can produce a one-frame black flash on some drivers.
-        {
-            int cur_zoom = static_cast<int>(op_zoom);
-            bool layout_changed = (vport_width != last_vport_width ||
-                vport_height != last_vport_height ||
-                cur_zoom != last_zoom);
-            if (layout_changed)
-            {
-                // Clear both buffers in the swap chain so neither the front
-                // nor the back buffer retains stale content from the old
-                // layout.  Without this, double-buffering causes a one-frame
-                // black or wrongly-bordered flash when zoom mode changes.
-                glClear(GL_COLOR_BUFFER_BIT);
-                // The platform's swap-buffers call will happen after DrawGL
-                // returns, so we mark that we need a second clear next frame
-                // to cover the other buffer.
-                pending_clear = true;
-
-                last_vport_width = vport_width;
-                last_vport_height = vport_height;
-                last_zoom = cur_zoom;
-            }
-            else if (pending_clear)
-            {
-                glClear(GL_COLOR_BUFFER_BIT);
-                pending_clear = false;
-            }
-        }
+        HandleLayoutClear(vport_width, vport_height);
 
         UseProgram(screen_shader);
-        u_show_scanlines_cached.update(op_scanlines && vport_height > slines_cnt + slines_cnt / 2 ? 1 : 0);
+        u_show_scanlines_cached.update(
+            op_scanlines && vport_height > slines_cnt + slines_cnt / 2 ? 1 : 0);
         u_simple_scale_cached.update({ scale_x * opZoom(), scale_y * opZoom() });
         u_fb_texture_cached.update(0);
         u_fb_size_cached.update({ float(fb_width), float(fb_height) });
         u_mask_scale_cached.update(OpMaskScale());
-
         u_enable_pal_effects_cached.update(OpPalEffects() ? 1 : 0);
         u_pal_strength_cached.update(static_cast<float>(OpPalStrength()) / 100.0f);
-        u_beam_spread_cached.update(static_cast<float>(OpBeamSpread()) / 100.0f * 2.0f);
+        u_beam_spread_cached.update(static_cast<float>(OpBeamSpread()) / 100.0f);
 
         BindTextureUnit(GL_TEXTURE0, fb_texture);
         if (mip_enabled_current)
@@ -875,10 +982,10 @@ void main() {
             }
         }
 
-        glBindVertexArray(vao1);
+        glBindVertexArray(vao2); // full NDC quad for the screen pass
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     }
-}
-//namespace xPlatform
+
+}//namespace xPlatform
 
 #endif//USE_GL
