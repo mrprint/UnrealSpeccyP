@@ -290,8 +290,7 @@ const vec3 PHASE_MOD_PATTERN = vec3(0.6, -0.4, -1.0); // Combined offset vector
 const float CROSSTALK_STRENGTH = 0.05;         // Base crosstalk intensity
 
 // CRT Beam Spread: Horizontal blur simulation
-const float BEAM_SPREAD_SCALE = 2.0;           // Scale uniform to sample distance
-const vec2 BEAM_WEIGHTS = vec2(0.6, 0.2);      // Center (0.6) + left/right (0.2 combined)
+const float BEAM_SPREAD_SCALE = 1.5;           // Scale uniform to sample distance
 
 // CRT Phosphor Mask: UKTV-style columnar shading
 const vec3 MASK_BASE = vec3(0.90, 0.95, 0.85);      // Base mask color per phase
@@ -368,18 +367,14 @@ void main() {
         vec3 crosstalk = (luma - palRgb) * CROSSTALK_STRENGTH * palStrength;
         palRgb += crosstalk;
 
+        float srcTexelX  = texelSize.x * (fbSize.x / 320.0);
         float spreadDist = beamSpread * BEAM_SPREAD_SCALE;
-        float spreadMix  = clamp(beamSpread, 0.0, 1.0);           // Safe mix factor
-
-        vec3 left = texture(fbTexture, uv - vec2(texelSize.x * spreadDist, 0.0)).rgb;
-        vec3 right = texture(fbTexture, uv + vec2(texelSize.x * spreadDist, 0.0)).rgb;
-
-        // Original YUV round-trip (assumed to simulate PAL chroma subsampling)
-        left = yuv2rgb(rgb2yuv(left));
-        right = yuv2rgb(rgb2yuv(right));
-
-        vec3 spreadColor = palRgb * BEAM_WEIGHTS.x + (left + right) * BEAM_WEIGHTS.y;
-        color.rgb = mix(palRgb, spreadColor, spreadMix);           // Preserve alpha
+        float spreadMix  = clamp(beamSpread, 0.0, 1.0);
+        vec3 left  = texture(fbTexture, uv - vec2(srcTexelX * spreadDist, 0.0)).rgb;
+        vec3 right = texture(fbTexture, uv + vec2(srcTexelX * spreadDist, 0.0)).rgb;
+        float sideWeight   = beamSpread * 0.275;
+        float centerWeight = 1.0 - sideWeight * 2.0;
+        color.rgb = palRgb * centerWeight + (left + right) * sideWeight;
     }
 
     // --- CRT Phosphor Mask: UKTV-style columnar shading ---
@@ -590,6 +585,7 @@ void main()
     {
         if (scr_height != -1)
         {
+            /*
             // Smallest integer scale that covers the viewport on both axes,
             // keeping pixels square.  Guarantees scanline/mask apertures land
             // on whole FBO texel boundaries.
@@ -599,6 +595,13 @@ void main()
             if (s < 1) s = 1;
             fb_width = sline_len * s;
             fb_height = slines_cnt * s;
+            */
+            float base_scale =
+                (float)((scr_width > scr_height) ? scr_width : scr_height) /
+                (float)((scr_width > scr_height) ? sline_len : slines_cnt);
+            base_scale *= 2.0f;
+            fb_width = int(sline_len * base_scale);
+            fb_height = int(slines_cnt * base_scale);
         }
 
         glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
