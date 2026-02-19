@@ -252,7 +252,7 @@ uniform int showScanlines;
 uniform int enablePalEffects;
 
 uniform float palStrength;    // 0.0 - 1.0 (PAL effect intensity)
-uniform float beamSpread;     // 0.0 - 2.0 (CRT beam spread amount)
+uniform float beamSpread;     // 0.0 - 1.0 (CRT beam spread amount; clamped to [0,1] for mix)
 uniform int maskScale;        // Phosphor mask column width (pixels per phase)
 uniform vec2 fbSize;          // Size of input framebuffer
 
@@ -280,7 +280,7 @@ const float CHROMA_WEIGHT_RIGHT_0_75 = 0.22;  // Right 0.75x step weight
 const float CHROMA_WEIGHT_RIGHT_1_5 = 0.08;   // Right 1.5x step weight
 
 // Green Dot Artifact: PAL-specific red/green tint distortion
-const float GREEN_DOT_MIX = 0.6;               // Strength of green dot effect
+const float GREEN_DOT_MIX = 0.36;              // Strength of green dot effect
 
 // Phase Modulation: Color phase interference (simplified from original A-B ops)
 const float PHASE_MOD_X_FREQ = 0.5;            // Horizontal frequency multiplier
@@ -348,7 +348,7 @@ void main() {
         vec3 yuvR0_75 = rgb2yuv(texture(fbTexture, uv + offset0_75).rgb);
         vec3 yuvR1_5 = rgb2yuv(texture(fbTexture, uv + offset1_5).rgb);
 
-        vec3 yuvCenter = rgb2yuv(texture(fbTexture, uv).rgb);
+        vec3 yuvCenter = yuv;
         vec2 filteredChroma =
             yuvL1_5.yz * CHROMA_WEIGHT_LEFT_1_5 +
             yuvL0_75.yz * CHROMA_WEIGHT_LEFT_0_75 +
@@ -370,8 +370,9 @@ void main() {
         vec3 crosstalk = (luma - palRgb) * CROSSTALK_STRENGTH * palStrength;
         palRgb += crosstalk;
 
-        // Beam Spread: Simulate CRT electron beam horizontal blur
-        float spreadDist = beamSpread * BEAM_SPREAD_SCALE;          // Scale to texture space
+        float spreadDist = beamSpread * BEAM_SPREAD_SCALE;
+        float spreadMix  = clamp(beamSpread, 0.0, 1.0);           // Safe mix factor
+
         vec3 left = texture(fbTexture, uv - vec2(texelSize.x * spreadDist, 0.0)).rgb;
         vec3 right = texture(fbTexture, uv + vec2(texelSize.x * spreadDist, 0.0)).rgb;
 
@@ -380,7 +381,7 @@ void main() {
         right = yuv2rgb(rgb2yuv(right));
 
         vec3 spreadColor = palRgb * BEAM_WEIGHTS.x + (left + right) * BEAM_WEIGHTS.y;
-        color.rgb = mix(palRgb, spreadColor, beamSpread); // Preserve alpha
+        color.rgb = mix(palRgb, spreadColor, spreadMix);           // Preserve alpha
     }
 
     // --- CRT Phosphor Mask: UKTV-style columnar shading ---
