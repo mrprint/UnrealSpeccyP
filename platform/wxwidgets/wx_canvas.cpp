@@ -38,7 +38,7 @@ void VsyncGL(bool on);
 void initGlew();
 void initGraphics(int scr_width, int scr_height);
 void cleanupGraphics();
-void DrawGL(int vport_width, int wport_height);
+bool DrawGL(int vport_width, int wport_height);
 
 wxWindow* CreateMouseCapture(wxWindow* parent);
 
@@ -149,8 +149,8 @@ void GLCanvas::Paint(wxDC& dc)
 		initGraphics(resolution.first, resolution.second);
 		gl_initialized = true;
 	}
-	DrawGL(w, h);
-	SwapBuffers();
+	if (DrawGL(w, h))
+		SwapBuffers();
 }
 //=============================================================================
 //	GLCanvas::OnIdle

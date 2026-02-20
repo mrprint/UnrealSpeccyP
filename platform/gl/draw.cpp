@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <utility>
 #include <array>
+#include <chrono>
 
 #include "../platform.h"
 #ifdef USE_WXWIDGETS
@@ -813,7 +814,7 @@ void main()
     //  DrawGL
     //=============================================================================
 
-    void DrawGL(int vport_width, int vport_height)
+    bool DrawGL(int vport_width, int vport_height)
     {
         PROFILER_BEGIN(draw_p);
 
@@ -861,6 +862,26 @@ void main()
         PROFILER_END(draw_p);
 
         PROFILER_SECTION(draw);
+
+        // --- FPS tracking & frame drop with hysteresis ---
+        static auto last_time = std::chrono::steady_clock::now();
+        static float virtual_fps = 60.0f;
+        static int frame_counter = 0;
+        static bool dropping = false;
+
+        auto now = std::chrono::steady_clock::now();
+        float dt = std::chrono::duration<float>(now - last_time).count();
+        last_time = now;
+
+        virtual_fps = virtual_fps * 0.9f + (1.0f / dt) * 0.1f;
+
+        if (dropping && virtual_fps > 55.0f)
+            dropping = false;
+        else if (!dropping && virtual_fps < 50.0f)
+            dropping = true;
+
+        if (dropping && (frame_counter++ & 1))
+            return false;
 
         // Aspect-correction scale (identical for both render paths)
         const float aspect_src = 320.0f / 240.0f;
@@ -911,7 +932,7 @@ void main()
 
             glBindVertexArray(vao1); // cropped quad — only the 320x240 visible area
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-            return;
+            return true;
         }
 
         // =====================================================================
@@ -987,6 +1008,7 @@ void main()
 
         glBindVertexArray(vao2); // full NDC quad for the screen pass
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        return true;
     }
 
 }//namespace xPlatform
