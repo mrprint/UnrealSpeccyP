@@ -156,7 +156,10 @@ namespace xPlatform
     // GL objects
     // -------------------------------------------------------------------------
 
-    static GLuint fb_texture{}, texture_id1{}, texture_id2{};
+    static GLuint fb_texture{};
+    // tex_id_for[0] → tex1[] CPU buffer, tex_id_for[1] → tex2[] CPU buffer.
+    // Replaces the old texture_id1 / texture_id2 named variables.
+    static GLuint tex_id_for[2] = { 0, 0 };
     static GLuint ebo{};
     static GLuint vao1{}, vbo1{};   // cropped quad (320x240 visible area)
     static GLuint vao2{}, vbo2{};   // full NDC quad (FBO / screen pass)
@@ -607,11 +610,12 @@ void main()
 
         glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 
-        // Source textures (Speccy frame data)
-        for (GLuint* tid : { &texture_id1, &texture_id2 })
+        // Source textures (Speccy frame data).
+        // tex_id_for[0] → tex1[] CPU buffer, tex_id_for[1] → tex2[] CPU buffer.
+        for (int i = 0; i < 2; ++i)
         {
-            glGenTextures(1, tid);
-            glBindTexture(GL_TEXTURE_2D, *tid);
+            glGenTextures(1, &tex_id_for[i]);
+            glBindTexture(GL_TEXTURE_2D, tex_id_for[i]);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
                 sline_len, slines_cnt, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -768,8 +772,7 @@ void main()
 
     void cleanupGraphics()
     {
-        glDeleteTextures(1, &texture_id1);
-        glDeleteTextures(1, &texture_id2);
+        glDeleteTextures(2, tex_id_for);
         glDeleteTextures(1, &fb_texture);
         glDeleteFramebuffers(1, &fbo);
         glDeleteBuffers(1, &vbo1);
@@ -892,6 +895,15 @@ void main()
         else
             scale_y = aspect_dst / aspect_src;
 
+        // Resolve which GL texture IDs correspond to the current p_tex1/p_tex2
+        // pointers.  std::swap() only exchanges pointers, so the mapping is:
+        //   buf1_idx: slot whose CPU buffer was just written (always upload)
+        //   buf2_idx: slot whose CPU buffer is the previous frame (already in VRAM)
+        int    buf1_idx = (p_tex1 == tex1) ? 0 : 1;
+        int    buf2_idx = 1 - buf1_idx;
+        GLuint gl_tex1 = tex_id_for[buf1_idx];   // needs upload this frame
+        GLuint gl_tex2 = tex_id_for[buf2_idx];   // already resident in VRAM
+
         // =====================================================================
         //  LIGHTWEIGHT PATH
         //  No FBO, no PAL pipeline.  Single draw call directly to screen.
@@ -905,25 +917,22 @@ void main()
 
             UseProgram(lw_shader);
 
-            // Upload and configure source texture(s)
-            UploadTexture(texture_id1, p_tex1, sline_len, slines_cnt);
-            // Nearest-neighbour keeps pixel-art look crisp on integer scales.
+            // Upload only the freshly written buffer; p_tex2 is already in VRAM.
+            UploadTexture(gl_tex1, p_tex1, sline_len, slines_cnt);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
+            BindTextureUnit(GL_TEXTURE0, gl_tex1);
             u_lw_texture1.update(0);
             u_lw_blend_factor.update(0.0f);
 
             if (giga_enabled)
             {
-                UploadTexture(texture_id2, p_tex2, sline_len, slines_cnt);
-                BindTextureUnit(GL_TEXTURE1, texture_id2);
+                // gl_tex2 was uploaded last frame — just bind, no transfer.
+                BindTextureUnit(GL_TEXTURE1, gl_tex2);
                 u_lw_texture2.update(1);
                 u_lw_blend_factor.update(0.5f);
             }
-
-            // Restore TEXTURE0 after possible texture2 upload side-effect.
-            BindTextureUnit(GL_TEXTURE0, texture_id1);
 
             u_lw_scale.update({ scale_x * opZoom(), scale_y * opZoom() });
             u_lw_show_scanlines.update(
@@ -954,17 +963,17 @@ void main()
         u_blend_factor_cached.update(giga_enabled ? 0.5f : 0.0f);
         u_scale_cached.update({ 1.0f, 1.0f });
 
-        UploadTexture(texture_id1, p_tex1, sline_len, slines_cnt);
+        // Upload only the freshly written buffer; p_tex2 is already in VRAM.
+        UploadTexture(gl_tex1, p_tex1, sline_len, slines_cnt);
+        BindTextureUnit(GL_TEXTURE0, gl_tex1);
         u_texture1_cached.update(0);
 
         if (giga_enabled)
         {
-            UploadTexture(texture_id2, p_tex2, sline_len, slines_cnt);
-            BindTextureUnit(GL_TEXTURE1, texture_id2);
+            // gl_tex2 was uploaded last frame — just bind, no transfer.
+            BindTextureUnit(GL_TEXTURE1, gl_tex2);
             u_texture2_cached.update(1);
         }
-
-        BindTextureUnit(GL_TEXTURE0, texture_id1);
 
         glBindVertexArray(vao1); // cropped quad
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
