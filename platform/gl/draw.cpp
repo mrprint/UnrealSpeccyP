@@ -464,17 +464,19 @@ void main()
 
     if (maskScale > 0)
     {
+        const float PI = 3.141592653589793;
         float maskCol = floor(gl_FragCoord.x / float(maskScale));
-        float phase   = mod(maskCol, 3.0);
+        float angle   = maskCol * 2.0 * PI / 3.0;
 
-        vec3 mask = vec3(
-            (phase < 1.0)                 ? 1.00 : 0.72,
-            (phase >= 1.0 && phase < 2.0) ? 1.00 : 0.72,
-            (phase >= 2.0)                ? 1.00 : 0.72);
+        vec3 maskTint = vec3(0.90, 0.95, 0.85) + vec3(0.10, 0.05, 0.15) * sin(vec3(
+            angle,
+            angle + 2.0 * PI / 3.0,
+            angle + 4.0 * PI / 3.0));
 
         float lum      = dot(color, LUMINANCE);
-        float strength = clamp((lum - 0.12) / 0.65, 0.0, 1.0) * 0.55;
-        color *= mix(vec3(1.0), mask, strength);
+        float strength = smoothstep(0.2, 0.8, lum);
+        color *= mix(vec3(1.0), maskTint, strength * 0.35);
+        color *= vec3(1.0, 0.985, 1.03);
     }
 
     FragColor = vec4(color, 1.0);
