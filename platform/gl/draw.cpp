@@ -202,11 +202,13 @@ namespace xPlatform
     static int   video_frame_last = -1;
     static bool  giga_was_enabled = false;
 
-    // Layout-change tracking for glClear
+    // Layout-change tracking for glClear.
+    // pending_clear starts true so HandleLayoutClear clears both swap-chain
+    // buffers on the first two frames, preventing driver-default gray at startup.
     static int  last_vport_width = -1;
     static int  last_vport_height = -1;
     static int  last_zoom = -1;
-    static bool pending_clear = false;
+    static bool pending_clear = true;
 
     // -------------------------------------------------------------------------
     // Shaders
@@ -589,6 +591,8 @@ void main()
 
     void initGraphics(int scr_width, int scr_height)
     {
+        // Guarantee black clear color from the very first frame.
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         if (scr_height != -1)
         {
             /*
@@ -614,12 +618,17 @@ void main()
 
         // Source textures (Speccy frame data).
         // tex_id_for[0] → tex1[] CPU buffer, tex_id_for[1] → tex2[] CPU buffer.
+        // Both CPU buffers and both GPU textures are zeroed (black) so that the
+        // very first frame never blends with uninitialized VRAM (which shows as gray).
+        memset(tex1, 0, sizeof(tex1));
+        memset(tex2, 0, sizeof(tex2));
         for (int i = 0; i < 2; ++i)
         {
             glGenTextures(1, &tex_id_for[i]);
             glBindTexture(GL_TEXTURE_2D, tex_id_for[i]);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
-                sline_len, slines_cnt, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+                sline_len, slines_cnt, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                i == 0 ? tex1 : tex2);  // upload zeroed data instead of nullptr
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -819,16 +828,55 @@ void main()
     //  DrawGL
     //=============================================================================
 
+    void LightweightShadersMessage(bool prev_use_lightweight, bool use_lightweight);
+    void FrameSkippingMessage(bool prev_dropping, bool dropping, float virtual_fps);
+
     bool DrawGL(int vport_width, int vport_height)
     {
         PROFILER_BEGIN(draw_p);
 
         bool giga_enabled = op_gigascreen;
-
-        if (giga_enabled && !giga_was_enabled)
-            video_frame_last = -1;
         giga_was_enabled = giga_enabled;
 
+        // --- FPS tracking & frame drop with hysteresis ---
+        static std::chrono::steady_clock::time_point last_time;
+        static bool first_frame = true;
+        static float virtual_fps = 60.0f;
+        static int frame_counter = 0;
+        static bool dropping = false;
+
+        auto now = std::chrono::steady_clock::now();
+        if (first_frame)
+        {
+            // Skip dt measurement on the first call — the gap between static
+            // initialisation and the first draw can be hundreds of milliseconds,
+            // which would make virtual_fps collapse to ~0 and lock dropping=true
+            // for many seconds, causing DrawGL to return false on every frame.
+            first_frame = false;
+        }
+        else
+        {
+            float dt = std::chrono::duration<float>(now - last_time).count();
+            if (dt > 0.0f)
+                virtual_fps = virtual_fps * 0.9f + (1.0f / dt) * 0.1f;
+        }
+        last_time = now;
+
+        if (dropping && virtual_fps > 46.0f)
+            dropping = false;
+        else if (!dropping && virtual_fps < 41.0f)
+            dropping = true;
+
+        bool should_skip = dropping && (frame_counter++ & 1);
+
+        // Always swap and convert every emulator frame into the CPU buffers,
+        // even when we are going to skip the GL draw.
+        // This is essential for gigascreen: the emulator alternates its pixel
+        // data every VideoFrame().  If we skip the conversion on a dropped frame
+        // we only ever see one of the two alternating Speccy frames in both slots,
+        // so the blend is frame-with-itself and the gigascreen effect disappears.
+        // By always converting we keep p_tex1/p_tex2 holding two *different*
+        // consecutive emulator frames, so the next drawn frame blends them correctly.
         if (giga_enabled && video_frame_last != Handler()->VideoFrame())
             std::swap(p_tex1, p_tex2);
         video_frame_last = Handler()->VideoFrame();
@@ -866,27 +914,22 @@ void main()
         }
         PROFILER_END(draw_p);
 
+        // Skip the GL draw only — CPU buffers are already updated above.
+        if (should_skip)
+            return false;
+
         PROFILER_SECTION(draw);
 
-        // --- FPS tracking & frame drop with hysteresis ---
-        static auto last_time = std::chrono::steady_clock::now();
-        static float virtual_fps = 60.0f;
-        static int frame_counter = 0;
-        static bool dropping = false;
+        // --- Track Shader Type Changes ---
+        bool use_lightweight = !OpPalEffects() && !op_mipmapping;
+        static bool prev_use_lightweight = false;
+        LightweightShadersMessage(prev_use_lightweight, use_lightweight);
+        prev_use_lightweight = use_lightweight;
 
-        auto now = std::chrono::steady_clock::now();
-        float dt = std::chrono::duration<float>(now - last_time).count();
-        last_time = now;
-
-        virtual_fps = virtual_fps * 0.9f + (1.0f / dt) * 0.1f;
-
-        if (dropping && virtual_fps > 55.0f)
-            dropping = false;
-        else if (!dropping && virtual_fps < 50.0f)
-            dropping = true;
-
-        if (dropping && (frame_counter++ & 1))
-            return false;
+        // --- Track Frame Skipping State Changes ---
+        static bool prev_dropping = false;
+        FrameSkippingMessage(prev_dropping, dropping, virtual_fps);
+        prev_dropping = dropping;
 
         // Aspect-correction scale (identical for both render paths)
         const float aspect_src = 320.0f / 240.0f;

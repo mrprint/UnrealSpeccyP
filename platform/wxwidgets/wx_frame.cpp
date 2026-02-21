@@ -788,9 +788,37 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.\n"
 
 	//=============================================================================
 
+	Frame* g_main_frame = nullptr;
+
+	void LightweightShadersMessage(bool prev_use_lightweight, bool use_lightweight)
+	{
+		if (prev_use_lightweight != use_lightweight) {
+			prev_use_lightweight = use_lightweight;
+			const char* msg = use_lightweight
+				? "Lightweight shader enabled"
+				: "Full-quality shader enabled";
+			if (xPlatform::g_main_frame) { // Use global frame pointer
+				xPlatform::g_main_frame->SetStatusText(wxConvertMB2WX(msg));
+			}
+		}
+	}
+
+	void FrameSkippingMessage(bool prev_dropping, bool dropping, float virtual_fps)
+	{
+		if (prev_dropping != dropping) {
+			char msg[128];
+			snprintf(msg, sizeof(msg), "Frame skipping %s (FPS: %.1f)",
+				dropping ? "enabled" : "disabled", virtual_fps);
+			if (xPlatform::g_main_frame) {
+				xPlatform::g_main_frame->SetStatusText(wxConvertMB2WX(msg));
+			}
+		}
+	}
+
 	wxWindow* CreateFrame(const wxString& title, const wxPoint& pos, const eCmdLine& cmdline)
 	{
 		Frame* frame = new Frame(title, pos, cmdline);
+		g_main_frame = frame;
 		frame->Show(true);
 		if (op_full_screen)
 			frame->ShowFullScreen(true);
