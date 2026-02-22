@@ -157,8 +157,7 @@ namespace xPlatform
     // -------------------------------------------------------------------------
 
     static GLuint fb_texture{};
-    // tex_id_for[0] → tex1[] CPU buffer, tex_id_for[1] → tex2[] CPU buffer.
-    // Replaces the old texture_id1 / texture_id2 named variables.
+    // tex_id_for[0] -> tex1[] CPU buffer, tex_id_for[1] -> tex2[] CPU buffer.
     static GLuint tex_id_for[2] = { 0, 0 };
     static GLuint ebo{};
     static GLuint vao1{}, vbo1{};   // cropped quad (320x240 visible area)
@@ -186,13 +185,64 @@ namespace xPlatform
     CachedUniform<int>                 u_lw_texture1;
     CachedUniform<int>                 u_lw_texture2;
     CachedUniform<int>                 u_lw_show_scanlines;
-    CachedUniform<int>                 u_lw_mask_scale; // same value uploaded to both shaders
+    CachedUniform<int>                 u_lw_mask_scale;
 
     // Driver-call reduction
     static GLuint current_program = 0;
     bool          mip_enabled_current = false;
     bool          mip_dirty = true;
-    static GLuint bound_tex[2] = { 0, 0 }; // TEXTURE0/TEXTURE1 cache
+
+    static constexpr int MAX_CACHED_UNITS = 8;
+    static GLuint bound_tex[MAX_CACHED_UNITS] = {};  // zeroed = no texture bound
+
+    // Returns the array index for a GL texture unit enum, or -1 if out of range.
+    inline int TexUnitIndex(GLenum unit)
+    {
+        int idx = static_cast<int>(unit - GL_TEXTURE0);
+        return (idx >= 0 && idx < MAX_CACHED_UNITS) ? idx : -1;
+    }
+
+    // Bind a texture to a unit, updating the cache.  No-op if already bound.
+    // glActiveTexture is only called when a bind is actually needed, avoiding
+    // an unnecessary active-unit switch on every cached hit.
+    inline void BindTextureUnit(GLenum unit, GLuint tex)
+    {
+        int idx = TexUnitIndex(unit);
+        if (idx < 0) return;
+        if (bound_tex[idx] != tex)
+        {
+            glActiveTexture(unit);
+            glBindTexture(GL_TEXTURE_2D, tex);
+            bound_tex[idx] = tex;
+        }
+    }
+
+    // Mark all cached texture bindings as unknown.  Call this after any
+    // raw glBindTexture / FBO attachment / mipmap generation that bypasses
+    // BindTextureUnit(), so the next BindTextureUnit() call will re-bind.
+    inline void InvalidateTextureCache()
+    {
+        for (int i = 0; i < MAX_CACHED_UNITS; ++i)
+            bound_tex[i] = 0;
+    }
+
+    // Upload CPU pixel data to a texture on TEXTURE0.
+    // Forces TEXTURE0 to be active regardless of cache state, then routes the
+    // bind through BindTextureUnit so the cache stays consistent.
+    // The explicit glActiveTexture call is required because glTexSubImage2D
+    // operates on the currently *active* unit — if BindTextureUnit's cache
+    // reports a hit and returns early, we must still ensure the active unit
+    // is TEXTURE0 before the upload.
+    inline void UploadTexture(GLuint texture, const void* src,
+        GLsizei width, GLsizei height)
+    {
+        glActiveTexture(GL_TEXTURE0);   // ensure active unit is TEXTURE0
+        BindTextureUnit(GL_TEXTURE0, texture);  // bind (no-op if already bound)
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+            width, height, GL_RGBA, GL_UNSIGNED_BYTE, src);
+    }
+
+    // -------------------------------------------------------------------------
 
     static int fb_width = sline_len * 4;
     static int fb_height = slines_cnt * 4;
@@ -538,32 +588,7 @@ void main()
         }
     }
 
-    inline void BindTextureUnit(GLenum unit, GLuint tex)
-    {
-        int idx = (unit == GL_TEXTURE0) ? 0 : (unit == GL_TEXTURE1) ? 1 : -1;
-        if (idx < 0) return;
-        glActiveTexture(unit);
-        if (bound_tex[idx] != tex)
-        {
-            glBindTexture(GL_TEXTURE_2D, tex);
-            bound_tex[idx] = tex;
-        }
-    }
-
-    // Upload CPU pixel data directly.  Optimal for low-end GPUs where PBO
-    // async DMA stalls as badly as a direct glTexSubImage2D call.
-    inline void UploadTexture(GLuint texture, const void* src,
-        GLsizei width, GLsizei height)
-    {
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        bound_tex[0] = texture;
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-            width, height, GL_RGBA, GL_UNSIGNED_BYTE, src);
-    }
-
-    // Issue glClear only when the viewport or zoom mode changes, covering both
-    // swap-chain buffers over two consecutive frames to avoid double-buffer flicker.
+    // Issue glClear only when the viewport or zoom mode changes.
     void HandleLayoutClear(int vport_width, int vport_height)
     {
         int  cur_zoom = static_cast<int>(op_zoom);
@@ -640,6 +665,8 @@ void main()
         glBindTexture(GL_TEXTURE_2D, fb_texture);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
             fb_width, fb_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
@@ -775,6 +802,11 @@ void main()
             xPlatform::reportError("Shader Uniform Error",
                 "Failed to get uniform locations (lightweight).");
         }
+
+        // Restore program cache — the last glUseProgram during init was lw_shader.
+        // This keeps current_program consistent so UseProgram() doesn't miss the
+        // first real draw call's program switch.
+        current_program = lw_shader;
     }
 
     // -------------------------------------------------------------------------
@@ -783,17 +815,30 @@ void main()
 
     void cleanupGraphics()
     {
-        glDeleteTextures(2, tex_id_for);
-        glDeleteTextures(1, &fb_texture);
-        glDeleteFramebuffers(1, &fbo);
-        glDeleteBuffers(1, &vbo1);
+        // 1. Delete VAOs first: they hold references to VBOs and the EBO.
         glDeleteVertexArrays(1, &vao1);
+        glDeleteVertexArrays(1, &vao2);
+
+        // 2. VBOs and the shared EBO are now unreferenced.
+        glDeleteBuffers(1, &vbo1);
         glDeleteBuffers(1, &vbo2);
         glDeleteBuffers(1, &ebo);
-        glDeleteVertexArrays(1, &vao2);
+
+        // 3. FBO holds a reference to fb_texture; delete it before the texture.
+        glDeleteFramebuffers(1, &fbo);
+
+        // 4. Textures are now unreferenced.
+        glDeleteTextures(2, tex_id_for);
+        glDeleteTextures(1, &fb_texture);
+
+        // 5. Shader programs (individual shaders were detached after linking).
         glDeleteProgram(fb_shader);
         glDeleteProgram(screen_shader);
         glDeleteProgram(lw_shader);
+
+        // Reset the software caches so a potential re-init starts clean.
+        current_program = 0;
+        InvalidateTextureCache();
     }
 
 #ifdef USE_BIG_ENDIAN
@@ -964,10 +1009,11 @@ void main()
 
             // Upload only the freshly written buffer; p_tex2 is already in VRAM.
             UploadTexture(gl_tex1, p_tex1, sline_len, slines_cnt);
+            // UploadTexture() leaves TEXTURE0 active and gl_tex1 bound via the cache.
+            // Re-apply filter state (mip_dirty may have been set by the full path).
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-            BindTextureUnit(GL_TEXTURE0, gl_tex1);
             u_lw_texture1.update(0);
             u_lw_blend_factor.update(0.0f);
 
@@ -1010,7 +1056,7 @@ void main()
 
         // Upload only the freshly written buffer; p_tex2 is already in VRAM.
         UploadTexture(gl_tex1, p_tex1, sline_len, slines_cnt);
-        BindTextureUnit(GL_TEXTURE0, gl_tex1);
+        // UploadTexture() leaves TEXTURE0/gl_tex1 bound in the cache.
         u_texture1_cached.update(0);
 
         if (giga_enabled)
@@ -1040,6 +1086,12 @@ void main()
         u_beam_spread_cached.update(static_cast<float>(OpBeamSpread()) / 100.0f);
 
         BindTextureUnit(GL_TEXTURE0, fb_texture);
+        // Ensure TEXTURE0 is the active unit before glTexParameteri and
+        // glGenerateMipmap, which both operate on the currently *active* unit.
+        // BindTextureUnit only calls glActiveTexture when it actually issues a
+        // new bind; if fb_texture was already cached, the active unit is stale.
+        glActiveTexture(GL_TEXTURE0);
+
         if (mip_enabled_current)
         {
             if (mip_dirty)
@@ -1049,6 +1101,9 @@ void main()
                 mip_dirty = false;
             }
             glGenerateMipmap(GL_TEXTURE_2D);
+            // glGenerateMipmap is a raw driver call that doesn't go through the
+            // cache; the texture state on the GPU is unchanged, so no invalidation
+            // is needed — but we document this explicitly for future maintainers.
         }
         else
         {
