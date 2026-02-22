@@ -680,6 +680,10 @@ void main()
         }
 #endif
 
+        // Raw glBindTexture calls above (during texture creation) bypassed the
+        // BindTextureUnit cache, so invalidate it now before normal rendering begins.
+        InvalidateTextureCache();
+
         // vao1: cropped quad — maps only the 320x240 visible area of the 512x256 texture.
         // Used for the FBO blit pass and the lightweight single-pass draw.
         float vertices_cropped[] = {
@@ -874,7 +878,6 @@ void main()
     //=============================================================================
 
     void LightweightShadersMessage(bool prev_use_lightweight, bool use_lightweight);
-    void FrameSkippingMessage(bool prev_dropping, bool dropping, float virtual_fps);
 
     bool DrawGL(int vport_width, int vport_height)
     {
@@ -883,45 +886,6 @@ void main()
         bool giga_enabled = op_gigascreen;
         giga_was_enabled = giga_enabled;
 
-        // --- FPS tracking & frame drop with hysteresis ---
-        static std::chrono::steady_clock::time_point last_time;
-        static bool first_frame = true;
-        static float virtual_fps = 60.0f;
-        static int frame_counter = 0;
-        static bool dropping = false;
-
-        auto now = std::chrono::steady_clock::now();
-        if (first_frame)
-        {
-            // Skip dt measurement on the first call — the gap between static
-            // initialisation and the first draw can be hundreds of milliseconds,
-            // which would make virtual_fps collapse to ~0 and lock dropping=true
-            // for many seconds, causing DrawGL to return false on every frame.
-            first_frame = false;
-        }
-        else
-        {
-            float dt = std::chrono::duration<float>(now - last_time).count();
-            if (dt > 0.0f)
-                virtual_fps = virtual_fps * 0.9f + (1.0f / dt) * 0.1f;
-        }
-        last_time = now;
-
-        if (dropping && virtual_fps > 46.0f)
-            dropping = false;
-        else if (!dropping && virtual_fps < 41.0f)
-            dropping = true;
-
-        bool should_skip = dropping && (frame_counter++ & 1);
-
-        // Always swap and convert every emulator frame into the CPU buffers,
-        // even when we are going to skip the GL draw.
-        // This is essential for gigascreen: the emulator alternates its pixel
-        // data every VideoFrame().  If we skip the conversion on a dropped frame
-        // we only ever see one of the two alternating Speccy frames in both slots,
-        // so the blend is frame-with-itself and the gigascreen effect disappears.
-        // By always converting we keep p_tex1/p_tex2 holding two *different*
-        // consecutive emulator frames, so the next drawn frame blends them correctly.
         if (giga_enabled && video_frame_last != Handler()->VideoFrame())
             std::swap(p_tex1, p_tex2);
         video_frame_last = Handler()->VideoFrame();
@@ -959,10 +923,6 @@ void main()
         }
         PROFILER_END(draw_p);
 
-        // Skip the GL draw only — CPU buffers are already updated above.
-        if (should_skip)
-            return false;
-
         PROFILER_SECTION(draw);
 
         // --- Track Shader Type Changes ---
@@ -970,11 +930,6 @@ void main()
         static bool prev_use_lightweight = false;
         LightweightShadersMessage(prev_use_lightweight, use_lightweight);
         prev_use_lightweight = use_lightweight;
-
-        // --- Track Frame Skipping State Changes ---
-        static bool prev_dropping = false;
-        FrameSkippingMessage(prev_dropping, dropping, virtual_fps);
-        prev_dropping = dropping;
 
         // Aspect-correction scale (identical for both render paths)
         const float aspect_src = 320.0f / 240.0f;

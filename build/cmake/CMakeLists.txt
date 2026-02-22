@@ -16,6 +16,10 @@ option(USE_WEB "use web sources (SDL or iOS versions)" OFF)
 
 project(USP)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 set(PROJECT unreal_speccy_portable)
 
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "iOS")
@@ -169,7 +173,7 @@ if(NOT ANDROID AND(USE_SDL OR USE_SDL2 OR APPLE_IOS OR USE_HAIKU))
 		source_group("platform\\web" FILES ${SRCCXX_PLATFORM_WEB} ${SRCH_PLATFORM_WEB})
 
 		if(NOT MSVC)
-			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11")
+			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++17")
 		endif(NOT MSVC)
 	endif(USE_WEB)
 endif(NOT ANDROID AND(USE_SDL OR USE_SDL2 OR APPLE_IOS OR USE_HAIKU))
