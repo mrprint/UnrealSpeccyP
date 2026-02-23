@@ -76,15 +76,50 @@ jobs:
         path: |
           artifact-${{ matrix.arch }}/*
 
-    # Create GitHub Release for tagged builds (only runs on tags)
-    - name: Create GitHub Release for tagged build
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v2
-      with:
-        files: |
-          artifact-${{ matrix.arch }}/*
-        name: "Windows Static Build (${{ matrix.arch }}, static-md)"
-        body: |
-          Automated Windows static-md build
-          Release is pinned to tag commit SHA: `${{ github.sha }}`
-        target_commitish: ${{ github.sha }}
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download x64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: UnrealSpeccyDesktop-x64
+          path: release/x64
+
+      - name: Download x86 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: UnrealSpeccyDesktop-x86
+          path: release/x86
+
+      - name: Add root res folder to both builds
+        shell: pwsh
+        run: |
+          Copy-Item -Recurse -Force res release/x64/res
+          Copy-Item -Recurse -Force res release/x86/res
+
+      - name: Create ZIP archives
+        shell: pwsh
+        run: |
+          Compress-Archive release/x64/* UnrealSpeccyDesktop-x64.zip
+          Compress-Archive release/x86/* UnrealSpeccyDesktop-x86.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            UnrealSpeccyDesktop-x64.zip
+            UnrealSpeccyDesktop-x86.zip
+          name: "Windows Static Build (x64 + x86, static-md)"
+          body: |
+            Automated Windows static-md build
+            Includes:
+            - x64
+            - x86
+            Release is pinned to tag commit SHA: `${{ github.sha }}`
+          target_commitish: ${{ github.sha }}

@@ -31,6 +31,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <wx/thread.h>
 #include "wx_joystick.h"
 
+#if !defined(__WXMSW__)
+#include <GL/glx.h>
+#endif
+
 namespace xPlatform
 {
 
@@ -49,9 +53,6 @@ namespace xPlatform
     extern const wxEventType evtSetStatusText = wxNewEventType();
     extern const wxEventType evtExitFullScreen = wxNewEventType();
 
-    // evtSetStatusText (defined above) is reused for render-thread status posts.
-    // No new event type is needed — the frame already handles it.
-
     class GLCanvas;
 
     // =============================================================================
@@ -68,8 +69,6 @@ namespace xPlatform
     class RenderThread : public wxThread
     {
     public:
-        // ZX Spectrum PAL frame rate — the rate at which OnLoop() must be called.
-        // This is independent of the display refresh rate.
         static constexpr int EMULATOR_FPS = 50;
 
         RenderThread(GLCanvas* canvas, wxGLContext* ctx,
@@ -83,7 +82,6 @@ namespace xPlatform
         {
         }
 
-        // Thread-safe: called from main thread to request a clean stop.
         void RequestStop() { m_running.store(false, std::memory_order_relaxed); }
 
     protected:
@@ -94,7 +92,7 @@ namespace xPlatform
 
         GLCanvas* m_canvas;
         wxGLContext* m_ctx;
-        int               m_init_w, m_init_h;   // resolution for initGraphics()
+        int               m_init_w, m_init_h;
         std::atomic<bool> m_running;
     };
 
@@ -108,23 +106,14 @@ namespace xPlatform
         GLCanvas(wxWindow* parent);
         virtual ~GLCanvas();
 
-        // Called by RenderThread to acquire the GL context on the render thread.
-        // Must only be called once, before any GL work begins.
         void MakeCurrentOnRenderThread() { m_ctx->SetCurrent(*this); }
-
-        // Called by RenderThread after each drawn frame.
         void SwapGL() { SwapBuffers(); }
 
-        // Thread-safe viewport size read (render thread calls this every frame).
         wxSize GetViewportSize() const
         {
-            // GetClientSize() is documented as safe to call from non-UI threads
-            // on all platforms wxWidgets supports; it reads a cached value.
             return GetClientSize();
         }
 
-        // Post a status string to the parent frame from any thread.
-        // Reuses evtSetStatusText which the frame already handles.
         void PostStatusText(const wxString& text)
         {
             wxCommandEvent ev(evtSetStatusText);
@@ -132,20 +121,22 @@ namespace xPlatform
             wxQueueEvent(GetParent(), ev.Clone());
         }
 
+        // Render thread polls this before calling SetCurrent().
+        // Returns true only after the window has been fully realized on screen.
+        bool IsShownForGL() const { return m_shown.load(std::memory_order_acquire); }
+
     private:
-        // -------------------------------------------------------------------------
-        // OnPaint: still needed so wxWidgets doesn't fill the window with garbage
-        // on expose events.  The render thread is doing the real drawing; here we
-        // just validate the region so the OS stops sending WM_PAINT/Expose.
-        // -------------------------------------------------------------------------
         void OnPaint(wxPaintEvent& /*event*/)
         {
             wxPaintDC dc(this); // must be created to validate the paint region
-            // Do NOT call SetCurrent() or any GL here — the context belongs to
-            // the render thread.  The next render-thread frame will repaint.
+            // Signal the render thread that the window is now fully realized.
+            // EVT_PAINT is guaranteed to fire only after the window is mapped
+            // on screen, making it the most reliable trigger for SetCurrent().
+            // The render thread must NOT call any GL here — just set the flag.
+            m_shown.store(true, std::memory_order_release);
         }
 
-        void OnEraseBackground(wxEraseEvent& /*event*/) {} // prevent flicker
+        void OnEraseBackground(wxEraseEvent& /*event*/) {}
 
         void OnKeydown(wxKeyEvent& event);
         void OnKeyup(wxKeyEvent& event);
@@ -163,6 +154,10 @@ namespace xPlatform
         RenderThread* m_thread = nullptr;
         wxWindow* mouse_capture = nullptr;
         eWxJoystick* joysticks[2] = { nullptr, nullptr };
+
+        // Set to true by OnPaint() when the window is first painted/mapped.
+        // The render thread waits on this before calling SetCurrent().
+        std::atomic<bool> m_shown{ false };
     };
 
     int GLCanvas::canvas_attr[] = { WX_GL_RGBA, WX_GL_DOUBLEBUFFER, 0 };
@@ -170,7 +165,6 @@ namespace xPlatform
     BEGIN_EVENT_TABLE(GLCanvas, wxGLCanvas)
         EVT_PAINT(GLCanvas::OnPaint)
         EVT_ERASE_BACKGROUND(GLCanvas::OnEraseBackground)
-        // OnIdle is intentionally absent — the render thread drives the loop.
         EVT_KEY_DOWN(GLCanvas::OnKeydown)
         EVT_KEY_UP(GLCanvas::OnKeyup)
         EVT_LEFT_DOWN(GLCanvas::OnMouseKey)
@@ -185,7 +179,6 @@ namespace xPlatform
         GLCanvas::GLCanvas(wxWindow* parent)
         : eInherited(parent, wxID_ANY, canvas_attr)
     {
-        // --- Create GL context (main thread, not yet current) ---
         wxGLContextAttrs ctx_attrs;
         ctx_attrs.PlatformDefaults().CoreProfile().OGLVersion(3, 0).EndList();
         m_ctx = new wxGLContext(this, nullptr, &ctx_attrs);
@@ -198,11 +191,11 @@ namespace xPlatform
             return;
         }
 
-        // --- Determine FBO / init resolution (same logic as original) ---
         auto [init_w, init_h] = getMaxDisplayResolution();
 
-        // --- Start render thread ---
-        // The thread calls SetCurrent() itself; we must NOT call it here.
+        // The render thread will wait in Entry() until IsShownForGL() returns
+        // true (i.e. until OnShow fires), so it is safe to start it here even
+        // though the window is not yet visible.
         m_thread = new RenderThread(this, m_ctx, init_w, init_h);
         if (m_thread->Create() != wxTHREAD_NO_ERROR ||
             m_thread->Run() != wxTHREAD_NO_ERROR)
@@ -213,7 +206,6 @@ namespace xPlatform
             m_thread = nullptr;
         }
 
-        // --- Joysticks (unchanged from original) ---
         joysticks[0] = new eWxJoystick(this, wxJOYSTICK1);
         joysticks[1] = new eWxJoystick(this, wxJOYSTICK2);
     }
@@ -223,18 +215,17 @@ namespace xPlatform
     // =============================================================================
     GLCanvas::~GLCanvas()
     {
-        // Signal the render thread and block until it exits.
-        // This guarantees cleanupGraphics() has run and no GL calls are in flight
-        // before we delete the context below.
         if (m_thread)
         {
             m_thread->RequestStop();
-            m_thread->Wait(); // blocks; render thread calls cleanupGraphics() then exits
+            // Also unblock the thread if it is still waiting for the window to
+            // be shown (e.g. the app is closed before the frame is ever shown).
+            m_shown.store(true, std::memory_order_release);
+            m_thread->Wait();
             delete m_thread;
             m_thread = nullptr;
         }
 
-        // Safe to delete the context now — the thread that owned it has exited.
         delete m_ctx;
         m_ctx = nullptr;
 
@@ -247,11 +238,21 @@ namespace xPlatform
     // =============================================================================
     wxThread::ExitCode RenderThread::Entry()
     {
-        // Acquire the GL context on this thread.  All GL calls from here on must
-        // stay on this thread; the main thread must not call any GL after this.
+        // Wait until the canvas window is fully realized on screen before
+        // calling SetCurrent().  On X11/GLX, SetCurrent() asserts that the
+        // underlying XWindow exists and is mapped; calling it too early
+        // (before the first Expose/Map event) triggers the
+        // "window must be shown" assertion in wxGLContext::SetCurrent().
+        while (m_running.load(std::memory_order_relaxed) && !m_canvas->IsShownForGL())
+            wxMilliSleep(10);
+
+        // If we were stopped before the window ever appeared, exit cleanly.
+        if (!m_running.load(std::memory_order_relaxed))
+            return 0;
+
+        // Acquire the GL context on this thread. All GL calls must stay here.
         m_canvas->MakeCurrentOnRenderThread();
 
-        // GLEW and graphics init — same as original Paint(), but done once here.
         initGlew();
         initGraphics(m_init_w, m_init_h);
 
@@ -261,23 +262,7 @@ namespace xPlatform
         using Ms = std::chrono::duration<double, std::milli>;
         using NsInt = std::chrono::nanoseconds;
 
-        // ---------------------------------------------------------------------------
-        // Two independent accumulators:
-        //
-        //   next_emulator_tick — when the next OnLoop() call is due.
-        //                        Always advances by exactly EMULATOR_PERIOD_NS
-        //                        (20 ms), regardless of display refresh rate.
-        //                        This keeps the Z80 running at a stable 50 Hz.
-        //
-        //   next_render_tick   — when the next DrawGL() call is due.
-        //                        Only used when vsync is OFF; when vsync is ON,
-        //                        SwapBuffers() provides the pacing naturally.
-        //
-        // Decoupling is essential: on a 60 Hz display with vsync on, DrawGL runs
-        // at 60 Hz while OnLoop must still run at 50 Hz.  Tying them together
-        // would either run the Z80 at 60 Hz (too fast) or drop render frames.
-        // ---------------------------------------------------------------------------
-        static constexpr long long EMULATOR_PERIOD_NS = 1000000000LL / EMULATOR_FPS; // 20 ms
+        static constexpr long long EMULATOR_PERIOD_NS = 1000000000LL / EMULATOR_FPS;
 
         auto now = Clock::now();
         auto next_emulator_tick = now;
@@ -285,7 +270,6 @@ namespace xPlatform
 
         while (m_running.load(std::memory_order_relaxed))
         {
-            // --- Quit check ---
             if (OpQuit())
             {
                 wxQueueEvent(m_canvas->GetParent(), new wxCloseEvent(wxEVT_CLOSE_WINDOW));
@@ -295,19 +279,26 @@ namespace xPlatform
             now = Clock::now();
             const bool full_speed = Handler()->FullSpeed();
 
-            // --- VSync: only call the driver when the desired state changes ---
             {
                 bool want_vsync = !full_speed;
                 if (vsync_active != want_vsync)
                 {
                     vsync_active = want_vsync;
+#ifdef _LINUX
+                    // glXSwapIntervalEXT calls XSync internally on some drivers
+                    // (notably Mesa/llvmpipe), which races with GTK's X11 usage
+                    // on the main thread.  Lock the X11 display around the call
+                    // to serialize access even when XInitThreads() is active.
+                    Display* dpy = glXGetCurrentDisplay();
+                    if (dpy) XLockDisplay(dpy);
                     VsyncGL(vsync_active);
+                    if (dpy) XUnlockDisplay(dpy);
+#else
+                    VsyncGL(vsync_active);
+#endif
                 }
             }
 
-            // --- Emulator tick(s) ---
-            // In normal mode: tick once per 20 ms.  Skip if not yet due.
-            // In full-speed mode: tick as fast as possible (no rate cap).
             if (full_speed || now >= next_emulator_tick)
             {
                 const char* err = Handler()->OnLoop();
@@ -322,27 +313,18 @@ namespace xPlatform
                 if (!full_speed)
                 {
                     next_emulator_tick += NsInt(EMULATOR_PERIOD_NS);
-                    // If we've fallen more than one period behind (e.g. system
-                    // was suspended), reset rather than scheduling a burst of
-                    // catch-up ticks that would overload the sound buffer.
                     if (next_emulator_tick < now)
                         next_emulator_tick = now + NsInt(EMULATOR_PERIOD_NS);
                 }
             }
 
-            // --- Render ---
-            // When vsync is on: render every iteration — SwapBuffers() provides
-            // the cadence (60 Hz, 144 Hz, etc.) without any extra sleep.
-            // When vsync is off: render only when the render accumulator is due,
-            // so we don't busy-spin submitting frames faster than the emulator
-            // can produce new pixel data.
             bool should_render = vsync_active || full_speed || (now >= next_render_tick);
-            if (should_render)
+            if (should_render && m_running.load(std::memory_order_relaxed))
             {
                 wxSize sz = m_canvas->GetViewportSize();
                 if (sz.x > 0 && sz.y > 0)
                 {
-                    if (DrawGL(sz.x, sz.y))
+                    if (DrawGL(sz.x, sz.y) && m_running.load(std::memory_order_relaxed))
                         m_canvas->SwapGL();
                 }
 
@@ -354,9 +336,6 @@ namespace xPlatform
                 }
             }
 
-            // --- Sleep ---
-            // Compute when the next event of any kind is due and sleep until then.
-            // This prevents busy-spinning while still waking up on time.
             if (!full_speed)
             {
                 now = Clock::now();
@@ -367,26 +346,40 @@ namespace xPlatform
                 if (next_event > now)
                 {
                     auto sleep_ns = Ms(next_event - now).count();
-                    // Leave a 1 ms margin to account for OS scheduler latency.
                     if (sleep_ns > 1.0)
                         wxMilliSleep(static_cast<unsigned long>(sleep_ns - 1.0));
                 }
             }
             else
             {
-                // Full-speed: yield so we don't monopolise the core.
-                // wxMilliSleep(1) is more reliable than (0) on Windows where
-                // Sleep(0) only yields to equal-or-higher priority threads.
                 wxMilliSleep(1);
             }
         }
 
         cleanupGraphics();
+
+        // Release the GL context from this thread before the main thread
+        // deletes it in ~GLCanvas().  We use raw OpenGL calls which are
+        // available after initGlew() has run.  This prevents GLXBadContextTag
+        // on Linux when the main thread destroys the context while it is
+        // still marked current on the render thread.
+#if defined(__WXMSW__)
+        HDC hdc = wglGetCurrentDC();
+        wglMakeCurrent(hdc, nullptr);
+#else
+        // On Linux/GLX: passing nullptr for both drawable and context releases it.
+        // glXMakeCurrent requires the Display pointer; we stored nothing, so use
+        // a null-canvas trick — simply bind a non-existent context to release.
+        // The safest portable way with wxWidgets is to call the GLX/WGL directly
+        // via the platform GL header which is already included by GLEW.
+        glXMakeCurrent(glXGetCurrentDisplay(), None, nullptr);
+#endif
+
         return 0;
     }
 
     // =============================================================================
-    //  Input handlers — unchanged from original, still on main thread
+    //  Input handlers
     // =============================================================================
     void GLCanvas::OnKeydown(wxKeyEvent& event)
     {
@@ -450,7 +443,7 @@ namespace xPlatform
     }
 
     // =============================================================================
-    //  getMaxDisplayResolution — unchanged from original
+    //  getMaxDisplayResolution
     // =============================================================================
     std::pair<int, int> GLCanvas::getMaxDisplayResolution()
     {
@@ -479,11 +472,8 @@ namespace xPlatform
 
     // =============================================================================
     //  LightweightShadersMessage
-    //
-    //  Called from DrawGL() on the render thread.  Must not touch wxWindow.
-    //  Post through the canvas instead.
     // =============================================================================
-    static GLCanvas* g_canvas = nullptr; // set in CreateGLCanvas
+    static GLCanvas* g_canvas = nullptr;
 
     void LightweightShadersMessage(bool prev_use_lightweight, bool use_lightweight)
     {

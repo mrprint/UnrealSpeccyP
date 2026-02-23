@@ -1,10 +1,16 @@
 cmake_minimum_required(VERSION 3.10)
 
+# Linux/GLVND policy - harmless on Windows
+if(POLICY CMP0072)
+	cmake_policy(SET CMP0072 NEW)
+endif()
+if(UNIX)
+	set(OpenGL_GL_PREFERENCE GLVND)
+endif()
+
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
 
-# Add option for static linking with dynamic CRT (Windows only)
 option(USE_STATIC_LIBS_WITH_DLL_CRT "Use static libraries with dynamically linked CRT (Windows only)" OFF)
-
 option(USE_SYS_LIBS "use system libraries instead of supplied ones" ON)
 option(USE_WX_WIDGETS "wxWidgets + OpenAL + OpenGL version" ON)
 option(USE_SDL "SDL version" OFF)
@@ -59,26 +65,31 @@ source_group("devices\\fdd" FILES ${SRCCXX_DEVICES_FDD} ${SRCH_DEVICES_FDD})
 source_group("devices\\input" FILES ${SRCCXX_DEVICES_INPUT} ${SRCH_DEVICES_INPUT})
 source_group("devices\\sound" FILES ${SRCCXX_DEVICES_SOUND} ${SRCH_DEVICES_SOUND})
 
-# 3rdparty libs
-if(NOT APPLE_IOS AND NOT ANDROID AND(USE_SDL OR USE_SDL2 OR USE_HAIKU) AND USE_WEB AND NOT EMSCRIPTEN)
-	find_package(CURL REQUIRED)
+# Linux-specific: pkg-config and X11
+if(UNIX AND NOT APPLE AND NOT ANDROID)
+	include(FindPkgConfig)
+	find_package(X11 REQUIRED)
+endif()
 
+# 3rdparty libs
+if(NOT APPLE_IOS AND NOT ANDROID AND (USE_SDL OR USE_SDL2 OR USE_HAIKU) AND USE_WEB AND NOT EMSCRIPTEN)
+	find_package(CURL REQUIRED)
 	if(CURL_FOUND)
 		include_directories(${CURL_INCLUDE_DIRS})
 		list(APPEND THIRDPARTY_LIBRARIES ${CURL_LIBRARIES})
 		add_definitions(-DUSE_CURL)
-	endif(CURL_FOUND)
+	endif()
 endif()
 
 if(NOT APPLE_IOS)
 	find_package(ZLIB)
-endif(NOT APPLE_IOS)
+endif()
 
 if(ZLIB_FOUND)
 	include_directories(${ZLIB_INCLUDE_DIRS})
 	list(APPEND THIRDPARTY_LIBRARIES ${ZLIB_LIBRARIES})
 	add_definitions(-DUSE_FILE32API)
-else(ZLIB_FOUND)
+else()
 	if(NOT EMSCRIPTEN)
 		file(GLOB SRCC_ZLIB "../../3rdparty/zlib/*.c")
 		file(GLOB SRCH_ZLIB "../../3rdparty/zlib/*.h")
@@ -86,37 +97,55 @@ else(ZLIB_FOUND)
 		list(APPEND SRCH ${SRCH_ZLIB})
 		source_group("3rdparty\\zlib" FILES ${SRCC_ZLIB} ${SRCH_ZLIB})
 		include_directories("../../3rdparty/zlib")
-	endif(NOT EMSCRIPTEN)
-endif(ZLIB_FOUND)
+	endif()
+endif()
 
 if(USE_WX_WIDGETS)
 	if(NOT APPLE_IOS)
 		find_package(PNG)
-	endif(NOT APPLE_IOS)
-
+	endif()
 	if(PNG_FOUND)
 		include_directories(${PNG_INCLUDE_DIRS})
 		list(APPEND THIRDPARTY_LIBRARIES ${PNG_LIBRARIES})
-	else(PNG_FOUND)
+	else()
 		file(GLOB SRCC_LIBPNG "../../3rdparty/libpng/*.c")
 		file(GLOB SRCH_LIBPNG "../../3rdparty/libpng/*.h")
 		list(APPEND SRCC ${SRCC_LIBPNG})
 		list(APPEND SRCH ${SRCH_LIBPNG})
 		source_group("3rdparty\\libpng" FILES ${SRCC_LIBPNG} ${SRCH_LIBPNG})
 		include_directories("../../3rdparty/libpng")
-	endif(PNG_FOUND)
-endif(USE_WX_WIDGETS)
+	endif()
+endif()
 
 if(USE_SYS_LIBS)
-	find_package(unofficial-minizip CONFIG REQUIRED)
+	if(WIN32)
+		# Windows: use vcpkg/cmake config packages
+		find_package(unofficial-minizip CONFIG REQUIRED)
+		set(MINIZIP_TARGET unofficial::minizip::minizip)
+	else()
+		# Linux/Unix: prefer pkg-config for minizip
+		if(PKG_CONFIG_FOUND)
+			pkg_check_modules(MINIZIP minizip)
+		endif()
+		if(MINIZIP_FOUND)
+			include_directories(${MINIZIP_INCLUDE_DIRS})
+			link_directories(${MINIZIP_LIBRARY_DIRS})
+			set(MINIZIP_TARGET ${MINIZIP_LIBRARIES})
+		else()
+			# Fallback to cmake config
+			find_package(unofficial-minizip CONFIG QUIET)
+			if(unofficial-minizip_FOUND)
+				set(MINIZIP_TARGET unofficial::minizip::minizip)
+			else()
+				message(WARNING "minizip not found via pkg-config or cmake config; falling back to bundled")
+				set(USE_BUNDLED_MINIZIP TRUE)
+			endif()
+		endif()
+	endif()
+
 	find_package(tinyxml2 CONFIG REQUIRED)
-else(USE_SYS_LIBS)
-	file(GLOB SRCC_MINIZIP "../../3rdparty/minizip/*.c")
-	file(GLOB SRCH_MINIZIP "../../3rdparty/minizip/*.h")
-	list(APPEND SRCC ${SRCC_MINIZIP})
-	list(APPEND SRCH ${SRCH_MINIZIP})
-	source_group("3rdparty\\minizip" FILES ${SRCC_MINIZIP} ${SRCH_MINIZIP})
-	include_directories("../../3rdparty/minizip")
+else()
+	set(USE_BUNDLED_MINIZIP TRUE)
 
 	file(GLOB SRCCXX_TINYXML2 "../../3rdparty/tinyxml2/*.cpp")
 	file(GLOB SRCH_TINYXML2 "../../3rdparty/tinyxml2/*.h")
@@ -124,7 +153,17 @@ else(USE_SYS_LIBS)
 	list(APPEND SRCH ${SRCH_TINYXML2})
 	source_group("3rdparty\\tinyxml2" FILES ${SRCCXX_TINYXML2} ${SRCH_TINYXML2})
 	include_directories("../../3rdparty/tinyxml2")
-endif(USE_SYS_LIBS)
+endif()
+
+if(USE_BUNDLED_MINIZIP)
+	file(GLOB SRCC_MINIZIP "../../3rdparty/minizip/*.c")
+	file(GLOB SRCH_MINIZIP "../../3rdparty/minizip/*.h")
+	list(APPEND SRCC ${SRCC_MINIZIP})
+	list(APPEND SRCH ${SRCH_MINIZIP})
+	source_group("3rdparty\\minizip" FILES ${SRCC_MINIZIP} ${SRCH_MINIZIP})
+	include_directories("../../3rdparty/minizip")
+	set(MINIZIP_TARGET "")
+endif()
 
 if(USE_WEB)
 	file(GLOB SRCH_JSON "../../3rdparty/json/*.hpp")
@@ -141,7 +180,7 @@ list(APPEND SRCH ${SRCH_PLATFORM})
 source_group("platform" FILES ${SRCCXX_PLATFORM} ${SRCH_PLATFORM})
 
 if(USE_WX_WIDGETS OR APPLE_IOS)
-	# Open AL
+	# OpenAL
 	find_package(fmt REQUIRED)
 	find_package(OpenAL REQUIRED)
 	include_directories("${OPENAL_INCLUDE_DIR}")
@@ -150,9 +189,9 @@ if(USE_WX_WIDGETS OR APPLE_IOS)
 	file(GLOB SRCCXX_PLATFORM_OPENAL "../../platform/oal/*.cpp")
 	list(APPEND SRCCXX ${SRCCXX_PLATFORM_OPENAL})
 	source_group("platform\\oal" FILES ${SRCCXX_PLATFORM_OPENAL})
-endif(USE_WX_WIDGETS OR APPLE_IOS)
+endif()
 
-if(NOT ANDROID AND(USE_SDL OR USE_SDL2 OR APPLE_IOS OR USE_HAIKU))
+if(NOT ANDROID AND (USE_SDL OR USE_SDL2 OR APPLE_IOS OR USE_HAIKU))
 	file(GLOB SRCCXX_UI "../../ui/*.cpp")
 	file(GLOB SRCH_UI "../../ui/*.h")
 	list(APPEND SRCCXX ${SRCCXX_UI})
@@ -174,9 +213,9 @@ if(NOT ANDROID AND(USE_SDL OR USE_SDL2 OR APPLE_IOS OR USE_HAIKU))
 
 		if(NOT MSVC)
 			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++17")
-		endif(NOT MSVC)
-	endif(USE_WEB)
-endif(NOT ANDROID AND(USE_SDL OR USE_SDL2 OR APPLE_IOS OR USE_HAIKU))
+		endif()
+	endif()
+endif()
 
 if(USE_SDL2 OR APPLE_IOS OR ANDROID)
 	file(GLOB SRCCXX_PLATFORM_GLES2 "../../platform/gles2/*.cpp")
@@ -184,53 +223,40 @@ if(USE_SDL2 OR APPLE_IOS OR ANDROID)
 	list(APPEND SRCCXX ${SRCCXX_PLATFORM_GLES2})
 	list(APPEND SRCH ${SRCH_PLATFORM_GLES2})
 	source_group("platform\\gles2" FILES ${SRCCXX_PLATFORM_GLES2} ${SRCH_PLATFORM_GLES2})
-endif(USE_SDL2 OR APPLE_IOS OR ANDROID)
+endif()
 
-# Windows CRT Linkage Configuration - Static Libs with Dynamic CRT
+# Windows CRT linkage configuration
 if(MSVC AND NOT UWP)
-    if(USE_STATIC_LIBS_WITH_DLL_CRT)
-        message(STATUS "Configuring static libraries with dynamic CRT linkage")
+	if(USE_STATIC_LIBS_WITH_DLL_CRT)
+		message(STATUS "Configuring static libraries with dynamic CRT linkage")
+		set(variables CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE
+		              CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE)
+		foreach(variable ${variables})
+			if(${variable} MATCHES "/MD")
+				string(REGEX REPLACE "/MD" "/MT" ${variable} "${${variable}}")
+			endif()
+			if(${variable} MATCHES "/MTd?")
+				string(REPLACE "/MT" "/MD" ${variable} "${${variable}}")
+				set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} /INCREMENTAL:NO")
+				set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /INCREMENTAL:NO")
+			endif()
+		endforeach()
+		add_definitions(-DSTATIC_LIBS_WITH_DLL_CRT)
+	else()
+		set(variables CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE
+		              CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE)
+		foreach(variable ${variables})
+			if(${variable} MATCHES "/MD")
+				string(REGEX REPLACE "/MD" "/MT" ${variable} "${${variable}}")
+			endif()
+		endforeach()
+	endif()
 
-        # Set compiler flags - static libs but dynamic CRT
-        set(variables CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE
-                     CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE)
-
-        foreach(variable ${variables})
-            if(${variable} MATCHES "/MD")
-                string(REGEX REPLACE "/MD" "/MT" ${variable} "${${variable}}")
-            endif()
-
-            # Ensure dynamic CRT version instead of full static
-            if(${variable} MATCHES "/MTd?")
-                string(REPLACE "/MT" "/MD" ${variable} "${${variable}}")
-                set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} /INCREMENTAL:NO")
-                set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /INCREMENTAL:NO")
-            endif()
-        endforeach()
-
-        # Add global definition
-        add_definitions(-DSTATIC_LIBS_WITH_DLL_CRT)
-
-    else()
-        # Keep original static CRT settings
-        set(variables CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE
-                     CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE)
-
-        foreach(variable ${variables})
-            if(${variable} MATCHES "/MD")
-                string(REGEX REPLACE "/MD" "/MT" ${variable} "${${variable}}")
-            endif()
-        endforeach()
-    endif()
-
-    # Windows-specific definitions - should always apply when building for Windows
-    if(NOT USE_WX_WIDGETS)
-        add_definitions(-DWIN32_LEAN_AND_MEAN -DVC_EXTRALEAN -DNOCOLOR)
-    endif(NOT USE_WX_WIDGETS)
-
-    # Suppress compiler warnings - always applicable
-    add_definitions("/wd4244 /wd4996 /wd4800 /wd4267")
-endif(MSVC AND NOT UWP)
+	if(NOT USE_WX_WIDGETS)
+		add_definitions(-DWIN32_LEAN_AND_MEAN -DVC_EXTRALEAN -DNOCOLOR)
+	endif()
+	add_definitions("/wd4244 /wd4996 /wd4800 /wd4267")
+endif()
 
 macro(add_platform_io_stuff)
 	if(WIN32)
@@ -247,8 +273,10 @@ macro(add_platform_io_stuff)
 		list(APPEND SRCH ${SRCH_PLATFORM_LINUX})
 		source_group("platform\\linux" FILES ${SRCCXX_PLATFORM_LINUX} ${SRCH_PLATFORM_LINUX})
 		add_definitions(-D_POSIX)
-	endif(WIN32)
+	endif()
 endmacro()
+
+# ---- Platform targets ----
 
 if(APPLE_IOS)
 	set(PROJECT UnrealSpeccyPortable)
@@ -277,17 +305,13 @@ if(APPLE_IOS)
 	add_platform_io_stuff()
 
 	file(GLOB COPY_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../ios/Resources/*)
-	source_group("Resources" FILES ${COPY_RESOURCES})
-
 	file(GLOB COPY_IMAGES ${CMAKE_CURRENT_SOURCE_DIR}/../ios/Images/*)
-	source_group("Images" FILES ${COPY_IMAGES})
-
 	file(GLOB COPY_RES_ROM ${CMAKE_CURRENT_SOURCE_DIR}/../../res/rom/*)
-	source_group("Resources\\rom" FILES ${COPY_RES_ROM})
-
 	file(GLOB COPY_RES_FONT ${CMAKE_CURRENT_SOURCE_DIR}/../../res/font/*)
+	source_group("Resources" FILES ${COPY_RESOURCES})
+	source_group("Images" FILES ${COPY_IMAGES})
+	source_group("Resources\\rom" FILES ${COPY_RES_ROM})
 	source_group("Resources\\font" FILES ${COPY_RES_FONT})
-
 	list(APPEND SRCRES ${COPY_RESOURCES} ${COPY_IMAGES} ${COPY_RES_ROM} ${COPY_RES_FONT})
 
 	add_executable(${PROJECT} ${SRCCXX} ${SRCMM} ${SRCC} ${SRCH} ${SRCRES})
@@ -298,19 +322,16 @@ if(APPLE_IOS)
 
 	foreach(_file ${COPY_RESOURCES})
 		set_source_files_properties(${_file} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
-	endforeach(_file)
-
+	endforeach()
 	foreach(_file ${COPY_IMAGES})
 		set_source_files_properties(${_file} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
-	endforeach(_file)
-
+	endforeach()
 	foreach(_file ${COPY_RES_ROM})
 		set_source_files_properties(${_file} PROPERTIES MACOSX_PACKAGE_LOCATION "res/rom")
-	endforeach(_file)
-
+	endforeach()
 	foreach(_file ${COPY_RES_FONT})
 		set_source_files_properties(${_file} PROPERTIES MACOSX_PACKAGE_LOCATION "res/font")
-	endforeach(_file)
+	endforeach()
 
 elseif(ANDROID)
 	set(PROJECT usp)
@@ -339,12 +360,23 @@ elseif(USE_WX_WIDGETS)
 		add_definitions(-D_MAC)
 	elseif(UNIX)
 		add_definitions(-D_LINUX)
-	endif(APPLE)
+	endif()
 
 	# wxWidgets
 	if(USE_SYS_LIBS)
-		find_package(wxWidgets CONFIG REQUIRED)
-	else(USE_SYS_LIBS)
+		if(WIN32)
+			find_package(wxWidgets CONFIG REQUIRED)
+			set(WX_TARGETS wx::core wx::base wx::adv wx::aui wx::gl)
+		else()
+			# Linux: use classic find_package with components
+			find_package(wxWidgets 3.2 REQUIRED COMPONENTS ${wxWidgets_LIBRARIES})
+			include(${wxWidgets_USE_FILE})
+			# Look for the GL canvas library explicitly
+			find_library(WX_GL_LIB NAMES wx_gtk3u_gl-3.2 wx_gtk3u_gl PATHS /usr/lib/x86_64-linux-gnu)
+			message(STATUS "wxGL lib: ${WX_GL_LIB}")
+			set(WX_TARGETS ${wxWidgets_LIBRARIES} ${WX_GL_LIB})
+		endif()
+	else()
 		set(wxUSE_STC 0)
 		set(wxUSE_WXHTML_HELP 0)
 		set(wxUSE_HTML 0)
@@ -364,7 +396,8 @@ elseif(USE_WX_WIDGETS)
 		set(wxBUILD_USE_STATIC_RUNTIME 1)
 		set(wxBUILD_INSTALL 0)
 		add_subdirectory("../../3rdparty/wxWidgets" "wxWidgets")
-	endif(USE_SYS_LIBS)
+		set(WX_TARGETS wx::core wx::base wx::adv wx::aui wx::gl)
+	endif()
 
 	file(GLOB SRCCXX_PLATFORM_WX_WIDGETS "../../platform/wxwidgets/*.cpp")
 	file(GLOB SRCH_PLATFORM_WX_WIDGETS "../../platform/wxwidgets/*.h")
@@ -372,27 +405,31 @@ elseif(USE_WX_WIDGETS)
 	list(APPEND SRCH ${SRCH_PLATFORM_WX_WIDGETS})
 	source_group("platform\\wxwidgets" FILES ${SRCCXX_PLATFORM_WX_WIDGETS} ${SRCH_PLATFORM_WX_WIDGETS})
 
-	IF(WIN32)
+	if(WIN32)
 		add_definitions(-DWX_RES)
-
 		if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "8")
 			add_definitions(-DWX_CPU_AMD64)
 		else()
 			add_definitions(-DWX_CPU_X86)
 		endif()
-
-		SET(SRCRES "../win/unreal_speccy_portable.rc")
+		set(SRCRES "../win/unreal_speccy_portable.rc")
 		source_group("platform\\win\\res" FILES ${SRCRES})
-	ENDIF(WIN32)
+	endif()
 
-	# Open GL
+	# OpenGL / GLEW
 	find_package(GLEW REQUIRED)
+	# Ensure GLEW imported target exists (handles distro packages that may not create it)
+	if(NOT TARGET GLEW::GLEW)
+		add_library(GLEW::GLEW UNKNOWN IMPORTED)
+		set_target_properties(GLEW::GLEW PROPERTIES
+			IMPORTED_LOCATION "${GLEW_LIBRARIES}"
+			INTERFACE_INCLUDE_DIRECTORIES "${GLEW_INCLUDE_DIRS}")
+	endif()
 	find_package(OpenGL REQUIRED)
 	include_directories(${GLEW_INCLUDE_DIRS})
-
 	if(NOT WIN32)
 		include_directories("${OPENGL_INCLUDE_DIR}")
-	endif(NOT WIN32)
+	endif()
 
 	file(GLOB SRCCXX_PLATFORM_OPENGL "../../platform/gl/*.cpp")
 	list(APPEND SRCCXX ${SRCCXX_PLATFORM_OPENGL})
@@ -401,21 +438,35 @@ elseif(USE_WX_WIDGETS)
 	add_executable(${PROJECT} WIN32 ${SRCCXX} ${SRCC} ${SRCH} ${SRCRES})
 
 	if(USE_SYS_LIBS)
-		target_link_libraries(${PROJECT} tinyxml2::tinyxml2 unofficial::minizip::minizip wx::core wx::base wx::adv wx::aui wx::gl)
-	else(USE_SYS_LIBS)
-		target_link_libraries(${PROJECT} wx::core wx::base wx::adv wx::aui wx::gl)
-	endif(USE_SYS_LIBS)
+		if(WIN32)
+			target_link_libraries(${PROJECT} tinyxml2::tinyxml2 ${MINIZIP_TARGET} ${WX_TARGETS})
+		else()
+			target_link_libraries(${PROJECT} tinyxml2::tinyxml2 ${MINIZIP_TARGET} ${WX_TARGETS})
+		endif()
+	else()
+		target_link_libraries(${PROJECT} ${WX_TARGETS})
+	endif()
 
-	target_link_libraries(${PROJECT} ${GLEW_LIBRARIES} ${OPENGL_LIBRARIES})
+	target_link_libraries(${PROJECT} GLEW::GLEW ${OPENGL_LIBRARIES})
+
+	# Linux needs GLX and X11 for wxWidgets/OpenGL
+	if(UNIX AND NOT APPLE)
+		find_package(OpenGL COMPONENTS OpenGL GLX)
+		if(TARGET OpenGL::GLX)
+			target_link_libraries(${PROJECT} OpenGL::GLX)
+		endif()
+		if(X11_FOUND)
+			target_link_libraries(${PROJECT} ${X11_LIBRARIES})
+		endif()
+	endif()
 
 elseif(USE_HAIKU)
-	# Haiku
 	file(GLOB SRCCXX_PLATFORM_HAIKU "../../platform/haiku/*.cpp")
 	add_definitions(-DAPP_SIGNATURE="application/x-vnd.unreal-speccy-portable" -DUSE_HAIKU -DUSE_PNG -DUSE_UI -DUSE_CONFIG -DUSE_ZIP)
 
 	if(USE_WEB)
 		add_definitions(-DUSE_WEB)
-	endif(USE_WEB)
+	endif()
 
 	list(APPEND SRCCXX ${SRCCXX_PLATFORM_HAIKU})
 	source_group("platform\\haiku" FILES ${SRCCXX_PLATFORM_HAIKU})
@@ -426,7 +477,6 @@ elseif(USE_HAIKU)
 	target_link_libraries(${PROJECT} -lbe -lmedia -ldevice -lgame -ltracker -llocalestub -lpng)
 
 elseif(USE_SDL)
-	# SDL
 	find_package(SDL REQUIRED)
 	include_directories("${SDL_INCLUDE_DIR}")
 	file(GLOB SRCCXX_PLATFORM_SDL "../../platform/sdl/*.cpp")
@@ -434,7 +484,7 @@ elseif(USE_SDL)
 
 	if(USE_WEB)
 		add_definitions(-DUSE_WEB)
-	endif(USE_WEB)
+	endif()
 
 	list(APPEND SRCCXX ${SRCCXX_PLATFORM_SDL})
 	source_group("platform\\sdl" FILES ${SRCCXX_PLATFORM_SDL})
@@ -445,10 +495,9 @@ elseif(USE_SDL)
 	target_link_libraries(${PROJECT} ${SDL_LIBRARY})
 
 elseif(USE_SDL2)
-	# SDL2
 	if(NOT EMSCRIPTEN AND NOT WIN32)
 		find_package(SDL2 REQUIRED)
-	endif(NOT EMSCRIPTEN AND NOT WIN32)
+	endif()
 
 	list(APPEND THIRDPARTY_LIBRARIES ${SDL2_LIBRARIES})
 
@@ -485,37 +534,34 @@ elseif(USE_SDL2)
 		set_property(SOURCE ${LIB_DBG_PLATFORM_UWP} PROPERTY VS_DEPLOYMENT_LOCATION ".")
 		source_group("platform\\uwp\\lib" FILES ${LIB_PLATFORM_UWP})
 		source_group("platform\\uwp\\lib\\dbg" FILES ${LIB_DBG_PLATFORM_UWP})
-	endif(UWP)
+	endif()
 
 	if(WIN32)
 		set(OPENGLES2_INCLUDE_DIR "${ANGLE_INCLUDE_DIR}")
 		add_definitions(-DGL_GLEXT_PROTOTYPES)
 		list(APPEND THIRDPARTY_LIBRARIES ${ANGLE_LIBRARY})
-
 		if(MINGW)
 			set(SDL2_LINK_FLAGS "-s -static-libgcc -Wl,-Bstatic -lstdc++ -lpthread")
-		endif(MINGW)
-
+		endif()
 		if(NOT UWP)
-			SET(SRCRES "../win/unreal_speccy_portable.rc")
+			set(SRCRES "../win/unreal_speccy_portable.rc")
 			source_group("platform\\win\\res" FILES ${SRCRES})
-		endif(NOT UWP)
-	endif(WIN32)
+		endif()
+	endif()
 
 	if(UNIX)
 		add_definitions(-D_LINUX)
 		set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
-
 		if(NOT EMSCRIPTEN)
 			find_package(OpenGLES2 REQUIRED)
 			list(APPEND THIRDPARTY_LIBRARIES ${OPENGLES2_LIBRARIES})
-		endif(NOT EMSCRIPTEN)
-	endif(UNIX)
+		endif()
+	endif()
 
 	if(NOT EMSCRIPTEN AND NOT UWP)
 		include_directories("${OPENGLES2_INCLUDE_DIR}")
 		include_directories("${SDL2_INCLUDE_DIRS}")
-	endif(NOT EMSCRIPTEN AND NOT UWP)
+	endif()
 
 	file(GLOB SRCCXX_PLATFORM_SDL2 "../../platform/sdl2/*.cpp")
 	list(APPEND SRCCXX ${SRCCXX_PLATFORM_SDL2})
@@ -525,7 +571,7 @@ elseif(USE_SDL2)
 
 	if(USE_WEB AND NOT EMSCRIPTEN)
 		add_definitions(-DUSE_WEB)
-	endif(USE_WEB AND NOT EMSCRIPTEN)
+	endif()
 
 	if(EMSCRIPTEN)
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sUSE_SDL=2 -sUSE_ZLIB=1")
@@ -537,51 +583,42 @@ elseif(USE_SDL2)
 		set(CMAKE_EXECUTABLE_SUFFIX ".html")
 		set(EMSCRIPTEN_LINK_FLAGS "--preload-file ../../../res/@res/ -sUSE_SDL=2 -sUSE_ZLIB=1 -sALLOW_MEMORY_GROWTH=1 -sEXPORTED_RUNTIME_METHODS=ccall,cwrap -lidbfs.js")
 		set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} ${EMSCRIPTEN_LINK_FLAGS})
-	endif(EMSCRIPTEN)
+	endif()
 
 	add_platform_io_stuff()
 
 	if(APPLE)
 		set(PROJECT UnrealSpeccyPortable)
 		add_definitions(-D_MAC)
-
 		file(GLOB SRCCXX_PLATFORM_MAC "../../platform/mac/*.cpp")
 		list(APPEND SRCCXX ${SRCCXX_PLATFORM_MAC})
 		source_group("platform\\mac" FILES ${SRCCXX_PLATFORM_MAC})
-
 		file(GLOB COPY_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../mac/*.icns)
-		source_group("Resources" FILES ${COPY_RESOURCES})
-
 		file(GLOB COPY_RES_ROM ${CMAKE_CURRENT_SOURCE_DIR}/../../res/rom/*)
-		source_group("Resources\\rom" FILES ${COPY_RES_ROM})
-
 		file(GLOB COPY_RES_FONT ${CMAKE_CURRENT_SOURCE_DIR}/../../res/font/*)
+		source_group("Resources" FILES ${COPY_RESOURCES})
+		source_group("Resources\\rom" FILES ${COPY_RES_ROM})
 		source_group("Resources\\font" FILES ${COPY_RES_FONT})
-
 		list(APPEND SRCRES ${COPY_RESOURCES} ${COPY_RES_ROM} ${COPY_RES_FONT})
-	endif(APPLE)
+	endif()
 
 	add_executable(${PROJECT} WIN32 MACOSX_BUNDLE ${SRCCXX} ${SRCC} ${SRCH} ${SRCRES})
 	target_link_libraries(${PROJECT} ${SDL2_LINK_FLAGS})
 
 	if(APPLE)
 		set_property(TARGET ${PROJECT} PROPERTY MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/../mac/UnrealSpeccyPortable-Info.plist")
-
 		foreach(_file ${COPY_RESOURCES})
 			set_source_files_properties(${_file} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
-		endforeach(_file)
-
+		endforeach()
 		foreach(_file ${COPY_RES_ROM})
 			set_source_files_properties(${_file} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/res/rom")
-		endforeach(_file)
-
+		endforeach()
 		foreach(_file ${COPY_RES_FONT})
 			set_source_files_properties(${_file} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/res/font")
-		endforeach(_file)
-	endif(APPLE)
+		endforeach()
+	endif()
 
 elseif(USE_BENCHMARK)
-	# benchmark mode (console)
 	file(GLOB SRCCXX_PLATFORM_BENCHMARK "../../platform/benchmark/*.cpp")
 	add_definitions(-DUSE_BENCHMARK)
 	list(APPEND SRCCXX ${SRCCXX_PLATFORM_BENCHMARK})
@@ -592,7 +629,6 @@ elseif(USE_BENCHMARK)
 	add_executable(${PROJECT} ${SRCCXX} ${SRCC} ${SRCH})
 
 elseif(USE_LIBRARY)
-	# library mode
 	file(GLOB SRCCXX_PLATFORM_LIBRARY "../../platform/library/*.cpp")
 	add_definitions(-DUSE_LIBRARY)
 	list(APPEND SRCCXX ${SRCCXX_PLATFORM_LIBRARY})
@@ -601,8 +637,9 @@ elseif(USE_LIBRARY)
 	add_platform_io_stuff()
 
 	add_library(${PROJECT} SHARED ${SRCCXX} ${SRCC} ${SRCH})
-endif(APPLE_IOS)
+endif()
 
+# Final link - THIRDPARTY_LIBRARIES accumulated above
 target_link_libraries(${PROJECT} ${THIRDPARTY_LIBRARIES})
 
 if(HAIKU)
@@ -621,18 +658,18 @@ if(HAIKU)
 		COMMAND mimeset --all ${PROJECT}
 		COMMENT "${P} Updating MIME types for '${PROJECT}' executable."
 		VERBATIM)
-endif(HAIKU)
+endif()
 
 if(MSVC AND NOT UWP)
 	set_target_properties(${PROJECT} PROPERTIES LINK_FLAGS "/MANIFEST:NO /LARGEADDRESSAWARE")
-endif(MSVC AND NOT UWP)
+endif()
 
 if(WIN32 AND USE_WX_WIDGETS)
 	set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} avrt.lib")
 	set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} avrt.lib")
-endif(WIN32 AND USE_WX_WIDGETS)
+endif()
 
-if(WIN32 AND(USE_WX_WIDGETS OR USE_SDL2))
+if(WIN32 AND (USE_WX_WIDGETS OR USE_SDL2))
 	install(TARGETS ${PROJECT} RUNTIME DESTINATION ".")
 	set(CPACK_WIX_VERSION 4)
 	set(CPACK_PACKAGE_EXECUTABLES ${PROJECT} "Unreal Speccy Portable")
@@ -642,7 +679,7 @@ if(WIN32 AND(USE_WX_WIDGETS OR USE_SDL2))
 		string(REPLACE ".lib" ".dll" _dll ${_lib2})
 		file(GLOB _dll_exist ${_dll})
 		list(APPEND THIRDPARTY_LIBRARIES_INSTALL ${_dll_exist})
-	endforeach(_lib)
+	endforeach()
 
 	install(FILES ${THIRDPARTY_LIBRARIES_INSTALL} DESTINATION ".")
 	install(DIRECTORY "../../res" DESTINATION ".")
@@ -665,4 +702,4 @@ if(WIN32 AND(USE_WX_WIDGETS OR USE_SDL2))
 	set(CPACK_WIX_UPGRADE_GUID "E43C49AC-16AA-4818-A319-5395CCFC2DFC")
 	set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/../../gpl-3.0.rtf")
 	include(CPack)
-endif(WIN32 AND(USE_WX_WIDGETS OR USE_SDL2))
+endif()

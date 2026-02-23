@@ -28,6 +28,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <wx/wx.h>
 #include <wx/dnd.h>
 #include <wx/aboutdlg.h>
+#include <wx/stdpaths.h>
+#include <wx/filename.h>
 
 namespace xPlatform
 {
@@ -39,9 +41,6 @@ namespace xPlatform
     void cleanupGraphics();
 
     wxWindow* CreateGLCanvas(wxWindow* parent);
-
-    // evtSetStatusText is defined in wx_glcanvas.cpp and used for both
-    // emulator error strings and render-thread status messages.
 
     static struct eOptionWindowState : public xOptions::eOptionString
     {
@@ -110,10 +109,6 @@ namespace xPlatform
         void OnMinimize(wxCommandEvent& event);
         void OnZoom(wxCommandEvent& event);
         void OnOptions(wxCommandEvent& event);
-
-
-        // Handles the close event: signals the render thread to stop before
-        // the canvas (and thus the thread) are destroyed by wxWidgets.
         void OnClose(wxCloseEvent& event);
 
         void UpdateViewZoomMenu();
@@ -249,7 +244,13 @@ namespace xPlatform
         SetIcon(wxICON(unreal_speccy_portable));
 #endif//_WINDOWS
 #ifdef _LINUX
-        SetIcon(wxIcon(wxT("unreal_speccy_portable.xpm")));
+        // Resolve the icon path relative to the executable directory so the
+        // app can be launched from any working directory.
+        wxFileName icon_path(wxStandardPaths::Get().GetExecutablePath());
+        icon_path.SetFullName(wxT("unreal_speccy_portable.xpm"));
+        wxString icon_file = icon_path.GetFullPath();
+        if (wxFileExists(icon_file))
+            SetIcon(wxIcon(icon_file, wxBITMAP_TYPE_XPM));
 #endif//_LINUX
 
         wxMenu* menuFile = new wxMenu;
@@ -347,7 +348,6 @@ namespace xPlatform
             SetClientSize(org_size * cmdline.size_percent / 100);
         }
 
-        // CreateGLCanvas constructs the GLCanvas and starts the render thread.
         gl_canvas = CreateGLCanvas(this);
         gl_canvas->SetFocus();
 
@@ -394,32 +394,13 @@ namespace xPlatform
     {
         if (!IsFullScreen())
             StoreWindowState();
-        // gl_canvas destruction (triggered by wxWidgets child cleanup) will
-        // join the render thread via GLCanvas::~GLCanvas().
     }
 
     //=============================================================================
     //  Frame::OnClose
-    //
-    //  Intercept window close so we can signal the render thread to stop and
-    //  wait for it before the canvas is destroyed.  Without this, wxWidgets
-    //  destroys the canvas (and the GL context) while the thread may still
-    //  be executing GL calls.
     //-----------------------------------------------------------------------------
     void Frame::OnClose(wxCloseEvent& event)
     {
-        // OpQuit() was previously polled from OnIdle.  Set it here so that
-        // any in-flight OnLoop() call in the render thread also sees the flag.
-        // The render thread's m_running flag is set by GLCanvas::~GLCanvas()
-        // which is called during Destroy() below after the event handler returns.
-        //
-        // Sequence:
-        //   1. This handler calls Destroy().
-        //   2. wxWidgets destroys child windows, including gl_canvas.
-        //   3. ~GLCanvas() calls RequestStop() + Wait() — the render thread
-        //      finishes its current frame, calls cleanupGraphics(), then exits.
-        //   4. ~GLCanvas() deletes the GL context.
-        //   5. Frame is fully destroyed.
         if (!IsFullScreen())
             StoreWindowState();
         Destroy();
@@ -714,12 +695,10 @@ namespace xPlatform
     //-----------------------------------------------------------------------------
     void Frame::OnSetStatusText(wxCommandEvent& event)
     {
-        // Known emulator codes sent as short tokens:
-        if (event.GetString() == L"rzx_finished")    SetStatusText(_("RZX playback finished"));
+        if (event.GetString() == L"rzx_finished")         SetStatusText(_("RZX playback finished"));
         else if (event.GetString() == L"rzx_sync_lost")   SetStatusText(_("RZX error - sync lost"));
         else if (event.GetString() == L"rzx_invalid")     SetStatusText(_("RZX error - invalid data"));
         else if (event.GetString() == L"rzx_unsupported") SetStatusText(_("RZX error - unsupported format"));
-        // Any other string (e.g. from the render thread) is displayed as-is:
         else SetStatusText(event.GetString());
     }
 
