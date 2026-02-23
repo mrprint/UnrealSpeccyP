@@ -123,22 +123,53 @@ if(USE_SYS_LIBS)
 		find_package(unofficial-minizip CONFIG REQUIRED)
 		set(MINIZIP_TARGET unofficial::minizip::minizip)
 	else()
-		# Linux/Unix: prefer pkg-config for minizip
+		# Linux/Unix: try several discovery methods in order
+
+		# 1. pkg-config (works on Fedora/Arch; Ubuntu's libminizip-dev lacks a .pc file)
 		if(PKG_CONFIG_FOUND)
-			pkg_check_modules(MINIZIP minizip)
+			pkg_check_modules(MINIZIP QUIET minizip)
 		endif()
+
 		if(MINIZIP_FOUND)
+			message(STATUS "minizip found via pkg-config: ${MINIZIP_LIBRARIES}")
 			include_directories(${MINIZIP_INCLUDE_DIRS})
 			link_directories(${MINIZIP_LIBRARY_DIRS})
 			set(MINIZIP_TARGET ${MINIZIP_LIBRARIES})
 		else()
-			# Fallback to cmake config
+			# 2. cmake config (vcpkg / conan style)
 			find_package(unofficial-minizip CONFIG QUIET)
 			if(unofficial-minizip_FOUND)
+				message(STATUS "minizip found via cmake config")
 				set(MINIZIP_TARGET unofficial::minizip::minizip)
 			else()
-				message(WARNING "minizip not found via pkg-config or cmake config; falling back to bundled")
-				set(USE_BUNDLED_MINIZIP TRUE)
+				# 3. Plain find_library + find_path
+				#    Ubuntu's libminizip-dev installs libminizip.a and unzip.h
+				#    into /usr/include/minizip/ with no .pc file -- this catches it.
+				find_library(MINIZIP_LIB NAMES minizip
+					PATHS /usr/lib /usr/local/lib
+					PATH_SUFFIXES x86_64-linux-gnu aarch64-linux-gnu)
+				find_path(MINIZIP_INCLUDE_DIR NAMES unzip.h
+					PATHS /usr/include /usr/local/include
+					PATH_SUFFIXES minizip)
+				if(MINIZIP_LIB AND MINIZIP_INCLUDE_DIR)
+					message(STATUS "minizip found: lib=${MINIZIP_LIB}, include=${MINIZIP_INCLUDE_DIR}")
+					include_directories(${MINIZIP_INCLUDE_DIR})
+					set(MINIZIP_TARGET ${MINIZIP_LIB})
+				else()
+					# 4. Bundled fallback - only if sources are present
+					file(GLOB _BUNDLED_MINIZIP_CHECK "../../3rdparty/minizip/*.c")
+					if(_BUNDLED_MINIZIP_CHECK)
+						message(STATUS "minizip not found on system; using bundled sources")
+						set(USE_BUNDLED_MINIZIP TRUE)
+					else()
+						message(FATAL_ERROR
+							"minizip not found and bundled sources are missing.\n"
+							"  Ubuntu/Debian: sudo apt install libminizip-dev\n"
+							"  Fedora/RHEL:   sudo dnf install minizip-devel\n"
+							"  Arch:          sudo pacman -S minizip\n"
+							"Or set -DUSE_SYS_LIBS=OFF to use the bundled copy.")
+					endif()
+				endif()
 			endif()
 		endif()
 	endif()
