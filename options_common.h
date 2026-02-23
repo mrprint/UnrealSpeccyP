@@ -47,8 +47,8 @@ const eDrive DEFAULT_DRIVE = D_A;
 
 const bool DEFAULT_AUTO_PLAY_IMAGE = true;
 const bool DEFAULT_PAL_EFFECTS = true;
-const int DEFAULT_PAL_STRENGTH = 40; // 0-100 range
-const int DEFAULT_BEAM_SPREAD = 15; // 0-200 range
+const int DEFAULT_PAL_STRENGTH = 50; // 0-100 range
+const int DEFAULT_BEAM_SPREAD = 30; // 0-200 range
 
 const bool DEFAULT_FILTERING = true;
 const bool DEFAULT_GIGASCREEN = false;
