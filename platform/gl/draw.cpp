@@ -1024,6 +1024,17 @@ void main()
         glBindVertexArray(vao1); // cropped quad
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
+        //glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+        //glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        // generate mipmaps for the texture we just rendered
+        if (mip_enabled_current)
+        {
+            glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
+            BindTextureUnit(GL_TEXTURE0, fb_texture);
+            glGenerateMipmap(GL_TEXTURE_2D);
+        }
+
         // --- Second pass: FBO → screen ---
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, vport_width, vport_height);
@@ -1055,10 +1066,6 @@ void main()
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                 mip_dirty = false;
             }
-            glGenerateMipmap(GL_TEXTURE_2D);
-            // glGenerateMipmap is a raw driver call that doesn't go through the
-            // cache; the texture state on the GPU is unchanged, so no invalidation
-            // is needed — but we document this explicitly for future maintainers.
         }
         else
         {

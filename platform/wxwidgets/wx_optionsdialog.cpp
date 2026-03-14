@@ -11,6 +11,34 @@
 
 namespace xPlatform {
 
+// Declared in wx_canvas.cpp.
+void PauseGLCanvas();
+void ResumeGLCanvas();
+void LockEmulator();
+void UnlockEmulator();
+
+// Pauses the GL render thread while render-affecting options are written,
+// so DrawGL() never sees a partial option update.
+struct ScopedRenderPause
+{
+	ScopedRenderPause()  { PauseGLCanvas();  }
+	~ScopedRenderPause() { ResumeGLCanvas(); }
+	ScopedRenderPause(const ScopedRenderPause&) = delete;
+	ScopedRenderPause& operator=(const ScopedRenderPause&) = delete;
+};
+
+// Serialises main-thread option writes with the render thread's OnLoop().
+// All emulator state (sound chip, stereo, drive, joystick, etc.) is
+// accessed by OnLoop() on the render thread; Apply() on the main thread
+// must not run concurrently.
+struct ScopedEmuLock
+{
+	ScopedEmuLock()  { LockEmulator();   }
+	~ScopedEmuLock() { UnlockEmulator(); }
+	ScopedEmuLock(const ScopedEmuLock&) = delete;
+	ScopedEmuLock& operator=(const ScopedEmuLock&) = delete;
+};
+
 	BEGIN_EVENT_TABLE(OptionsDialog, wxDialog)
 		EVT_RADIOBUTTON(ID_RADIO_SOUND, OptionsDialog::OnSoundChipChanged)
 		EVT_COMBOBOX(wxID_ANY, OptionsDialog::OnStereoChanged)
@@ -362,6 +390,13 @@ namespace xPlatform {
 
 	void OptionsDialog::OnApply(wxCommandEvent& event)
 	{
+		// ScopedRenderPause: GL render thread is idle — DrawGL() will not
+		// read any option until all writes below are complete.
+		// ScopedEmuLock: render thread cannot be inside OnLoop() concurrently
+		// with the Apply() calls that reconfigure the emulator subsystems.
+		ScopedRenderPause render_guard;
+		ScopedEmuLock     emu_guard;
+
 		// Write local state to xOptions and apply
 		xOptions::eOption<int>* op_sound = xOptions::eOption<int>::Find("sound chip");
 		if (op_sound) { op_sound->Set(sound_chip); op_sound->Apply(); }

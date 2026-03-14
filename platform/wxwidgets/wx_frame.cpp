@@ -41,6 +41,10 @@ namespace xPlatform
     void cleanupGraphics();
 
     wxWindow* CreateGLCanvas(wxWindow* parent);
+    void PauseGLCanvas();
+    void ResumeGLCanvas();
+    void LockEmulator();
+    void UnlockEmulator();
 
     static struct eOptionWindowState : public xOptions::eOptionString
     {
@@ -59,6 +63,35 @@ namespace xPlatform
     extern const wxEventType evtSetStatusText;
     extern const wxEventType evtExitFullScreen;
 
+    // ---------------------------------------------------------------------------
+    // ScopedRenderPause
+    //
+    // RAII guard: pauses the GL render thread for the duration of a scope.
+    // Use before mutating any render option (zoom, gigascreen, scanlines, PAL
+    // effects, etc.) so the render thread is guaranteed idle while the option
+    // value changes.  Prevents mid-frame option reads that can stall the GPU
+    // driver and make the whole system feel unresponsive.
+    // ---------------------------------------------------------------------------
+    struct ScopedRenderPause
+    {
+        ScopedRenderPause()  { PauseGLCanvas();  }
+        ~ScopedRenderPause() { ResumeGLCanvas(); }
+        // Non-copyable, non-movable.
+        ScopedRenderPause(const ScopedRenderPause&) = delete;
+        ScopedRenderPause& operator=(const ScopedRenderPause&) = delete;
+    };
+
+    // Serializes main-thread access to emulator state with the render thread.
+    // Use for every Handler() call and every option Apply() that touches
+    // emulator internals (sound chip, stereo, drive, joystick, tape, etc.).
+    struct ScopedEmuLock
+    {
+        ScopedEmuLock()  { LockEmulator();   }
+        ~ScopedEmuLock() { UnlockEmulator(); }
+        ScopedEmuLock(const ScopedEmuLock&) = delete;
+        ScopedEmuLock& operator=(const ScopedEmuLock&) = delete;
+    };
+
 #ifndef _MAC
     struct DropFilesTarget : public wxFileDropTarget
     {
@@ -66,6 +99,7 @@ namespace xPlatform
         {
             if (filenames.empty())
                 return false;
+            ScopedEmuLock emu_guard;
             return Handler()->OnOpenFile(wxConvertWX2MB(filenames[0].c_str()));
         }
     };
@@ -403,6 +437,17 @@ namespace xPlatform
     {
         if (!IsFullScreen())
             StoreWindowState();
+
+        // Destroy the GL canvas (and join the render thread) *synchronously*
+        // before Destroy() posts its deferred frame-delete event.  Without this,
+        // App::OnExit() → DoneSound() can run while the render thread is still
+        // calling OnLoopSound(), causing a use-after-free in the audio buffers.
+        if (gl_canvas)
+        {
+            gl_canvas->Destroy();
+            gl_canvas = nullptr;
+        }
+
         Destroy();
     }
 
@@ -448,6 +493,7 @@ namespace xPlatform
     //-----------------------------------------------------------------------------
     void Frame::OnReset(wxCommandEvent& /*event*/)
     {
+        ScopedEmuLock emu_guard;
         if (Handler()->OnAction(A_RESET) == AR_OK)
             SetStatusText(_("Reset OK"));
         else
@@ -501,6 +547,7 @@ namespace xPlatform
         );
         if (fd.ShowModal() == wxID_OK)
         {
+            ScopedEmuLock emu_guard;
             if (Handler()->OnOpenFile(wxConvertWX2MB(fd.GetPath().c_str())))
             {
                 SetStatusText(_("File open OK"));
@@ -516,6 +563,7 @@ namespace xPlatform
     //-----------------------------------------------------------------------------
     void Frame::OnSaveFile(wxCommandEvent& /*event*/)
     {
+        ScopedEmuLock emu_guard;
         Handler()->VideoPaused(true);
         wxFileDialog fd(this, wxFileSelectorPromptStr,
             wxConvertMB2WX(OpLastFolder()),
@@ -586,6 +634,7 @@ namespace xPlatform
     //-----------------------------------------------------------------------------
     void Frame::OnViewMode(wxCommandEvent& event)
     {
+        ScopedRenderPause guard;    // idle the render thread before changing zoom
         using namespace xOptions;
         eOption<int>* op_zoom = eOption<int>::Find("zoom");
         switch (event.GetId())
@@ -602,6 +651,7 @@ namespace xPlatform
     //-----------------------------------------------------------------------------
     void Frame::OnTapeToggle(wxCommandEvent& /*event*/)
     {
+        ScopedEmuLock emu_guard;
         switch (Handler()->OnAction(A_TAPE_TOGGLE))
         {
         case AR_TAPE_STARTED:      SetStatusText(_("Tape started"));      break;
@@ -616,6 +666,7 @@ namespace xPlatform
     //-----------------------------------------------------------------------------
     void Frame::OnTapeFastToggle(wxCommandEvent& /*event*/)
     {
+        ScopedEmuLock emu_guard;
         using namespace xOptions;
         eOption<bool>* op = eOption<bool>::Find("fast tape");
         SAFE_CALL(op)->Change();
@@ -629,6 +680,7 @@ namespace xPlatform
     //-----------------------------------------------------------------------------
     void Frame::OnPauseToggle(wxCommandEvent& /*event*/)
     {
+        ScopedEmuLock emu_guard;
         if (menu_pause->IsChecked())
         {
             Handler()->VideoPaused(true);
@@ -646,36 +698,43 @@ namespace xPlatform
     //-----------------------------------------------------------------------------
     void Frame::OnViewGigascreenToggle(wxCommandEvent& /*event*/)
     {
+        ScopedRenderPause guard;
         SetStatusText(UpdateBoolOption(menu_view.gigascreen, "gigascreen", true)
             ? _("Gigascreen on") : _("Gigascreen off"));
     }
     void Frame::OnViewScanlinesToggle(wxCommandEvent& /*event*/)
     {
+        ScopedRenderPause guard;
         SetStatusText(UpdateBoolOption(menu_view.scanlines, "scanlines", true)
             ? _("CRT scanlines simulation on") : _("CRT scanlines simulation off"));
     }
     void Frame::OnViewPalEffectsToggle(wxCommandEvent& /*event*/)
     {
+        ScopedRenderPause guard;
         SetStatusText(UpdateBoolOption(menu_view.pal_effects, "pal effects", true)
             ? _("PAL effects on") : _("PAL effects off"));
     }
     void Frame::OnTrueSpeedToggle(wxCommandEvent& /*event*/)
     {
+        ScopedEmuLock emu_guard;
         SetStatusText(UpdateBoolOption(menu_true_speed, "true speed", true)
             ? _("True speed (50Hz mode) on") : _("True speed off"));
     }
     void Frame::OnMode48kToggle(wxCommandEvent& /*event*/)
     {
+        ScopedEmuLock emu_guard;
         SetStatusText(UpdateBoolOption(menu_mode_48k, "mode 48k", true)
             ? _("Mode 48k on") : _("Mode 48k off"));
     }
     void Frame::OnResetToServiceRomToggle(wxCommandEvent& /*event*/)
     {
+        ScopedEmuLock emu_guard;
         SetStatusText(UpdateBoolOption(menu_reset_to_service_rom, "reset to service rom", true)
             ? _("Reset to service ROM") : _("Reset to usual ROM"));
     }
     void Frame::OnAutoPlayImageToggle(wxCommandEvent& /*event*/)
     {
+        ScopedEmuLock emu_guard;
         SetStatusText(UpdateBoolOption(menu_auto_play_image, "auto play image", true)
             ? _("Auto launch on") : _("Auto launch off"));
     }
@@ -707,6 +766,7 @@ namespace xPlatform
     //-----------------------------------------------------------------------------
     void Frame::OnQuickLoad(wxCommandEvent& /*event*/)
     {
+        ScopedEmuLock emu_guard;
         using namespace xOptions;
         eOption<bool>* o = eOption<bool>::Find("load state");
         if (o)
@@ -718,6 +778,7 @@ namespace xPlatform
     }
     void Frame::OnQuickSave(wxCommandEvent& /*event*/)
     {
+        ScopedEmuLock emu_guard;
         using namespace xOptions;
         eOption<bool>* o = eOption<bool>::Find("save state");
         if (o)
@@ -783,6 +844,9 @@ namespace xPlatform
         int result = dialog.ShowModal();
         if (result == wxID_OK || result == wxID_APPLY)
         {
+            // Any option may have changed in the dialog; pause the render thread
+            // while we push the new values so it never sees a partial update.
+            ScopedRenderPause guard;
             UpdateBoolOption(menu_view.gigascreen, "gigascreen");
             UpdateBoolOption(menu_view.scanlines, "scanlines");
             UpdateBoolOption(menu_view.pal_effects, "pal effects");

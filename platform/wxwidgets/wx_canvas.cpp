@@ -25,6 +25,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <utility>
 #include <atomic>
 #include <chrono>
+#include <mutex>
+#include <condition_variable>
 #include <wx/wx.h>
 #include <wx/glcanvas.h>
 #include <wx/display.h>
@@ -82,7 +84,7 @@ namespace xPlatform
         {
         }
 
-        void RequestStop() { m_running.store(false, std::memory_order_relaxed); }
+        void RequestStop();
 
     protected:
         virtual ExitCode Entry() override;
@@ -109,10 +111,39 @@ namespace xPlatform
         void MakeCurrentOnRenderThread() { m_ctx->SetCurrent(*this); }
         void SwapGL() { SwapBuffers(); }
 
+        // Thread-safe viewport size: updated on the main thread via EVT_SIZE
+        // (and once at construction), read by the render thread each frame.
+        // wxWindow::GetClientSize() must only be called from the main thread;
+        // calling it from the render thread races with window resize events on GTK.
         wxSize GetViewportSize() const
         {
-            return GetClientSize();
+            return wxSize(
+                m_viewport_w.load(std::memory_order_acquire),
+                m_viewport_h.load(std::memory_order_acquire));
         }
+
+        void UpdateViewportSize()
+        {
+            wxSize sz = GetClientSize();
+            m_viewport_w.store(sz.x, std::memory_order_release);
+            m_viewport_h.store(sz.y, std::memory_order_release);
+        }
+
+        // Interruptible sleep: PauseRender() notifies this to wake the render
+        // thread immediately instead of waiting up to ~19ms for the sleep to expire.
+        std::mutex              m_sleep_mutex;
+        std::condition_variable m_sleep_cv;
+
+        // Emulator state mutex.
+        // Held by the render thread during OnLoop()/OnLoopSound()/VideoData(),
+        // and by the main thread for any Handler() call or option Apply() that
+        // touches emulator internals (file load, reset, key, tape, options).
+        // Recursive so re-entrant handler callbacks are safe.
+        std::recursive_mutex    m_emu_mutex;
+        void LockEmu()   { m_emu_mutex.lock();   }
+        void UnlockEmu() { m_emu_mutex.unlock(); }
+
+        std::atomic<bool>       m_render_paused{ false };
 
         void PostStatusText(const wxString& text)
         {
@@ -124,6 +155,81 @@ namespace xPlatform
         // Render thread polls this before calling SetCurrent().
         // Returns true only after the window has been fully realized on screen.
         bool IsShownForGL() const { return m_shown.load(std::memory_order_acquire); }
+
+        // ---------------------------------------------------------------------------
+        // PauseRender / ResumeRender
+        //
+        // Called from the MAIN thread before mutating any render option, and
+        // released afterwards.  The render thread checks m_render_paused at the
+        // start of each loop iteration and blocks there, so by the time
+        // PauseRender() returns the GPU command queue has been drained and the
+        // render thread is idle.  Safe to call multiple times (ref-counted).
+        // ---------------------------------------------------------------------------
+        void PauseRender()
+        {
+            {
+                std::lock_guard<std::mutex> lk(m_render_mutex);
+                ++m_render_pause_count;
+                m_render_paused.store(true, std::memory_order_release);
+            }
+            // Wake the render thread if it is in the interruptible sleep
+            // so it reaches RenderThreadMaybePause() without delay.
+            m_sleep_cv.notify_one();
+            std::unique_lock<std::mutex> lk(m_render_mutex);
+            m_render_cv_main.wait(lk, [this] { return m_render_idle; });
+        }
+
+        void ResumeRender()
+        {
+            {
+                std::lock_guard<std::mutex> lk(m_render_mutex);
+                if (m_render_pause_count > 0)
+                    --m_render_pause_count;
+                if (m_render_pause_count == 0)
+                    m_render_paused.store(false, std::memory_order_release);
+            }
+            m_render_cv_thread.notify_one();
+        }
+
+        // Called by the render thread at the top of each loop iteration.
+        // Blocks while paused and signals the main thread that we are idle.
+        //
+        // glFinish() is called before signalling idle so that any in-flight GPU
+        // commands from the previous DrawGL()/SwapGL() are fully retired before
+        // the main thread starts mutating options.  Without this, options could
+        // change while the GPU is still consuming the previous frame's uniforms.
+        void RenderThreadMaybePause()
+        {
+            if (!m_render_paused.load(std::memory_order_acquire))
+                return;
+
+            std::unique_lock<std::mutex> lk(m_render_mutex);
+            if (!m_render_paused.load(std::memory_order_relaxed))
+                return;
+
+            // Drain the GPU pipeline before telling the main thread we are idle.
+            glFinish();
+
+            m_render_idle = true;
+            m_render_cv_main.notify_one();      // wake PauseRender() caller
+            // Sleep until ResumeRender() clears the pause OR RequestStop() sets
+            // m_stop_requested (so shutdown is never blocked by a pending pause).
+            m_render_cv_thread.wait(lk, [this]
+                {
+                    return !m_render_paused.load(std::memory_order_relaxed)
+                        || m_stop_requested.load(std::memory_order_relaxed);
+                });
+            m_render_idle = false;
+        }
+
+        // Called by RenderThread::RequestStop() to unblock a paused render
+        // thread without touching the pause ref-count.
+        void RequestStopWhilePaused()
+        {
+            m_stop_requested.store(true, std::memory_order_release);
+            m_sleep_cv.notify_one();
+            m_render_cv_thread.notify_one();
+        }
 
     private:
         void OnPaint(wxPaintEvent& /*event*/)
@@ -138,6 +244,7 @@ namespace xPlatform
 
         void OnEraseBackground(wxEraseEvent& /*event*/) {}
 
+        void OnSize(wxSizeEvent& event);
         void OnKeydown(wxKeyEvent& event);
         void OnKeyup(wxKeyEvent& event);
         void OnKillFocus(wxFocusEvent& event);
@@ -158,11 +265,43 @@ namespace xPlatform
         // Set to true by OnPaint() when the window is first painted/mapped.
         // The render thread waits on this before calling SetCurrent().
         std::atomic<bool> m_shown{ false };
+
+        // Render-pause mechanism.
+        // m_render_paused: set by main thread, read by render thread each loop.
+        // m_render_pause_count: ref-count so nested pauses are safe.
+        // m_render_idle: set by render thread when it has acknowledged the pause.
+        // m_render_cv_main: wakes PauseRender() once the render thread is idle.
+        // m_render_cv_thread: wakes the render thread when ResumeRender() is called.
+        std::mutex              m_render_mutex;
+        std::condition_variable m_render_cv_main;
+        std::condition_variable m_render_cv_thread;
+        std::atomic<bool>       m_stop_requested{ false }; // set by RequestStopWhilePaused()
+        int                     m_render_pause_count{ 0 };
+        bool                    m_render_idle{ false };
+
+        // Viewport dimensions cached atomically so the render thread can read
+        // them without calling wxWindow::GetClientSize() (which is not
+        // thread-safe on GTK).  Written by OnSize() and the constructor,
+        // both of which run on the main thread.
+        std::atomic<int>        m_viewport_w{ 0 };
+        std::atomic<int>        m_viewport_h{ 0 };
     };
+
+    void RenderThread::RequestStop()
+    {
+        m_running.store(false, std::memory_order_relaxed);
+        // Wake the render thread if it is currently blocked inside
+        // RenderThreadMaybePause().  We must NOT call ResumeRender() here
+        // because that decrements m_render_pause_count and would corrupt
+        // the ref-count when no matching PauseRender() is in flight.
+        // A separate flag avoids the ownership problem entirely.
+        m_canvas->RequestStopWhilePaused();
+    }
 
     int GLCanvas::canvas_attr[] = { WX_GL_RGBA, WX_GL_DOUBLEBUFFER, 0 };
 
     BEGIN_EVENT_TABLE(GLCanvas, wxGLCanvas)
+        EVT_SIZE(GLCanvas::OnSize)
         EVT_PAINT(GLCanvas::OnPaint)
         EVT_ERASE_BACKGROUND(GLCanvas::OnEraseBackground)
         EVT_KEY_DOWN(GLCanvas::OnKeydown)
@@ -205,6 +344,10 @@ namespace xPlatform
             delete m_thread;
             m_thread = nullptr;
         }
+
+        // Seed the atomic viewport cache so the render thread has a valid
+        // size from its very first frame (before the first EVT_SIZE fires).
+        UpdateViewportSize();
 
         joysticks[0] = new eWxJoystick(this, wxJOYSTICK1);
         joysticks[1] = new eWxJoystick(this, wxJOYSTICK2);
@@ -270,6 +413,13 @@ namespace xPlatform
 
         while (m_running.load(std::memory_order_relaxed))
         {
+            // Block here (cheaply) while the main thread is mutating render options.
+            // SwapBuffers() has already returned so the GPU pipeline is idle.
+            m_canvas->RenderThreadMaybePause();
+
+            if (!m_running.load(std::memory_order_relaxed))
+                break;
+
             if (OpQuit())
             {
                 wxQueueEvent(m_canvas->GetParent(), new wxCloseEvent(wxEVT_CLOSE_WINDOW));
@@ -277,82 +427,108 @@ namespace xPlatform
             }
 
             now = Clock::now();
-            const bool full_speed = Handler()->FullSpeed();
 
+            // Hold the emulator mutex for the duration of OnLoop(),
+            // OnLoopSound(), and the VideoData/VideoFrame reads inside DrawGL().
+            // The main thread acquires the same mutex before any Handler() call
+            // or option Apply() that touches emulator internals, ensuring the
+            // two threads never operate on emulator state concurrently.
+            bool do_emu_tick;
+            bool full_speed;
+            bool did_draw = false;
             {
-                bool want_vsync = !full_speed;
-                if (vsync_active != want_vsync)
+                std::lock_guard<std::recursive_mutex> emu_lk(m_canvas->m_emu_mutex);
+                full_speed = Handler()->FullSpeed();
+                do_emu_tick = full_speed || (now >= next_emulator_tick);
+
                 {
-                    vsync_active = want_vsync;
+                    bool want_vsync = !full_speed;
+                    if (vsync_active != want_vsync)
+                    {
+                        vsync_active = want_vsync;
 #ifdef _LINUX
-                    // glXSwapIntervalEXT calls XSync internally on some drivers
-                    // (notably Mesa/llvmpipe), which races with GTK's X11 usage
-                    // on the main thread.  Lock the X11 display around the call
-                    // to serialize access even when XInitThreads() is active.
-                    Display* dpy = glXGetCurrentDisplay();
-                    if (dpy) XLockDisplay(dpy);
-                    VsyncGL(vsync_active);
-                    if (dpy) XUnlockDisplay(dpy);
+                        Display* dpy = glXGetCurrentDisplay();
+                        if (dpy) XLockDisplay(dpy);
+                        VsyncGL(vsync_active);
+                        if (dpy) XUnlockDisplay(dpy);
 #else
-                    VsyncGL(vsync_active);
+                        VsyncGL(vsync_active);
 #endif
+                    }
                 }
-            }
 
-            if (full_speed || now >= next_emulator_tick)
-            {
-                const char* err = Handler()->OnLoop();
-                if (err)
+                if (do_emu_tick)
                 {
-                    wxCommandEvent ev(evtSetStatusText);
-                    ev.SetString(wxConvertMB2WX(err));
-                    wxQueueEvent(m_canvas->GetParent(), ev.Clone());
-                }
-                OnLoopSound();
+                    const char* err = Handler()->OnLoop();
+                    if (err)
+                    {
+                        wxCommandEvent ev(evtSetStatusText);
+                        ev.SetString(wxConvertMB2WX(err));
+                        wxQueueEvent(m_canvas->GetParent(), ev.Clone());
+                    }
+                    OnLoopSound();
 
+                    if (!full_speed)
+                    {
+                        next_emulator_tick += NsInt(EMULATOR_PERIOD_NS);
+                        if (next_emulator_tick < now)
+                            next_emulator_tick = now + NsInt(EMULATOR_PERIOD_NS);
+                    }
+                }
+
+                bool should_render = vsync_active || full_speed || (now >= next_render_tick);
+                did_draw = false;
+                if (should_render && m_running.load(std::memory_order_relaxed))
+                {
+                    wxSize sz = m_canvas->GetViewportSize();
+                    if (sz.x > 0 && sz.y > 0)
+                        // DrawGL reads VideoData/VideoFrame — inside emu lock.
+                        did_draw = DrawGL(sz.x, sz.y);
+
+                    if (!vsync_active && !full_speed)
+                    {
+                        next_render_tick += NsInt(EMULATOR_PERIOD_NS);
+                        if (next_render_tick < now)
+                            next_render_tick = now + NsInt(EMULATOR_PERIOD_NS);
+                    }
+                }
+            } // emu_lk released here
+
+            // SwapGL (and potential vsync stall) runs outside the emu lock
+            // so the main thread is never blocked during vblank wait.
+            if (did_draw && m_running.load(std::memory_order_relaxed))
+                m_canvas->SwapGL();
+
+            // Interruptible sleep: wakes immediately if paused or stopped.
+            {
+                std::unique_lock<std::mutex> lk(m_canvas->m_sleep_mutex);
                 if (!full_speed)
                 {
-                    next_emulator_tick += NsInt(EMULATOR_PERIOD_NS);
-                    if (next_emulator_tick < now)
-                        next_emulator_tick = now + NsInt(EMULATOR_PERIOD_NS);
-                }
-            }
+                    now = Clock::now();
+                    auto next_event = next_emulator_tick;
+                    if (!vsync_active && next_render_tick < next_event)
+                        next_event = next_render_tick;
 
-            bool should_render = vsync_active || full_speed || (now >= next_render_tick);
-            if (should_render && m_running.load(std::memory_order_relaxed))
-            {
-                wxSize sz = m_canvas->GetViewportSize();
-                if (sz.x > 0 && sz.y > 0)
+                    if (next_event > now)
+                    {
+                        auto wake_at = next_event - NsInt(1000000LL);
+                        m_canvas->m_sleep_cv.wait_until(lk, wake_at,
+                            [this] {
+                                return m_canvas->m_render_paused.load(
+                                    std::memory_order_relaxed)
+                                    || !m_running.load(std::memory_order_relaxed);
+                            });
+                    }
+                }
+                else
                 {
-                    if (DrawGL(sz.x, sz.y) && m_running.load(std::memory_order_relaxed))
-                        m_canvas->SwapGL();
+                    m_canvas->m_sleep_cv.wait_for(lk, std::chrono::milliseconds(1),
+                        [this] {
+                            return m_canvas->m_render_paused.load(
+                                std::memory_order_relaxed)
+                                || !m_running.load(std::memory_order_relaxed);
+                        });
                 }
-
-                if (!vsync_active && !full_speed)
-                {
-                    next_render_tick += NsInt(EMULATOR_PERIOD_NS);
-                    if (next_render_tick < now)
-                        next_render_tick = now + NsInt(EMULATOR_PERIOD_NS);
-                }
-            }
-
-            if (!full_speed)
-            {
-                now = Clock::now();
-                auto next_event = next_emulator_tick;
-                if (!vsync_active && next_render_tick < next_event)
-                    next_event = next_render_tick;
-
-                if (next_event > now)
-                {
-                    auto sleep_ns = Ms(next_event - now).count();
-                    if (sleep_ns > 1.0)
-                        wxMilliSleep(static_cast<unsigned long>(sleep_ns - 1.0));
-                }
-            }
-            else
-            {
-                wxMilliSleep(1);
             }
         }
 
@@ -364,8 +540,12 @@ namespace xPlatform
         // on Linux when the main thread destroys the context while it is
         // still marked current on the render thread.
 #if defined(__WXMSW__)
-        HDC hdc = wglGetCurrentDC();
-        wglMakeCurrent(hdc, nullptr);
+        // Release the GL context without leaking the HDC.
+        // wglGetCurrentDC() returns the DC that wx passed to wglMakeCurrent()
+        // internally; calling ReleaseDC() on it here would be incorrect because
+        // wx owns that DC's lifetime.  Passing nullptr for both arguments simply
+        // unbinds the context from this thread without touching the DC at all.
+        wglMakeCurrent(nullptr, nullptr);
 #else
         // On Linux/GLX: passing nullptr for both drawable and context releases it.
         // glXMakeCurrent requires the Display pointer; we stored nothing, so use
@@ -381,6 +561,17 @@ namespace xPlatform
     // =============================================================================
     //  Input handlers
     // =============================================================================
+    // =============================================================================
+    //  GLCanvas::OnSize
+    // =============================================================================
+    void GLCanvas::OnSize(wxSizeEvent& event)
+    {
+        // Keep the atomic viewport cache in sync so the render thread always
+        // sees the current client dimensions without calling GetClientSize().
+        UpdateViewportSize();
+        event.Skip(); // let wx do its default resize processing
+    }
+
     void GLCanvas::OnKeydown(wxKeyEvent& event)
     {
         int key = event.GetKeyCode();
@@ -399,7 +590,7 @@ namespace xPlatform
         if (event.AltDown())    flags |= KF_ALT;
         if (event.ShiftDown())  flags |= KF_SHIFT;
         TranslateKey(key, flags);
-        Handler()->OnKey(key, flags);
+        { std::lock_guard<std::recursive_mutex> lk(m_emu_mutex); Handler()->OnKey(key, flags); }
     }
 
     void GLCanvas::OnKeyup(wxKeyEvent& event)
@@ -409,7 +600,7 @@ namespace xPlatform
         if (event.AltDown())    flags |= KF_ALT;
         if (event.ShiftDown())  flags |= KF_SHIFT;
         TranslateKey(key, flags);
-        Handler()->OnKey(key, OpJoyKeyFlags());
+        { std::lock_guard<std::recursive_mutex> lk(m_emu_mutex); Handler()->OnKey(key, OpJoyKeyFlags()); }
     }
 
     void GLCanvas::OnMouseKey(wxMouseEvent& event)
@@ -493,6 +684,23 @@ namespace xPlatform
         g_canvas = canvas;
         return canvas;
     }
+
+    // =============================================================================
+    //  PauseGLCanvas / ResumeGLCanvas
+    //
+    //  Called from wx_frame.cpp (main thread) before and after mutating any
+    //  render option (zoom, scanlines, gigascreen, PAL effects, etc.).
+    //  Guarantees the render thread is idle (GPU pipeline drained) for the
+    //  duration, preventing mid-frame option changes that stall the driver.
+    // =============================================================================
+    void PauseGLCanvas()  { if (g_canvas) g_canvas->PauseRender();  }
+    void ResumeGLCanvas() { if (g_canvas) g_canvas->ResumeRender(); }
+
+    // Lock/unlock the emulator state mutex from any thread.
+    // Use ScopedEmuLock (defined in wx_frame.cpp and wx_optionsdialog.cpp)
+    // rather than calling these directly.
+    void LockEmulator()   { if (g_canvas) g_canvas->LockEmu();   }
+    void UnlockEmulator() { if (g_canvas) g_canvas->UnlockEmu(); }
 
 }//namespace xPlatform
 
