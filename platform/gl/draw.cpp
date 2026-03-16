@@ -1024,8 +1024,8 @@ void main()
         glBindVertexArray(vao1); // cropped quad
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-        //glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
-        //glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        // Unbind FBO before operating on fb_texture to avoid feedback loop
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
         // generate mipmaps for the texture we just rendered
         if (mip_enabled_current)
@@ -1036,7 +1036,6 @@ void main()
         }
 
         // --- Second pass: FBO → screen ---
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, vport_width, vport_height);
         HandleLayoutClear(vport_width, vport_height);
 
