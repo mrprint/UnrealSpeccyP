@@ -1,41 +1,52 @@
-name: Windows Static Build (vcpkg static-md)
-
+name: Build
 on:
   push:
     branches: [ "desktop" ]
     tags: [ "*" ]
   pull_request:
     branches: [ "desktop" ]
-
 env:
   VCPKG_ROOT: ${{ github.workspace }}/vcpkg
   VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
-
 jobs:
   build:
     strategy:
       matrix:
-        arch: [x64, x86]
         include:
-          - arch: x64
+          - os: windows-latest
+            arch: x64
             triplet: x64-windows-static-md
-            crt: MultiThreadedDLL
-          - arch: x86
+          - os: windows-latest
+            arch: x86
             triplet: x86-windows-static-md
-            crt: MultiThreadedDLL
-
-    runs-on: windows-latest
-
+          - os: ubuntu-latest
+            arch: x64
+            triplet: x64-linux
+    runs-on: ${{ matrix.os }}
     steps:
     # Checkout repo with full history (needed for tags & SHA)
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: 0
         submodules: recursive
 
-    # Run vcpkg to install dependencies from vcpkg.json
+    # ── Linux system dependencies ──────────────────────────────────────────
+    - name: Install Linux system dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libwxgtk3.2-dev \
+          libopenal-dev libglew-dev libgl1-mesa-dev \
+          libglu1-mesa-dev libx11-dev \
+          libpng-dev zlib1g-dev libminizip-dev \
+          libtinyxml2-dev libfmt-dev \
+          cmake ninja-build
+
+    # ── vcpkg (Windows only) ───────────────────────────────────────────────
     - name: Setup vcpkg and install dependencies
+      if: runner.os == 'Windows'
       uses: lukka/run-vcpkg@v11
       with:
         runVcpkgInstall: true
@@ -44,8 +55,9 @@ jobs:
       env:
         VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
 
-    # Configure CMake with vcpkg toolchain and static-md CRT
-    - name: Configure CMake
+    # ── Configure ──────────────────────────────────────────────────────────
+    - name: Configure CMake (Windows)
+      if: runner.os == 'Windows'
       shell: pwsh
       run: |
         cmake -S build/cmake -B build/cmake/build-${{ matrix.arch }} `
@@ -55,26 +67,47 @@ jobs:
           -DUSE_STATIC_LIBS_WITH_DLL_CRT=ON `
           -DCMAKE_PREFIX_PATH="$env:VCPKG_INSTALLED_DIR/${{ matrix.triplet }}"
 
-    # Build the project
+    - name: Configure CMake (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        cmake -S build/cmake -B build/cmake/build-${{ matrix.arch }} \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DUSE_SYS_LIBS=ON \
+          -DUSE_WX_WIDGETS=ON
+
+    # ── Build ──────────────────────────────────────────────────────────────
     - name: Build project
-      shell: pwsh
       run: cmake --build build/cmake/build-${{ matrix.arch }} --config Release --parallel
 
-    # Collect output EXE and resources into artifact directory (no ZIP yet)
-    - name: Prepare artifact directory
+    # ── Collect artifacts ──────────────────────────────────────────────────
+    - name: Prepare artifact directory (Windows)
+      if: runner.os == 'Windows'
       shell: pwsh
       run: |
         mkdir artifact-${{ matrix.arch }}
         Get-ChildItem -Recurse -Filter unreal_speccy_portable.exe build/cmake/build-${{ matrix.arch }} | Select-Object -First 1 | Copy-Item -Destination artifact-${{ matrix.arch }}/
         Copy-Item -Recurse res artifact-${{ matrix.arch }}/res
 
-    # Upload artifact directory (not a ZIP—add Compress-Archive if ZIP is intended)
-    - name: Upload build artifact
-      uses: actions/upload-artifact@v4
+    - name: Prepare artifact directory (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        mkdir -p artifact-linux-${{ matrix.arch }}
+        cp build/cmake/build-${{ matrix.arch }}/unreal_speccy_portable artifact-linux-${{ matrix.arch }}/
+        cp -r res artifact-linux-${{ matrix.arch }}/res
+
+    - name: Upload build artifact (Windows)
+      if: runner.os == 'Windows'
+      uses: actions/upload-artifact@v5
       with:
         name: UnrealSpeccyDesktop-${{ matrix.arch }}
-        path: |
-          artifact-${{ matrix.arch }}/*
+        path: artifact-${{ matrix.arch }}/*
+
+    - name: Upload build artifact (Linux)
+      if: runner.os == 'Linux'
+      uses: actions/upload-artifact@v5
+      with:
+        name: UnrealSpeccyDesktop-linux-${{ matrix.arch }}
+        path: artifact-linux-${{ matrix.arch }}/*
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
@@ -83,16 +116,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download x64 artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: UnrealSpeccyDesktop-x64
           path: release/x64
 
       - name: Download x86 artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: UnrealSpeccyDesktop-x86
           path: release/x86
