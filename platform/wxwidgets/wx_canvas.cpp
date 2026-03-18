@@ -29,12 +29,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <utility>
 #include <wx/display.h>
 #include <wx/glcanvas.h>
 #include <wx/thread.h>
 #include <wx/wx.h>
 #include "wx_joystick.h"
+#include "../../devices/video_snapshot.h"
 
 #if !defined(__WXMSW__)
 #include <GL/glx.h>
@@ -50,7 +52,8 @@ void VsyncGL(bool on);
 void initGlew();
 void initGraphics(int scr_width, int scr_height);
 void cleanupGraphics();
-bool DrawGL(int vport_width, int vport_height);
+struct VideoSnapshot;
+bool DrawGL(int vport_width, int vport_height, const VideoSnapshot& snap);
 
 wxWindow* CreateMouseCapture(wxWindow* parent);
 
@@ -280,7 +283,7 @@ private:
 class InputRouter
 {
 public:
-    explicit InputRouter(std::recursive_mutex& emu_mutex)
+    explicit InputRouter(std::mutex& emu_mutex)
         : m_emu_mutex(emu_mutex)
     {}
 
@@ -291,7 +294,7 @@ public:
         if (event.AltDown())   flags |= KF_ALT;
         if (event.ShiftDown()) flags |= KF_SHIFT;
         TranslateKey(key, flags);
-        std::lock_guard<std::recursive_mutex> lk(m_emu_mutex);
+        std::lock_guard<std::mutex> lk(m_emu_mutex);
         Handler()->OnKey(key, flags);
     }
 
@@ -302,7 +305,7 @@ public:
         if (event.AltDown())   flags |= KF_ALT;
         if (event.ShiftDown()) flags |= KF_SHIFT;
         TranslateKey(key, flags);
-        std::lock_guard<std::recursive_mutex> lk(m_emu_mutex);
+        std::lock_guard<std::mutex> lk(m_emu_mutex);
         Handler()->OnKey(key, OpJoyKeyFlags());
     }
 
@@ -317,7 +320,7 @@ public:
     }
 
 private:
-    std::recursive_mutex& m_emu_mutex;
+    std::mutex& m_emu_mutex;
 };
 
 // Forward declaration needed by RenderThread before GLCanvas is defined.
@@ -378,6 +381,11 @@ private:
 //    RequestStop()+Wait() before delete, ensuring the thread exits before
 //    m_sync/m_emu_mutex/m_ctx are torn down.
 //
+//  m_emu_mutex is std::mutex (not recursive_mutex).  The render thread holds
+//  it only for OnLoop() + OnLoopSound(); DrawGL() runs after the lock is
+//  released.  The main thread acquires it via ScopedEmuLock for Handler()
+//  calls.  Neither side may re-acquire the lock on the same thread.
+//
 //  m_emu_mutex and m_sync are public so RenderThread::Entry() can access them
 //  directly without a proliferation of forwarding methods on GLCanvas.
 //  g_canvas is file-static, so this does not constitute a public API.
@@ -423,8 +431,8 @@ public:
     void UnlockEmu() { m_emu_mutex.unlock(); }
 
     // Public: accessed directly by RenderThread (file-private via g_canvas).
-    RenderSync           m_sync;
-    std::recursive_mutex m_emu_mutex;
+    RenderSync  m_sync;
+    std::mutex  m_emu_mutex;  // guards Handler() calls and emulator state
 
 private:
     // ---- wx event handlers -------------------------------------------------
@@ -626,14 +634,22 @@ wxThread::ExitCode RenderThread::Entry()
 
         now = Clock::now();
 
-        // Hold the emulator mutex for the duration of OnLoop(),
-        // OnLoopSound(), and the VideoData/VideoFrame reads inside DrawGL().
-        // The main thread acquires the same mutex before any Handler() call
-        // or option Apply() that touches emulator internals.
-        bool did_draw  = false;
+        // Phase 1 (under lock): run the emulator tick, then snapshot the video
+        // buffer before releasing the lock.  DrawGL() reads only from the
+        // snapshot, so the emulator is free to write the next frame immediately
+        // after the lock drops.
+        //
+        // std::optional<VideoSnapshot> gives us conditional construction with
+        // correct RAII destruction and no heap allocation.  The optional itself
+        // is just a bool + aligned storage — T is not constructed until emplace()
+        // is called, so the 153 KB arrays are not touched on frames where
+        // do_draw is false.
+        bool did_draw   = false;
         bool full_speed = false;
+        bool do_draw    = false;
+        std::optional<VideoSnapshot> snap;
         {
-            std::lock_guard<std::recursive_mutex> emu_lk(m_canvas->m_emu_mutex);
+            std::lock_guard<std::mutex> emu_lk(m_canvas->m_emu_mutex);
 
             full_speed       = Handler()->FullSpeed();
             bool do_emu_tick = full_speed || (now >= next_emulator_tick);
@@ -672,23 +688,40 @@ wxThread::ExitCode RenderThread::Entry()
                 }
             }
 
-            const bool should_render =
-                vsync_active || full_speed || (now >= next_render_tick);
+            do_draw = vsync_active || full_speed || (now >= next_render_tick);
 
-            if (should_render && m_running.load(std::memory_order_relaxed))
+            if (do_draw && !vsync_active && !full_speed)
             {
-                const wxSize sz = m_canvas->GetViewportSize();
-                if (sz.x > 0 && sz.y > 0)
-                    did_draw = DrawGL(sz.x, sz.y);
-
-                if (!vsync_active && !full_speed)
-                {
-                    next_render_tick += NsInt(EMULATOR_PERIOD_NS);
-                    if (next_render_tick < now)
-                        next_render_tick = now + NsInt(EMULATOR_PERIOD_NS);
-                }
+                next_render_tick += NsInt(EMULATOR_PERIOD_NS);
+                if (next_render_tick < now)
+                    next_render_tick = now + NsInt(EMULATOR_PERIOD_NS);
             }
-        } // emu_lk released here
+
+            // Snapshot video state while still holding the lock.
+            // eUla::screen is 320*240 = 76,800 bytes; memcpy takes ~20 µs on
+            // modern hardware — negligible compared to the ~20 ms frame budget.
+            if (do_draw)
+            {
+                snap.emplace();  // constructs in-place, no heap allocation
+                snap->frame = Handler()->VideoFrame();
+                memcpy(snap->video, Handler()->VideoData(), sizeof(snap->video));
+#ifdef USE_UI
+                const void* ui_data = Handler()->VideoDataUI();
+                snap->has_ui = (ui_data != nullptr);
+                if (snap->has_ui)
+                    memcpy(snap->video_ui, ui_data, sizeof(snap->video_ui));
+#endif
+            }
+        } // emu_lk released here — emulator may now begin writing the next frame.
+
+        // Phase 2 (no lock): GPU upload and draw from the snapshot.
+        // optional's destructor handles cleanup when snap goes out of scope.
+        if (snap && m_running.load(std::memory_order_relaxed))
+        {
+            const wxSize sz = m_canvas->GetViewportSize();
+            if (sz.x > 0 && sz.y > 0)
+                did_draw = DrawGL(sz.x, sz.y, *snap);
+        }
 
         // SwapGL (and any vsync stall) runs outside the emu lock so the main
         // thread is never blocked during a vblank wait.

@@ -29,6 +29,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "../../tools/profiler.h"
 #include "../../tools/options.h"
 #include "../../options_common.h"
+#include "../../devices/video_snapshot.h"
 
 #ifdef USE_GL
 
@@ -879,40 +880,50 @@ void main()
 
     void LightweightShadersMessage(bool prev_use_lightweight, bool use_lightweight);
 
-    bool DrawGL(int vport_width, int vport_height)
+    // =============================================================================
+    //  DrawGL  — pure GL function, no emulator access
+    //
+    //  Previously called Handler()->VideoData() / VideoFrame() / VideoDataUI()
+    //  directly, creating a data race when the emulator began writing the next
+    //  frame after OnLoop() returned.  Now receives a pre-built VideoSnapshot
+    //  (copied under the emulator mutex in RenderThread::Entry) and reads only
+    //  from it.  All logic below the pixel-conversion loop is unchanged.
+    // =============================================================================
+    bool DrawGL(int vport_width, int vport_height, const VideoSnapshot& snap)
     {
         PROFILER_BEGIN(draw_p);
 
         bool giga_enabled = op_gigascreen;
         giga_was_enabled = giga_enabled;
 
-        if (giga_enabled && video_frame_last != Handler()->VideoFrame())
+        if (giga_enabled && video_frame_last != snap.frame)
             std::swap(p_tex1, p_tex2);
-        video_frame_last = Handler()->VideoFrame();
+        video_frame_last = snap.frame;
 
-        // CPU-side colour conversion into p_tex1
-        byte* data = (byte*)Handler()->VideoData();
+        // CPU-side colour conversion into p_tex1.
+        // Reads only from the snapshot — no emulator memory touched here.
+        const byte* data = snap.video;
         dword* p = p_tex1;
 
-#ifdef USE_UI
-        byte* data_ui = (byte*)Handler()->VideoDataUI();
-        if (data_ui)
+    #ifdef USE_UI
+        if (snap.has_ui)
         {
+            const byte* data_ui = snap.video_ui;
             for (int y = 0; y < 240; ++y)
             {
                 for (int x = 0; x < 320; ++x)
                 {
                     xUi::eRGBAColor c_ui = xUi::palette[*data_ui++];
-                    xUi::eRGBAColor c = color_cache.items[*data++];
+                    xUi::eRGBAColor c    = color_cache.items[*data++];
                     *p++ = RGBX((c.r >> c_ui.a) + c_ui.r,
-                        (c.g >> c_ui.a) + c_ui.g,
-                        (c.b >> c_ui.a) + c_ui.b);
+                                (c.g >> c_ui.a) + c_ui.g,
+                                (c.b >> c_ui.a) + c_ui.b);
                 }
                 p += 512 - 320;
             }
         }
         else
-#endif//USE_UI
+    #endif//USE_UI
         {
             for (int y = 0; y < 240; ++y)
             {

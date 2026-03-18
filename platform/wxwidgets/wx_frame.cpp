@@ -84,6 +84,10 @@ namespace xPlatform
     // Serializes main-thread access to emulator state with the render thread.
     // Use for every Handler() call and every option Apply() that touches
     // emulator internals (sound chip, stereo, drive, joystick, tape, etc.).
+    //
+    // IMPORTANT: m_emu_mutex is std::mutex (non-recursive).  Never nest two
+    // ScopedEmuLock guards on the same thread — it will deadlock.  If you need
+    // to call two Handler() operations in sequence, use a single guard for both.
     struct ScopedEmuLock
     {
         ScopedEmuLock()  { LockEmulator();   }
@@ -563,8 +567,15 @@ namespace xPlatform
     //-----------------------------------------------------------------------------
     void Frame::OnSaveFile(wxCommandEvent& /*event*/)
     {
-        ScopedEmuLock emu_guard;
-        Handler()->VideoPaused(true);
+        // Pause the emulator display while the dialog is open so the screen
+        // does not update under the user's feet, but do NOT hold the emu lock
+        // across ShowModal — that would block the render thread for the entire
+        // duration of the dialog (potentially many seconds).
+        {
+            ScopedEmuLock emu_guard;
+            Handler()->VideoPaused(true);
+        }
+
         wxFileDialog fd(this, wxFileSelectorPromptStr,
             wxConvertMB2WX(OpLastFolder()),
             wxEmptyString,
@@ -583,12 +594,17 @@ namespace xPlatform
                 path.rfind(L".sna") != p && path.rfind(L".SNA") != p &&
                 path.rfind(L".png") != p && path.rfind(L".PNG") != p))
                 path += fi ? L".png" : L".sna";
+            ScopedEmuLock emu_guard;
             if (Handler()->OnSaveFile(wxConvertWX2MB(path.c_str())))
                 SetStatusText(_("File save OK"));
             else
                 SetStatusText(_("File save FAILED"));
         }
-        Handler()->VideoPaused(false);
+
+        {
+            ScopedEmuLock emu_guard;
+            Handler()->VideoPaused(false);
+        }
     }
 
     //=============================================================================
