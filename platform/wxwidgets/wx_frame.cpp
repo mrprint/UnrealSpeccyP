@@ -41,10 +41,6 @@ namespace xPlatform
     void cleanupGraphics();
 
     wxWindow* CreateGLCanvas(wxWindow* parent);
-    void PauseGLCanvas();
-    void ResumeGLCanvas();
-    void LockEmulator();
-    void UnlockEmulator();
 
     static struct eOptionWindowState : public xOptions::eOptionString
     {
@@ -62,39 +58,6 @@ namespace xPlatform
     extern const wxEventType evtMouseCapture;
     extern const wxEventType evtSetStatusText;
     extern const wxEventType evtExitFullScreen;
-
-    // ---------------------------------------------------------------------------
-    // ScopedRenderPause
-    //
-    // RAII guard: pauses the GL render thread for the duration of a scope.
-    // Use before mutating any render option (zoom, gigascreen, scanlines, PAL
-    // effects, etc.) so the render thread is guaranteed idle while the option
-    // value changes.  Prevents mid-frame option reads that can stall the GPU
-    // driver and make the whole system feel unresponsive.
-    // ---------------------------------------------------------------------------
-    struct ScopedRenderPause
-    {
-        ScopedRenderPause()  { PauseGLCanvas();  }
-        ~ScopedRenderPause() { ResumeGLCanvas(); }
-        // Non-copyable, non-movable.
-        ScopedRenderPause(const ScopedRenderPause&) = delete;
-        ScopedRenderPause& operator=(const ScopedRenderPause&) = delete;
-    };
-
-    // Serializes main-thread access to emulator state with the render thread.
-    // Use for every Handler() call and every option Apply() that touches
-    // emulator internals (sound chip, stereo, drive, joystick, tape, etc.).
-    //
-    // IMPORTANT: m_emu_mutex is std::mutex (non-recursive).  Never nest two
-    // ScopedEmuLock guards on the same thread — it will deadlock.  If you need
-    // to call two Handler() operations in sequence, use a single guard for both.
-    struct ScopedEmuLock
-    {
-        ScopedEmuLock()  { LockEmulator();   }
-        ~ScopedEmuLock() { UnlockEmulator(); }
-        ScopedEmuLock(const ScopedEmuLock&) = delete;
-        ScopedEmuLock& operator=(const ScopedEmuLock&) = delete;
-    };
 
 #ifndef _MAC
     struct DropFilesTarget : public wxFileDropTarget
@@ -509,6 +472,8 @@ namespace xPlatform
     //-----------------------------------------------------------------------------
     void Frame::OnAbout(wxCommandEvent& /*event*/)
     {
+        ScopedRenderPause render_guard;
+
         wxAboutDialogInfo info;
         info.SetName(GetTitle());
         info.SetDescription(_("Portable ZX Spectrum emulator."));
@@ -537,6 +502,10 @@ namespace xPlatform
     //-----------------------------------------------------------------------------
     void Frame::OnOpenFile(wxCommandEvent& /*event*/)
     {
+        // No ScopedRenderPause here — the file dialog is informational only,
+        // the emulator (including tape) continues running while it is open.
+        // The render thread touching SwapBuffers during a file dialog is less
+        // dangerous than during an options dialog because no GL state changes.
         wxFileDialog fd(this, wxFileSelectorPromptStr,
             wxConvertMB2WX(OpLastFolder()));
         fd.SetWildcard(
@@ -551,6 +520,8 @@ namespace xPlatform
         );
         if (fd.ShowModal() == wxID_OK)
         {
+            // Pause render + lock emulator only for the actual file load.
+            ScopedRenderPause render_guard;
             ScopedEmuLock emu_guard;
             if (Handler()->OnOpenFile(wxConvertWX2MB(fd.GetPath().c_str())))
             {
@@ -567,6 +538,8 @@ namespace xPlatform
     //-----------------------------------------------------------------------------
     void Frame::OnSaveFile(wxCommandEvent& /*event*/)
     {
+        ScopedRenderPause render_guard;
+
         // Pause the emulator display while the dialog is open so the screen
         // does not update under the user's feet, but do NOT hold the emu lock
         // across ShowModal — that would block the render thread for the entire
@@ -856,17 +829,24 @@ namespace xPlatform
     //-----------------------------------------------------------------------------
     void Frame::OnOptions(wxCommandEvent& /*event*/)
     {
+        // Note: while the render thread is blocked in MaybePause(), OnLoop() is
+        // also suspended — the emulator does not tick for the duration of the
+        // dialog.  This is acceptable: the user is interacting with the dialog,
+        // not watching the emulator screen.
+        ScopedRenderPause render_guard;
+
         OptionsDialog dialog(this);
         int result = dialog.ShowModal();
-        if (result == wxID_OK || result == wxID_APPLY)
+
+        if (result == wxID_OK)
         {
-            // Any option may have changed in the dialog; pause the render thread
-            // while we push the new values so it never sees a partial update.
-            ScopedRenderPause guard;
+            // render_guard is still held here — UpdateBoolOption reads options
+            // that DrawGL() also reads, so this is safe without a second pause.
             UpdateBoolOption(menu_view.gigascreen, "gigascreen");
             UpdateBoolOption(menu_view.scanlines, "scanlines");
             UpdateBoolOption(menu_view.pal_effects, "pal effects");
         }
+        // ~ScopedRenderPause() → Resume()
     }
 
     //=============================================================================

@@ -11,34 +11,6 @@
 
 namespace xPlatform {
 
-// Declared in wx_canvas.cpp.
-void PauseGLCanvas();
-void ResumeGLCanvas();
-void LockEmulator();
-void UnlockEmulator();
-
-// Pauses the GL render thread while render-affecting options are written,
-// so DrawGL() never sees a partial option update.
-struct ScopedRenderPause
-{
-	ScopedRenderPause()  { PauseGLCanvas();  }
-	~ScopedRenderPause() { ResumeGLCanvas(); }
-	ScopedRenderPause(const ScopedRenderPause&) = delete;
-	ScopedRenderPause& operator=(const ScopedRenderPause&) = delete;
-};
-
-// Serialises main-thread option writes with the render thread's OnLoop().
-// All emulator state (sound chip, stereo, drive, joystick, etc.) is
-// accessed by OnLoop() on the render thread; Apply() on the main thread
-// must not run concurrently.
-struct ScopedEmuLock
-{
-	ScopedEmuLock()  { LockEmulator();   }
-	~ScopedEmuLock() { UnlockEmulator(); }
-	ScopedEmuLock(const ScopedEmuLock&) = delete;
-	ScopedEmuLock& operator=(const ScopedEmuLock&) = delete;
-};
-
 	BEGIN_EVENT_TABLE(OptionsDialog, wxDialog)
 		EVT_RADIOBUTTON(ID_RADIO_SOUND, OptionsDialog::OnSoundChipChanged)
 		EVT_COMBOBOX(wxID_ANY, OptionsDialog::OnStereoChanged)
@@ -49,7 +21,7 @@ struct ScopedEmuLock
 		EVT_CHECKBOX(ID_CHECK_PAL_EFFECTS, OptionsDialog::OnCheckboxChanged)
 		EVT_CHECKBOX(ID_CHECK_MIPMAPPING, OptionsDialog::OnCheckboxChanged)
 		EVT_SLIDER(wxID_ANY, OptionsDialog::OnSliderChanged)
-		EVT_BUTTON(wxID_APPLY, OptionsDialog::OnApply)
+
 		EVT_BUTTON(wxID_OK, OptionsDialog::OnOK)
 		// Add reset button events
 		EVT_BUTTON(ID_RESET_AUDIO, OptionsDialog::OnResetAudio)
@@ -248,7 +220,7 @@ struct ScopedEmuLock
 		// BUTTONS
 		// ======================================================
 		wxStdDialogButtonSizer* btnSizer = new wxStdDialogButtonSizer();
-		btnSizer->Add(new wxButton(this, wxID_APPLY, _("Apply")));
+
 		btnSizer->Add(new wxButton(this, wxID_OK, _("OK")));
 		btnSizer->Add(new wxButton(this, wxID_CANCEL, _("Cancel")));
 		btnSizer->Realize();
@@ -388,14 +360,20 @@ struct ScopedEmuLock
 		}
 	}
 
-	void OptionsDialog::OnApply(wxCommandEvent& event)
+	void OptionsDialog::OnOK(wxCommandEvent& event)
 	{
-		// ScopedRenderPause: GL render thread is idle — DrawGL() will not
-		// read any option until all writes below are complete.
-		// ScopedEmuLock: render thread cannot be inside OnLoop() concurrently
-		// with the Apply() calls that reconfigure the emulator subsystems.
-		ScopedRenderPause render_guard;
-		ScopedEmuLock     emu_guard;
+		// ScopedRenderPause is intentionally absent here.
+		// Frame::OnOptions() holds a ScopedRenderPause for the entire lifetime
+		// of this dialog.  MaybePause() blocks the render thread completely —
+		// including OnLoop() — so the emulator is effectively paused while the
+		// dialog is open.  Taking a second ScopedRenderPause would deadlock:
+		// Pause() waits for m_idle, but MaybePause() is already blocked in
+		// m_cv_thread.wait() and will never set m_idle again.
+		//
+		// ScopedEmuLock is kept for defensive correctness: it costs nothing
+		// (m_emu_mutex is uncontested while the render thread is in MaybePause),
+		// but makes OnOK() safe if the threading model changes in the future.
+		ScopedEmuLock emu_guard;
 
 		// Write local state to xOptions and apply
 		xOptions::eOption<int>* op_sound = xOptions::eOption<int>::Find("sound chip");
@@ -430,11 +408,7 @@ struct ScopedEmuLock
 
 		xOptions::eOption<int>* op_mask = xOptions::eOption<int>::Find("mask scale");
 		if (op_mask) { op_mask->Set(mask_scale_val); op_mask->Apply(); }
-	}
 
-	void OptionsDialog::OnOK(wxCommandEvent& event)
-	{
-		OnApply(event);
 		EndModal(wxID_OK);
 	}
 
