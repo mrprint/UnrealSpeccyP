@@ -35,7 +35,7 @@ eWxJoystick::eWxJoystick(wxWindow* owner, int id) : joy(NULL)
 {
 #if wxUSE_JOYSTICK
 	joy = new wxJoystick(id);
-	joy->SetCapture(owner);
+	joy->SetCapture(owner, 20);
 #endif//wxUSE_JOYSTICK
 }
 //=============================================================================
