@@ -57,6 +57,8 @@ const float DEFAULT_ZOOM_VALUE = 1.0f;
 const bool DEFAULT_MIPMAPPING = true;
 const int DEFAULT_MASK_SCALE = 1; // CRT mask scale (0=disabled, 1-4=visible)
 
+const bool DEFAULT_NVIDIA_WARNING = true;
+
 const char* OpLastFolder();
 const char* OpLastFile();
 void OpLastFile(const char* path);

@@ -61,6 +61,12 @@ namespace xPlatform
             exit(EXIT_FAILURE);
     }
 
+    bool IsNvidiaGPU()
+    {
+        const char* vendor = (const char*)glGetString(GL_VENDOR);
+        return vendor && strstr(vendor, "NVIDIA") != nullptr;
+    }
+
     void initGlew()
     {
         glewExperimental = GL_TRUE;

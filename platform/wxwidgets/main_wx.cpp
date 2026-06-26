@@ -71,6 +71,12 @@ namespace xPlatform
 				xIo::SetResourcePath(buf);
 			}
 #endif//_WINDOWS
+#ifdef _LINUX
+			// Disable NVIDIA Threaded Optimization before any GL context is created.
+			// The driver reads this variable at context creation time; setting it
+			// afterwards has no effect.  0 = do not overwrite if user already set it.
+			setenv("__GL_THREADED_OPTIMIZATIONS", "0", 0);
+#endif
 			if (!wxApp::OnInit())
 				return false;
 			wxString cfg_dir = wxStandardPaths::Get().GetUserDataDir() + L"/";

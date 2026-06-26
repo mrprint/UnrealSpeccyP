@@ -24,6 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "../../options_common.h"
 #include "wx_cmdline.h"
 #include "wx_optionsdialog.h"
+#include "wx_nvidiawarn.h"
 
 #include <wx/wx.h>
 #include <wx/dnd.h>
@@ -58,6 +59,7 @@ namespace xPlatform
     extern const wxEventType evtMouseCapture;
     extern const wxEventType evtSetStatusText;
     extern const wxEventType evtExitFullScreen;
+    extern const wxEventType evtCheckNvidiaWarning;
 
 #ifndef _MAC
     struct DropFilesTarget : public wxFileDropTarget
@@ -105,6 +107,7 @@ namespace xPlatform
         void OnAutoPlayImageToggle(wxCommandEvent& event);
         void OnMouseCapture(wxCommandEvent& event);
         void OnSetStatusText(wxCommandEvent& event);
+        void OnCheckNvidiaWarning(wxCommandEvent& event);
         void OnQuickLoad(wxCommandEvent& event);
         void OnQuickSave(wxCommandEvent& event);
         void OnMinimize(wxCommandEvent& event);
@@ -189,6 +192,7 @@ namespace xPlatform
         EVT_COMMAND(wxID_ANY, evtMouseCapture, Frame::OnMouseCapture)
         EVT_COMMAND(wxID_ANY, evtSetStatusText, Frame::OnSetStatusText)
         EVT_COMMAND(wxID_ANY, evtExitFullScreen, Frame::OnExitFullScreen)
+        EVT_COMMAND(wxID_ANY, evtCheckNvidiaWarning, Frame::OnCheckNvidiaWarning)
         EVT_MENU(Frame::ID_Options, Frame::OnOptions)
         END_EVENT_TABLE()
 
@@ -748,6 +752,21 @@ namespace xPlatform
         else if (event.GetString() == L"rzx_invalid")     SetStatusText(_("RZX error - invalid data"));
         else if (event.GetString() == L"rzx_unsupported") SetStatusText(_("RZX error - unsupported format"));
         else SetStatusText(event.GetString());
+    }
+
+    void Frame::OnCheckNvidiaWarning(wxCommandEvent& /*event*/)
+    {
+        xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("nvidia warning");
+        if (!op || !*op)
+            return; // user suppressed it previously
+
+        NvidiaWarnDialog dlg(this);
+        dlg.ShowModal();
+
+        if (dlg.DontShowAgain())
+        {
+            if (op) op->Set(false);
+        }
     }
 
     //=============================================================================

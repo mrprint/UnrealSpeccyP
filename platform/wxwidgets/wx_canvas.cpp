@@ -50,6 +50,7 @@ void TranslateKey(int& key, dword& flags);
 
 void VsyncGL(bool on);
 void initGlew();
+bool IsNvidiaGPU();
 void initGraphics(int scr_width, int scr_height);
 void cleanupGraphics();
 struct VideoSnapshot;
@@ -60,6 +61,7 @@ wxWindow* CreateMouseCapture(wxWindow* parent);
 extern const wxEventType evtMouseCapture   = wxNewEventType();
 extern const wxEventType evtSetStatusText  = wxNewEventType();
 extern const wxEventType evtExitFullScreen = wxNewEventType();
+extern const wxEventType evtCheckNvidiaWarning = wxNewEventType();
 
 // =============================================================================
 //  ViewportCache
@@ -605,16 +607,27 @@ wxThread::ExitCode RenderThread::Entry()
     initGlew();
     initGraphics(m_init_w, m_init_h);
 
+    // Check for NVIDIA GPU and warn the user if needed.
+    // Posted to the main thread because GL calls must stay on the render thread
+    // but wx dialogs must run on the main thread.
+    if (IsNvidiaGPU())
+    {
+        wxCommandEvent ev(evtCheckNvidiaWarning);
+        wxQueueEvent(m_canvas->GetParent(), ev.Clone());
+    }
+
     bool vsync_active = false;
 
     using Clock = std::chrono::steady_clock;
     using NsInt = std::chrono::nanoseconds;
 
     static constexpr long long EMULATOR_PERIOD_NS = 1'000'000'000LL / EMULATOR_FPS;
+    static constexpr long long FULL_SPEED_SWAP_PERIOD_NS = 1'000'000'000LL / EMULATOR_FPS;
 
     auto now               = Clock::now();
     auto next_emulator_tick = now;
     auto next_render_tick   = now;
+    auto next_full_speed_swap = now;
 
     while (m_running.load(std::memory_order_relaxed))
     {
@@ -726,26 +739,50 @@ wxThread::ExitCode RenderThread::Entry()
         // SwapGL (and any vsync stall) runs outside the emu lock so the main
         // thread is never blocked during a vblank wait.
         if (did_draw && m_running.load(std::memory_order_relaxed))
-            m_canvas->SwapGL();
+        {
+            if (!full_speed)
+            {
+                // Normal mode: vsync (if active) acts as the rate limiter.
+                m_canvas->SwapGL();
+            }
+            else
+            {
+                // full_speed mode: throttle SwapBuffers to ~50 fps.
+                // Without throttling, unconstrained wglSwapBuffers calls
+                // accumulate in the NVIDIA WDDM flip queue faster than the
+                // GPU can drain them.  The kernel-mode driver then enters a
+                // spin-loop that survives process termination and only clears
+                // on logout.
+                now = Clock::now();
+                if (now >= next_full_speed_swap)
+                {
+                    m_canvas->SwapGL();
+                    next_full_speed_swap = now + NsInt(FULL_SPEED_SWAP_PERIOD_NS);
+                }
+            }
+        }
+
+        // Refresh now after SwapGL — with vsync it may have blocked ~20 ms.
+        // Without this, next_emulator_tick is already in the past when we
+        // reach the sleep below, sleep is skipped every iteration, and the
+        // loop burns 100% of one CPU core.
+        now = Clock::now();
 
         // Interruptible inter-frame sleep: wakes immediately on pause or stop.
         if (!full_speed)
         {
-            now = Clock::now();
-
             auto next_event = next_emulator_tick;
             if (!vsync_active && next_render_tick < next_event)
                 next_event = next_render_tick;
 
             if (next_event > now)
-            {
-                // Wake 1 ms early to compensate for sleep over-run jitter.
                 m_canvas->m_sync.SleepUntil(next_event - NsInt(1'000'000LL));
-            }
         }
         else
         {
-            m_canvas->m_sync.SleepFor(std::chrono::milliseconds(1));
+            // Limit to ~250 iterations/sec — fast enough for the emulator,
+            // prevents burning the core between SwapBuffers calls.
+            m_canvas->m_sync.SleepFor(std::chrono::milliseconds(4));
         }
     }
 

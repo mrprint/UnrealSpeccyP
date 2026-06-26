@@ -352,6 +352,14 @@ static struct eOptionBeamSpread : public xOptions::eOptionInt
 	virtual int Order() const { return 45; }
 } op_beam_spread;
 
+static struct eOptionNvidiaWarning : public xOptions::eOptionBool
+{
+    eOptionNvidiaWarning() { Set(DEFAULT_NVIDIA_WARNING); }
+    virtual const char* Name() const { return "nvidia warning"; }
+    virtual int Order() const { return 48; }
+    virtual bool IsCustomizable() const { return true; }
+} op_nvidia_warning;
+
 bool OpPalEffects() { return op_pal_effects; }
 void OpPalEffects(bool v) { op_pal_effects.Set(v); }
 
