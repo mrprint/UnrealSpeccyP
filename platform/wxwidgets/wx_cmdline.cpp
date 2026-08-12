@@ -40,6 +40,7 @@ void eCmdLine::Init(wxCmdLineParser& parser) const
 		{ wxCMD_LINE_OPTION, wxT_2("f"), wxT_2("full_screen"), wxT_2("full screen mode (0 or 1)"), wxCMD_LINE_VAL_NUMBER, wxCMD_LINE_PARAM_OPTIONAL  },
 		{ wxCMD_LINE_OPTION, wxT_2("s"), wxT_2("size"), wxT_2("window size (in percent)"), wxCMD_LINE_VAL_NUMBER, wxCMD_LINE_PARAM_OPTIONAL  },
 		{ wxCMD_LINE_OPTION, wxT_2("j"), wxT_2("joystick"), wxT_2("use joystick (kempston, cursor, qaop, sinclair2)"), wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL  },
+		{ wxCMD_LINE_OPTION, wxT_2("g"), wxT_2("gamepad"), wxT_2("host gamepad device index (0=first)"), wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL  },
 		{ wxCMD_LINE_NONE }
 	};
 	parser.SetDesc(g_cmdLineDesc);
@@ -67,6 +68,11 @@ void eCmdLine::Parse(wxCmdLineParser& parser)
 	if(parser.Found(wxT_2("j"), &joy))
 	{
 		joystick = joy;
+	}
+	wxString gp;
+	if(parser.Found(wxT_2("g"), &gp))
+	{
+		gamepad_device = gp;
 	}
 }
 

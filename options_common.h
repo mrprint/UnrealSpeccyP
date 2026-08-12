@@ -21,6 +21,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
+#include <string>
+
 namespace xPlatform
 {
 
@@ -95,6 +97,12 @@ int OpPalStrength(); // 0-100 range
 void OpPalStrength(int v);
 int OpBeamSpread(); // 0-200 range
 void OpBeamSpread(int v);
+
+// --- SDL2 Gamepad options ---
+int OpHostGamepadDevice(int player);
+void OpHostGamepadDevice(int player, int device_index);
+std::string OpJoystickMappingData(int player);
+void OpJoystickMappingData(int player, const std::string& data);
 
 }
 //namespace xPlatform

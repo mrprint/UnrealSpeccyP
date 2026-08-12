@@ -44,6 +44,7 @@ struct eCmdLine
 
 	wxString file_to_open;
 	wxString joystick;
+	wxString gamepad_device;
 
 	eOptionValue true_speed;
 	eOptionValue mode_48k;

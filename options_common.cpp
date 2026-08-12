@@ -369,5 +369,68 @@ void OpPalStrength(int v) { op_pal_strength.Set(v); }
 int OpBeamSpread() { return (int)op_beam_spread; }
 void OpBeamSpread(int v) { op_beam_spread.Set(v); }
 
+// --- SDL2 Gamepad options ---
+static struct eOptionHostGamepad : public xOptions::eOptionInt {
+    int player_index;
+    // Name() must return a stable, per-instance string. A function-local
+    // `static char buf[64]` here would be shared by BOTH player instances
+    // (player 0 and player 1 call the very same method body), so calling
+    // Name() on one player after having called it on the other silently
+    // rewrites the first call's returned string out from under whoever's
+    // still holding that pointer (e.g. option lookup/serialization code
+    // that expects Name() to stay stable while it works) - producing
+    // corrupted/mismatched option names. Store it as a real per-object
+    // member instead.
+    // Also: no parentheses - "(" and ")" are not valid characters in an
+    // XML element name, and every other pre-existing option name in this
+    // file uses only letters/digits/spaces (which the save/load layer
+    // turns into underscores). Parens broke that round trip, so the
+    // gamepad device index was written to disk correctly but silently
+    // failed to be read back on the next launch.
+    char name_buf[64];
+    eOptionHostGamepad(int p) : player_index(p) {
+        snprintf(name_buf, sizeof(name_buf), "host gamepad device %d", p);
+        // eOptionInt's base constructor defaults to Set(0), which is a *valid*
+        // SDL device index and would make JoystickProfile::IsEnabled() (host_device_index >= 0)
+        // true out of the box, silently binding both players to physical device 0
+        // before the user ever opens the config dialog. -1 means "no device assigned".
+        Set(-1);
+    }
+    virtual const char* Name() const override { return name_buf; }
+    virtual int Order() const override { return 15 + player_index; }
+} op_host_gamepad_0(0), op_host_gamepad_1(1);
+
+static struct eOptionJoystickMapping : public xOptions::eOptionString {
+    int player_index;
+    char name_buf[64];
+    eOptionJoystickMapping(int p) : player_index(p) {
+        snprintf(name_buf, sizeof(name_buf), "joystick mapping %d", p);
+    }
+    virtual const char* Name() const override { return name_buf; }
+    virtual int Order() const override { return 16 + player_index; }
+} op_joystick_mapping_0(0), op_joystick_mapping_1(1);
+
+int OpHostGamepadDevice(int player) {
+    if (player == 0) return static_cast<int>(op_host_gamepad_0);
+    else return static_cast<int>(op_host_gamepad_1);
+}
+
+void OpHostGamepadDevice(int player, int device_index) {
+    if (player == 0) op_host_gamepad_0.Set(device_index);
+    else op_host_gamepad_1.Set(device_index);
+}
+
+std::string OpJoystickMappingData(int player) {
+    const char* data = (player == 0) ? static_cast<const char*>(op_joystick_mapping_0)
+                                     : static_cast<const char*>(op_joystick_mapping_1);
+    return data ? std::string(data) : "";
+}
+
+void OpJoystickMappingData(int player, const std::string& data) {
+    if (player == 0) op_joystick_mapping_0.Set(data.c_str());
+    else op_joystick_mapping_1.Set(data.c_str());
+}
+
 }
 //namespace xPlatform
+

@@ -9,6 +9,7 @@
     "tinyxml2",
     "minizip",
     "zlib",
-    "libpng"
+    "libpng",
+    "sdl2"
   ]
 }

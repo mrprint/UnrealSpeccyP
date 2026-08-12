@@ -447,9 +447,14 @@ elseif(USE_WX_WIDGETS)
 		source_group("platform\\win\\res" FILES ${SRCRES})
 	endif()
 
+	# SDL2 для Gamepad поддержки
+	find_package(SDL2 REQUIRED)
+	include_directories(${SDL2_INCLUDE_DIRS})
+	list(APPEND THIRDPARTY_LIBRARIES ${SDL2_LIBRARIES})
+	add_definitions(-DUSE_SDL2_GAMEPAD)
+
 	# OpenGL / GLEW
 	find_package(GLEW REQUIRED)
-	# Ensure GLEW imported target exists (handles distro packages that may not create it)
 	if(NOT TARGET GLEW::GLEW)
 		add_library(GLEW::GLEW UNKNOWN IMPORTED)
 		set_target_properties(GLEW::GLEW PROPERTIES

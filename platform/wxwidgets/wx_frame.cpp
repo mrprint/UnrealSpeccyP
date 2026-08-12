@@ -25,6 +25,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "wx_cmdline.h"
 #include "wx_optionsdialog.h"
 #include "wx_nvidiawarn.h"
+#ifdef USE_SDL2_GAMEPAD
+#include "wx_gamepad.h"
+#include "joystick_mapper.h"
+#endif
 
 #include <wx/wx.h>
 #include <wx/dnd.h>
@@ -353,6 +357,18 @@ namespace xPlatform
             SetClientSize(org_size * cmdline.size_percent / 100);
         }
 
+#ifdef USE_SDL2_GAMEPAD
+        SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER);
+        SDL_GameControllerEventState(SDL_ENABLE);
+        // Actually open every gamepad that is already plugged in. Without
+        // this, a controller connected before the app starts is only picked
+        // up once SDL happens to deliver a queued SDL_CONTROLLERDEVICEADDED
+        // event via PollEvents() - relying on that is fragile, so open
+        // everything explicitly up front as well (PollEvents() already
+        // guards against double-opening a device that's already connected).
+        GamepadBackend().Initialize();
+#endif
+
         gl_canvas = CreateGLCanvas(this);
         gl_canvas->SetFocus();
 
@@ -376,6 +392,41 @@ namespace xPlatform
             xOptions::eOption<int>* op_joy = xOptions::eOption<int>::Find("joystick");
             SAFE_CALL(op_joy)->Value(wxConvertWX2MB(cmdline.joystick));
         }
+
+#ifdef USE_SDL2_GAMEPAD
+        if (!cmdline.gamepad_device.empty()) {
+            int device_idx = wxAtoi(wxConvertWX2MB(cmdline.gamepad_device));
+            if (device_idx >= 0) {
+                // Merge into whatever profile (button mapping) player 1
+                // already had saved - this flag only overrides which
+                // device to use, not the mapping.
+                JoystickProfile profile;
+                DeserializeProfile(OpJoystickMappingData(0), profile);
+
+                for (const auto& dev : GamepadBackend().EnumerateDevices()) {
+                    if (dev.index == device_idx) {
+                        profile.device_guid = dev.guid;
+                        break;
+                    }
+                }
+                profile.host_device_index = device_idx;
+
+                OpJoystickMappingData(0, SerializeProfile(profile));
+                // Legacy hint, kept in sync for the benefit of anything
+                // still reading it as a migration fallback (see
+                // ResolveDeviceIndexForGuid) - not the source of truth once
+                // profile.device_guid above is set.
+                OpHostGamepadDevice(0, device_idx);
+                GamepadBackend().RefreshDeviceState(device_idx);
+                // GLCanvas was already constructed (and already loaded its
+                // own copy of this profile) a few lines above, before this
+                // flag was processed - without this, the command-line
+                // override would silently have no effect on the running
+                // emulator until the Options dialog was opened and OK'd.
+                ReloadGamepadProfiles();
+            }
+        }
+#endif
 
         menu_true_speed->Check(op_true_speed && *op_true_speed);
         menu_mode_48k->Check(op_mode_48k && *op_mode_48k);
@@ -417,6 +468,11 @@ namespace xPlatform
         {
             gl_canvas->Destroy();
             gl_canvas = nullptr;
+#ifdef USE_SDL2_GAMEPAD
+            // gl_canvas's polling timer is gone now, so it's safe to close
+            // every open SDL_GameController handle.
+            GamepadBackend().Shutdown();
+#endif
         }
 
         Destroy();
@@ -887,3 +943,4 @@ namespace xPlatform
 }//namespace xPlatform
 
 #endif//USE_WXWIDGETS
+

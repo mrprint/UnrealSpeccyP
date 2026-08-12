@@ -22,6 +22,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "../io.h"
 #include "wx_cmdline.h"
+#ifdef USE_SDL2_GAMEPAD
+#include <SDL.h>
+#endif
 #include <wx/wx.h>
 #include <wx/stdpaths.h>
 #include <wx/filename.h>
@@ -40,6 +43,21 @@ namespace {
 	} g_x_thread_init;
 } // namespace
 #endif//_LINUX
+
+#ifdef USE_SDL2_GAMEPAD
+namespace {
+    struct SdlGamepadInit {
+        SdlGamepadInit() {
+            if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) == 0) {
+                SDL_GameControllerEventState(SDL_ENABLE);
+            }
+        }
+        ~SdlGamepadInit() {
+            SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
+        }
+    } g_sdl_gamepad_init;
+} // namespace
+#endif
 
 namespace xPlatform
 {

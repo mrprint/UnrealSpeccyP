@@ -36,6 +36,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <wx/thread.h>
 #include <wx/wx.h>
 #include "wx_joystick.h"
+#ifdef USE_SDL2_GAMEPAD
+#include "wx_gamepad.h"
+#include "joystick_mapper.h"
+#endif
 #include "../../devices/video_snapshot.h"
 
 #if !defined(__WXMSW__)
@@ -432,6 +436,18 @@ public:
     void LockEmu()   { m_emu_mutex.lock();   }
     void UnlockEmu() { m_emu_mutex.unlock(); }
 
+#ifdef USE_SDL2_GAMEPAD
+    // Re-reads host_device_index/input mapping for both players from
+    // xOptions into m_profiles. Called once from the constructor, and again
+    // whenever OptionsDialog::OnOK() has just written new gamepad settings,
+    // so a just-assigned device/mapping takes effect immediately instead of
+    // only after the emulator is restarted (m_profiles was previously only
+    // ever populated at construction time). Runs on the main thread only —
+    // same as OnGamepadPoll(), which is the only other reader/writer of
+    // m_profiles — so no locking is needed here.
+    void ReloadGamepadProfiles();
+#endif
+
     // Public: accessed directly by RenderThread (file-private via g_canvas).
     RenderSync  m_sync;
     std::mutex  m_emu_mutex;  // guards Handler() calls and emulator state
@@ -447,6 +463,9 @@ private:
     void OnMouseKey(wxMouseEvent& event);
     void OnMouseCapture(wxCommandEvent& event);
     void OnJoystickEvent(wxJoystickEvent& event);
+#ifdef USE_SDL2_GAMEPAD
+    void OnGamepadPoll(wxTimerEvent& event);
+#endif
 
     static std::pair<int, int> getMaxDisplayResolution();
 
@@ -476,6 +495,13 @@ private:
 
     // Joystick objects: owned, not wx-window-managed.
     std::array<std::unique_ptr<eWxJoystick>, 2> m_joysticks;
+
+#ifdef USE_SDL2_GAMEPAD
+    // SDL2 gamepad support
+    wxTimer m_gamepad_timer;
+    JoystickMapper m_joystick_mapper;
+    std::array<JoystickProfile, 2> m_profiles;
+#endif
 
     // ---- Value / non-owning members ----------------------------------------
 
@@ -517,6 +543,9 @@ BEGIN_EVENT_TABLE(GLCanvas, wxGLCanvas)
     EVT_KILL_FOCUS      (GLCanvas::OnKillFocus)
     EVT_COMMAND(wxID_ANY, evtMouseCapture, GLCanvas::OnMouseCapture)
     EVT_JOYSTICK_EVENTS (GLCanvas::OnJoystickEvent)
+#ifdef USE_SDL2_GAMEPAD
+    EVT_TIMER(wxID_ANY, GLCanvas::OnGamepadPoll)
+#endif
 END_EVENT_TABLE()
 
 // =============================================================================
@@ -565,6 +594,20 @@ GLCanvas::GLCanvas(wxWindow* parent)
 
     m_joysticks[0] = std::make_unique<eWxJoystick>(this, wxJOYSTICK1);
     m_joysticks[1] = std::make_unique<eWxJoystick>(this, wxJOYSTICK2);
+
+#ifdef USE_SDL2_GAMEPAD
+    // Load saved profiles from options
+    ReloadGamepadProfiles();
+
+    // wxTimer's default constructor does NOT set an owner window, and
+    // without one it never posts a wxTimerEvent anywhere - the underlying
+    // OS timer still ticks, but GLCanvas::OnGamepadPoll (bound below via
+    // EVT_TIMER) is simply never invoked, so gamepad input is read only
+    // once at startup and never again during actual gameplay. SetOwner()
+    // must be called before Start() so ticks are routed to this window.
+    m_gamepad_timer.SetOwner(this);
+    m_gamepad_timer.Start(16);  // ~60 FPS polling
+#endif
 }
 
 // =============================================================================
@@ -871,6 +914,63 @@ void GLCanvas::OnJoystickEvent(wxJoystickEvent& event)
         m_joysticks[0].get(), m_joysticks[1].get());
 }
 
+#ifdef USE_SDL2_GAMEPAD
+void GLCanvas::ReloadGamepadProfiles()
+{
+    for (int i = 0; i < 2; ++i) {
+        std::string mapping_data = OpJoystickMappingData(i);
+        DeserializeProfile(mapping_data, m_profiles[i]);
+
+        // Device identity is the GUID embedded in the mapping string, not
+        // the persisted numeric index (which SDL can reassign across
+        // reconnects/restarts) - resolve it against whatever is actually
+        // connected right now. See ResolveDeviceIndexForGuid() for details,
+        // including the one-time migration path for profiles saved before
+        // GUID-based tracking existed.
+        int hinted_index = OpHostGamepadDevice(i);
+        m_profiles[i].host_device_index = ResolveDeviceIndexForGuid(m_profiles[i].device_guid, hinted_index);
+
+        if (m_profiles[i].IsEnabled()) {
+            GamepadBackend().RefreshDeviceState(m_profiles[i].host_device_index);
+        }
+    }
+}
+
+void GLCanvas::OnGamepadPoll(wxTimerEvent& /*event*/)
+{
+    GamepadBackend().PollEvents(
+        [this](int device_index) {
+            // Device added — update profile if it's assigned
+            for (int i = 0; i < 2; ++i) {
+                if (m_profiles[i].IsEnabled() && m_profiles[i].host_device_index == device_index) {
+                    GamepadBackend().RefreshDeviceState(device_index);
+                }
+            }
+        },
+        [this](int device_index) {
+            (void)device_index; // device removed
+        }
+    );
+
+    // Process events for each player
+    for (int player = 0; player < 2; ++player) {
+        auto& profile = m_profiles[player];
+        if (!profile.IsEnabled()) continue;
+
+        const auto& state = GamepadBackend().GetState(profile.host_device_index);
+        auto key_events = m_joystick_mapper.ProcessEvent(profile, player, state, profile.host_device_index);
+
+        for (const auto& ke : key_events) {
+            dword flags = OpJoyKeyFlags();
+            if (ke.is_down) flags |= KF_DOWN;
+
+            std::lock_guard<std::mutex> lk(m_emu_mutex);
+            Handler()->OnKey(ke.key, flags);
+        }
+    }
+}
+#endif
+
 // =============================================================================
 //  GLCanvas::getMaxDisplayResolution
 // =============================================================================
@@ -927,6 +1027,10 @@ void ResumeGLCanvas() { if (g_canvas) g_canvas->ResumeRender(); }
 
 void LockEmulator()   { if (g_canvas) g_canvas->LockEmu();   }
 void UnlockEmulator() { if (g_canvas) g_canvas->UnlockEmu(); }
+
+#ifdef USE_SDL2_GAMEPAD
+void ReloadGamepadProfiles() { if (g_canvas) g_canvas->ReloadGamepadProfiles(); }
+#endif
 
 } // namespace xPlatform
 

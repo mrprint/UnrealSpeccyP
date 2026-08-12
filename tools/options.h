@@ -97,7 +97,7 @@ public:
 	virtual ~eOptionString() { SAFE_DELETE_ARRAY(value); }
 	virtual const char*	Value() const { return value; }
 	virtual void Value(const char* v);
-	virtual void Set(const char*& v) { Value(v); }
+	virtual void Set(const char* v) { Value(v); }
 private:
 	int alloc_size;
 };

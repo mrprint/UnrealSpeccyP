@@ -35,6 +35,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define USE_GL
 //#define USE_GLUT
 #define USE_WXWIDGETS
+#ifndef USE_SDL2_GAMEPAD
+#define USE_SDL2_GAMEPAD
+#endif
 
 #undef USE_PNG
 #define USE_PNG
