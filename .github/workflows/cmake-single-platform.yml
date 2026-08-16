@@ -42,6 +42,7 @@ jobs:
           libglu1-mesa-dev libx11-dev \
           libpng-dev zlib1g-dev libminizip-dev \
           libtinyxml2-dev libfmt-dev \
+          libsdl2-dev \
           cmake ninja-build
 
     # ── vcpkg (Windows only) ───────────────────────────────────────────────
