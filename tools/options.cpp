@@ -40,21 +40,21 @@ eOptionB* eOptionB::Find(const char* name)
 	return NULL;
 }
 
-const char* eOptionInt::Value() const
+const char* eOptionIntRange::Value() const
 {
 	static std::string buffer;
 	buffer = std::to_string(value);
 	return buffer.c_str();
 }
 
-void eOptionInt::Value(const char* v)
+void eOptionIntRange::Value(const char* v)
 {
 	if (!v)
 		return;
 	value = std::stoi(v);
 }
 
-void eOptionEnum::Change(int f, int l, bool next)
+void eOptionInt::Change(int f, int l, bool next)
 {
 	if(next)
 	{
@@ -69,14 +69,14 @@ void eOptionEnum::Change(int f, int l, bool next)
 			Set(l - 1);
 	}
 }
-const char*	eOptionEnum::Value() const
+const char*	eOptionInt::Value() const
 {
 	const char** vals = Values();
 	if(!vals)
 		return NULL;
 	return vals[value];
 }
-void eOptionEnum::Value(const char* v)
+void eOptionInt::Value(const char* v)
 {
 	const char** vals = Values();
 	if(!vals)

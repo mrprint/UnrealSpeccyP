@@ -1,0 +1,8 @@
+unreal-speccy-portable-wx (0.0.91-1) unstable; urgency=medium
+
+  * Initial source-based Debian package for the wxWidgets desktop
+    variant, packaged in parallel with unreal-speccy-portable (SDL2).
+  * Build via CMake + wxWidgets + OpenAL Soft + GLEW, using system
+    libraries (USE_SYS_LIBS=ON) for a fast, dependency-clean build.
+
+ -- djdron <djdron@gmail.com>  Mon, 17 Aug 2026 00:00:00 +0200

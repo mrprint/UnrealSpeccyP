@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Unreal Speccy Portable (wxWidgets)
+GenericName=ZX Spectrum Emulator
+Comment=Portable ZX-Spectrum emulator (native desktop UI)
+Exec=unreal-speccy-portable-wx %F
+Icon=unreal_speccy_portable_wx
+Terminal=false
+Categories=Game;Emulator;
+StartupNotify=true
+StartupWMClass=unreal_speccy_portable_wx
+MimeType=application/usp-zx-snapshot;application/usp-zx-disk;application/usp-zx-replay;application/usp-zx-tape;
+Keywords=spectrum;zx;emulator;retro;wxwidgets;

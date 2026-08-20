@@ -419,7 +419,7 @@ void eSpeccyHandler::AudioSetSampleRate(dword sample_rate)
 
 
 static void SetupSoundChip();
-static struct eOptionSoundChip : public xOptions::eOptionEnum
+static struct eOptionSoundChip : public xOptions::eOptionInt
 {
 	eOptionSoundChip() { Set(DEFAULT_SOUND_CHIP); }
 	enum eType { SC_FIRST, SC_AY = SC_FIRST, SC_YM, SC_LAST };
@@ -431,7 +431,7 @@ static struct eOptionSoundChip : public xOptions::eOptionEnum
 	}
 	virtual void Change(bool next = true)
 	{
-		eOptionEnum::Change(SC_FIRST, SC_LAST, next);
+		eOptionInt::Change(SC_FIRST, SC_LAST, next);
 		Apply();
 	}
 	virtual void Apply()
@@ -441,7 +441,7 @@ static struct eOptionSoundChip : public xOptions::eOptionEnum
 	virtual int Order() const { return 24; }
 }op_sound_chip;
 
-static struct eOptionAYStereo : public xOptions::eOptionEnum
+static struct eOptionAYStereo : public xOptions::eOptionInt
 {
 	eOptionAYStereo() { Set(DEFAULT_STEREO); }
 	virtual const char* Name() const { return "ay stereo"; }
@@ -452,7 +452,7 @@ static struct eOptionAYStereo : public xOptions::eOptionEnum
 	}
 	virtual void Change(bool next = true)
 	{
-		eOptionEnum::Change(AS_FIRST, AS_LAST, next);
+		eOptionInt::Change(AS_FIRST, AS_LAST, next);
 		Apply();
 	}
 	virtual void Apply()

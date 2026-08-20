@@ -2,6 +2,7 @@
 <resources>
     <string name="opening">Открытие \"%s\"</string>
     <string name="open_file">Открыть файл</string>
+    <string name="toggle_control">Переключить Клавиатуру/Джойстик</string>
     <string name="save_state">Сохранить состояние</string>
     <string name="load_state">Загрузить состояние</string>
     <string name="select_joystick">Джойстик</string>
@@ -44,10 +45,11 @@
     <string name="gigascreen">Гигаскрин</string>
     <string name="gigascreen_desc">Больше цветов, меньше мерцание</string>
     <string name="black_and_white">Чёрно-белый режим</string>
-    <string name="av_timer_sync">Синхронизация по таймеру</string>
-    <string name="av_timer_sync_desc">Более плавная эмуляция на некоторых устройствах</string>
-    <string name="skip_frames">Пропуск кадров</string>
-    <string name="skip_frames_none">Нет</string>
+
+    <string name="theme">Тема</string>
+    <string name="theme_dark">Тёмная</string>
+    <string name="theme_light">Светлая</string>
+    <string name="theme_system">Системная</string>
 
     <string name="file_system">Файлы</string>
 

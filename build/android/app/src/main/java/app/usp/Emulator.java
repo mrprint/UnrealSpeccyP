@@ -1,6 +1,6 @@
 /*
 Portable ZX-Spectrum emulator.
-Copyright (C) 2001-2017 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2001-2026 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,6 +17,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 package app.usp;
+
+import androidx.annotation.Keep;
 
 import java.nio.ByteBuffer;
 
@@ -46,7 +48,11 @@ public class Emulator
 	public synchronized native void	GLSpriteSetColor(int handle, float r, float g, float b);
 
 	synchronized native int		Update();
-	synchronized native int		UpdateAudio(ByteBuffer buf, boolean skip_data);
+
+	synchronized native void	AudioInit();
+	synchronized native void	AudioDone();
+	synchronized native int		AudioUpdate(boolean skip_data);
+
 	public synchronized native void	OnKey(char key, boolean down, boolean shift, boolean alt);
 	public synchronized native void	OnTouch(boolean keyboard, float x, float y, boolean down, int pointer_id);
 	synchronized native void	VideoPaused(boolean on);
@@ -60,6 +66,7 @@ public class Emulator
 	synchronized native void	Reset();
 	public synchronized native boolean	FileTypeSupported(final String name);
 
+	@Keep
 	public class ReplayProgress
 	{
 		public int frame_current;
@@ -68,6 +75,8 @@ public class Emulator
 	}
 	public synchronized native ReplayProgress ReplayProgress();
 	public synchronized native boolean ReplayActive();
+	//Kotlin helper
+	public ReplayProgress getReplayProgress() { return ReplayProgress(); }
 
 	synchronized native int		GetOptionInt(final String name);
 	synchronized native void	SetOptionInt(final String name, int value);

@@ -7,6 +7,7 @@
     <string name="unable_open">Αδυναμία ανοίγματος του \"%s\"</string>
     <string name="cancel">Άκυρο</string>
     <string name="open_file">Άνοιγμα αρχείου</string>
+    <string name="toggle_control">Εναλλαγή Πληκτρολογίου/Χειριστηρίου</string>
     <string name="save_state">Αποθήκευση κατάστασης</string>
     <string name="load_state">Φόρτωση κατάστασης</string>
     <string name="save_slot">Αποθήκευση υποδοχής</string>
@@ -51,10 +52,11 @@
     <string name="filtering">Φιλτράρισμα</string>
     <string name="gigascreen_desc">Περισσότερα χρώματα λιγότερο τρέμουλο</string>
     <string name="black_and_white">Ασπρόμαυρο</string>
-    <string name="av_timer_sync">Συγχρονισμός A/V με το χρόνο</string>
-    <string name="av_timer_sync_desc">Ομαλότερη αναπαραγωγή σε ορισμένες συσκευές</string>
-    <string name="skip_frames">Παράλειψη καρέ</string>
-    <string name="skip_frames_none">Κανένα</string>
+
+    <string name="theme">θέμα</string>
+    <string name="theme_dark">Σκούρο</string>
+    <string name="theme_light">Ανοιχτόχρωμο</string>
+    <string name="theme_system">Συστήματος</string>
 
     <string name="file_system">Αρχεία</string>
 

@@ -75,7 +75,7 @@ namespace xPlatform
             reportError("GLEW Initialization Failed", glewGetErrorString(err));
     }
 
-    static struct eOptionZoom : public xOptions::eOptionEnum
+    static struct eOptionZoom : public xOptions::eOptionInt
     {
         virtual const char* Name() const { return "zoom"; }
         virtual const char** Values() const
@@ -83,7 +83,7 @@ namespace xPlatform
             static const char* values[] = { "fill screen", "small border", "no border", NULL };
             return values;
         }
-        virtual void Change(bool next = true) { eOptionEnum::Change(0, 3, next); }
+        virtual void Change(bool next = true) { eOptionInt::Change(0, 3, next); }
         virtual int Order() const { return 35; }
         float Zoom() const
         {

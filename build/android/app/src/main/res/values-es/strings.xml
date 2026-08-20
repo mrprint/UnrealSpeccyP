@@ -2,6 +2,7 @@
 <resources>
     <string name="opening">Abriendo \"%s\"</string>
     <string name="open_file">Abrir archivo</string>
+    <string name="toggle_control">Alternar Teclado/Joystick</string>
     <string name="save_state">Guardar estado</string>
     <string name="load_state">Cargar estado</string>
     <string name="use_sensor">Usar sensor</string>
@@ -37,10 +38,11 @@
     <string name="filtering">Filtrado</string>
     <string name="gigascreen_desc">Más colores menos parpadeos</string>
     <string name="black_and_white">El modo de blanco y negro</string>
-    <string name="av_timer_sync">Sincronismo A/V por temporizador</string>
-    <string name="av_timer_sync_desc">Visualización más fluida en algunos dispositivos</string>
-    <string name="skip_frames">Saltear cuadros</string>
-    <string name="skip_frames_none">Ninguno</string>
+
+    <string name="theme">Tema</string>
+    <string name="theme_dark">Oscuro</string>
+    <string name="theme_light">Claro</string>
+    <string name="theme_system">Sistema</string>
 
     <string name="file_system">Archivos</string>
 

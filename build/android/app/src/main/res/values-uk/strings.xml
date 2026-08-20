@@ -2,6 +2,7 @@
 <resources>
     <string name="opening">Відкриття \"%s\"</string>
     <string name="open_file">Відкрити файл</string>
+    <string name="toggle_control">Перемкнути Клавіатуру/Джойстик</string>
     <string name="save_state">Зберегти стан</string>
     <string name="load_state">Завантажити стан</string>
     <string name="select_joystick">Джойстик</string>
@@ -43,10 +44,11 @@
     <string name="filtering">Фільтрація</string>
     <string name="gigascreen_desc">Більше кольорів, менше блимає</string>
     <string name="black_and_white">Чорно-білий режим</string>
-    <string name="av_timer_sync">Синхронізація за таймером</string>
-    <string name="av_timer_sync_desc">Більш плавна емуляція на деяких пристроях</string>
-    <string name="skip_frames">Пропуск кадрів</string>
-    <string name="skip_frames_none">Немає</string>
+
+    <string name="theme">Тема</string>
+    <string name="theme_dark">Темна</string>
+    <string name="theme_light">Світла</string>
+    <string name="theme_system">Системна</string>
 
     <string name="file_system">Файли</string>
 

@@ -2,37 +2,53 @@ apply plugin: 'com.android.application'
 android {
     buildFeatures {
         buildConfig = true
+        prefab = true
     }
-    compileSdk 35
+    buildToolsVersion "37.0.0"
+    compileSdk 37
 
     defaultConfig {
         applicationId "app.usp"
-
-//        minSdkVersion 8
-//        targetSdkVersion 10
-
-        minSdkVersion 21
-        targetSdkVersion 35
+        minSdkVersion 23
+        targetSdkVersion 37
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
     }
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources = true
         }
         debug {
             jniDebuggable true
         }
     }
     lint {
-        checkReleaseBuilds false
-        abortOnError false
+        checkReleaseBuilds = false
+        abortOnError = false
     }
-    namespace 'app.usp'
+    namespace = 'app.usp'
     externalNativeBuild {
         cmake {
             path '../../cmake/CMakeLists.txt'
-            version '3.31.1'
+            version = '4.1.2'
         }
     }
-    ndkVersion '28.0.13004108'
+    ndkVersion = '29.0.14206865'
+}
+dependencies {
+    implementation 'androidx.activity:activity:1.13.0'
+    implementation 'androidx.fragment:fragment:1.8.9'
+    implementation 'androidx.constraintlayout:constraintlayout:2.2.1'
+    implementation 'androidx.viewpager2:viewpager2:1.1.0'
+    implementation 'androidx.recyclerview:recyclerview:1.4.0'
+    implementation 'androidx.preference:preference:1.2.1'
+    implementation 'com.google.android.material:material:1.14.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.11.0'
+    implementation 'com.google.oboe:oboe:1.10.0'
 }

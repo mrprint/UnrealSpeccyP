@@ -62,18 +62,18 @@ protected:
 	T	value;
 };
 
-class eOptionInt : public eOption<int>
+class eOptionIntRange : public eOption<int>
 {
 public:
-	eOptionInt() { Set(0); }
+	eOptionIntRange() { Set(0); }
 	virtual const char* Value() const;
 	virtual void Value(const char* v);
 };
 
-class eOptionEnum : public eOption<int>
+class eOptionInt : public eOption<int>
 {
 public:
-	eOptionEnum() { Set(0); }
+	eOptionInt() { Set(0); }
 	virtual const char*	Value() const;
 	virtual void Value(const char* v);
 protected:

@@ -26,7 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 namespace xPlatform
 {
 
-static struct eOptionStoreSlot : public xOptions::eOptionEnum
+static struct eOptionStoreSlot : public xOptions::eOptionInt
 {
 	virtual const char* Name() const { return "save slot"; }
 	virtual const char** Values() const
@@ -36,7 +36,7 @@ static struct eOptionStoreSlot : public xOptions::eOptionEnum
 	}
 	virtual void Change(bool next = true)
 	{
-		eOptionEnum::Change(0, 10, next);
+		eOptionInt::Change(0, 10, next);
 	}
 	virtual int Order() const { return 7; }
 } op_save_slot;
@@ -142,7 +142,7 @@ static struct eOptionLoadState : public eOptionSave
 	virtual int Order() const { return 6; }
 } op_load_state;
 
-static struct eOptionTape : public xOptions::eOptionEnum
+static struct eOptionTape : public xOptions::eOptionInt
 {
 	eOptionTape() { storeable = false; }
 	virtual const char* Name() const { return "tape"; }
@@ -176,7 +176,7 @@ static struct eOptionPause : public xOptions::eOptionBool
 	virtual int Order() const { return 70; }
 } op_pause;
 
-static struct eOptionSound : public xOptions::eOptionEnum
+static struct eOptionSound : public xOptions::eOptionInt
 {
 	eOptionSound() { Set(DEFAULT_SOUND); }
 	virtual const char* Name() const { return "sound"; }
@@ -187,12 +187,12 @@ static struct eOptionSound : public xOptions::eOptionEnum
 	}
 	virtual void Change(bool next = true)
 	{
-		eOptionEnum::Change(S_FIRST, S_LAST, next);
+		eOptionInt::Change(S_FIRST, S_LAST, next);
 	}
 	virtual int Order() const { return 20; }
 } op_sound;
 
-static struct eOptionVolume : public xOptions::eOptionEnum
+static struct eOptionVolume : public xOptions::eOptionInt
 {
 	eOptionVolume() { Set(DEFAULT_VOLUME); }
 	virtual const char* Name() const { return "volume"; }
@@ -203,7 +203,7 @@ static struct eOptionVolume : public xOptions::eOptionEnum
 	}
 	virtual void Change(bool next = true)
 	{
-		eOptionEnum::Change(V_FIRST, V_LAST, next);
+		eOptionInt::Change(V_FIRST, V_LAST, next);
 	}
 	virtual int Order() const { return 30; }
 } op_volume;
@@ -221,7 +221,7 @@ void OpVolume(eVolume v) { op_volume.Set(v); }
 eSound	OpSound() { return (eSound)(int)op_sound; }
 void OpSound(eSound s) { op_sound.Set(s); }
 
-static struct eOptionJoy : public xOptions::eOptionEnum
+static struct eOptionJoy : public xOptions::eOptionInt
 {
 	eOptionJoy() { Set(DEFAULT_JOYSTICK); storeable = true; }
 	virtual const char* Name() const { return "joystick"; }
@@ -232,12 +232,12 @@ static struct eOptionJoy : public xOptions::eOptionEnum
 	}
 	virtual void Change(bool next = true)
 	{
-		eOptionEnum::Change(J_FIRST, J_LAST, next);
+		eOptionInt::Change(J_FIRST, J_LAST, next);
 	}
 	virtual int Order() const { return 10; }
 } op_joy;
 
-static struct eOptionDrive : public xOptions::eOptionEnum
+static struct eOptionDrive : public xOptions::eOptionInt
 {
 	eOptionDrive() { storeable = false; Set(DEFAULT_DRIVE); }
 	virtual const char* Name() const { return "drive"; }
@@ -248,7 +248,7 @@ static struct eOptionDrive : public xOptions::eOptionEnum
 	}
 	virtual void Change(bool next = true)
 	{
-		eOptionEnum::Change(D_FIRST, D_LAST, next);
+		eOptionInt::Change(D_FIRST, D_LAST, next);
 	}
 	virtual int Order() const { return 60; }
 } op_drive;
@@ -275,7 +275,7 @@ static struct eOptionLastFile : public xOptions::eOptionString
 	virtual const char* Name() const { return "last file"; }
 } op_last_file;
 
-static struct eOptionMaskScale : public xOptions::eOptionInt {
+static struct eOptionMaskScale : public xOptions::eOptionIntRange {
     eOptionMaskScale() { Set(DEFAULT_MASK_SCALE); }
     virtual const char* Name() const { return "mask scale"; }
     virtual int Min() const { return 0; }   // 0 = disable mask
@@ -334,7 +334,7 @@ static struct eOptionPalEffects : public xOptions::eOptionBool
 	virtual int Order() const { return 41; } // After scanlines
 } op_pal_effects;
 
-static struct eOptionPalStrength : public xOptions::eOptionInt
+static struct eOptionPalStrength : public xOptions::eOptionIntRange
 {
 	eOptionPalStrength() { Set(DEFAULT_PAL_STRENGTH); } // Default: 50%
 	virtual const char* Name() const { return "pal strength"; }
@@ -343,7 +343,7 @@ static struct eOptionPalStrength : public xOptions::eOptionInt
 	virtual int Order() const { return 44; }
 } op_pal_strength;
 
-static struct eOptionBeamSpread : public xOptions::eOptionInt
+static struct eOptionBeamSpread : public xOptions::eOptionIntRange
 {
 	eOptionBeamSpread() { Set(DEFAULT_BEAM_SPREAD); } // Default: 30 (0-200 -> 0.0-2.0)
 	virtual const char* Name() const { return "beam spread"; }
@@ -370,7 +370,7 @@ int OpBeamSpread() { return (int)op_beam_spread; }
 void OpBeamSpread(int v) { op_beam_spread.Set(v); }
 
 // --- SDL2 Gamepad options ---
-static struct eOptionHostGamepad : public xOptions::eOptionInt {
+static struct eOptionHostGamepad : public xOptions::eOptionIntRange {
     int player_index;
     // Name() must return a stable, per-instance string. A function-local
     // `static char buf[64]` here would be shared by BOTH player instances
@@ -390,7 +390,7 @@ static struct eOptionHostGamepad : public xOptions::eOptionInt {
     char name_buf[64];
     eOptionHostGamepad(int p) : player_index(p) {
         snprintf(name_buf, sizeof(name_buf), "host gamepad device %d", p);
-        // eOptionInt's base constructor defaults to Set(0), which is a *valid*
+        // eOptionIntRange's base constructor defaults to Set(0), which is a *valid*
         // SDL device index and would make JoystickProfile::IsEnabled() (host_device_index >= 0)
         // true out of the box, silently binding both players to physical device 0
         // before the user ever opens the config dialog. -1 means "no device assigned".
