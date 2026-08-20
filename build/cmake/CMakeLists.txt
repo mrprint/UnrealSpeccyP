@@ -203,6 +203,17 @@ if(WIN32 AND USE_WX_WIDGETS)
 	set(ALSOFT_UTILS OFF CACHE BOOL "" FORCE)
 	set(ALSOFT_EXAMPLES OFF CACHE BOOL "" FORCE)
 	set(ALSOFT_TESTS OFF CACHE BOOL "" FORCE)
+	#Size trimming: HRTF data (3D headphone positioning) and legacy EAX are
+	#both unused by this emulator's simple mono/stereo output, but
+	#ALSOFT_EMBED_HRTF_DATA defaults ON and bakes .mhr HRTF tables straight
+	#into the static lib ("increases library footprint" per its own
+	#description), and ALSOFT_EAX defaults ON specifically on Windows.
+	set(ALSOFT_EMBED_HRTF_DATA OFF CACHE BOOL "" FORCE)
+	set(ALSOFT_EAX OFF CACHE BOOL "" FORCE)
+	#DirectSound is redundant with WASAPI (available since Vista, and this
+	#project already targets Windows 7+) - disabling it also drops the
+	#dsound.lib dependency below.
+	set(ALSOFT_BACKEND_DSOUND OFF CACHE BOOL "" FORCE)
 	set(ALSOFT_INSTALL OFF CACHE BOOL "" FORCE)
 	set(ALSOFT_INSTALL_CONFIG OFF CACHE BOOL "" FORCE)
 	set(ALSOFT_INSTALL_HRTF_DATA OFF CACHE BOOL "" FORCE)
@@ -485,6 +496,18 @@ if(WIN32 AND USE_WX_WIDGETS)
 	set(SDL_STATIC ON CACHE BOOL "" FORCE)
 	set(SDL_TEST OFF CACHE BOOL "" FORCE)
 	set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+	#Size trimming: this project only uses SDL2 for gamepad/joystick input
+	#(see comment above) - video/render/audio subsystems, and the D3D/GL
+	#context-creation code that comes with them, are dead weight here.
+	#UNVERIFIED: if the SDL2 build or gamepad init breaks with these off,
+	#drop this block first and report back.
+	set(SDL_VIDEO OFF CACHE BOOL "" FORCE)
+	set(SDL_RENDER OFF CACHE BOOL "" FORCE)
+	set(SDL_AUDIO OFF CACHE BOOL "" FORCE)
+	set(SDL_SENSOR OFF CACHE BOOL "" FORCE)
+	set(SDL_POWER OFF CACHE BOOL "" FORCE)
+	set(SDL_JOYSTICK ON CACHE BOOL "" FORCE)
+	set(SDL_HAPTIC ON CACHE BOOL "" FORCE)
 	add_subdirectory("../../3rdparty/SDL2" "SDL2")
 	list(APPEND THIRDPARTY_LIBRARIES SDL2::SDL2main SDL2::SDL2-static)
 else()
@@ -547,12 +570,14 @@ if(UNIX AND NOT APPLE)
 	target_link_libraries(${PROJECT} ${X11_LIBRARIES})
 endif()
 
-#OpenAL Soft (built from source, WASAPI/DirectSound backends) needs
-#avrt.lib (MMCSS thread priority), ksuser.lib, and dsound.lib (DirectSound
-#backend: DirectSoundCreate/DirectSoundEnumerateW/etc.) on Windows
+#OpenAL Soft (built from source, WASAPI backend) needs avrt.lib (MMCSS
+#thread priority) and ksuser.lib on Windows. DirectSound backend is
+#disabled above (redundant with WASAPI), so dsound.lib isn't needed.
+#/OPT:REF,ICF trims unreferenced code and folds identical COMDATs - safe
+#size win on a fully-static binary, no functional effect either way.
 if(WIN32)
-	set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} avrt.lib ksuser.lib dsound.lib")
-	set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} avrt.lib ksuser.lib dsound.lib")
+	set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} avrt.lib ksuser.lib")
+	set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} avrt.lib ksuser.lib /OPT:REF /OPT:ICF")
 endif()
 
 elseif(USE_HAIKU)
