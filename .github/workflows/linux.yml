@@ -101,3 +101,45 @@ jobs:
           name: unreal-speccy-portable_all_rpms.zip
           path: artifacts/*.rpm
           if-no-files-found: warn
+
+  rpm-fedora-wx:
+    name: RPM (Fedora) wxWidgets OpenAL GLEW
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: |
+          dnf install -y \
+            rpm-build rpmdevtools cmake gcc-c++ make \
+            wxGTK-devel openal-soft-devel glew-devel \
+            mesa-libGL-devel mesa-libGLU-devel libX11-devel \
+            SDL2-devel zlib-devel libpng-devel \
+            minizip-ng-compat-devel tinyxml2-devel \
+            desktop-file-utils shared-mime-info libappstream-glib \
+            rsync git findutils
+
+      - name: Build .rpm
+        run: |
+          chmod +x build/install/fedora-wx/make_rpm.sh
+          export RPMBUILD_DIR="${GITHUB_WORKSPACE}/rpmbuild"
+          export OUTPUT_DIR="${GITHUB_WORKSPACE}/artifacts"
+          mkdir -p "$RPMBUILD_DIR"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+          mkdir -p "$OUTPUT_DIR"
+          ./build/install/fedora-wx/make_rpm.sh
+
+      - name: Upload .rpm
+        uses: actions/upload-artifact@v7
+        with:
+          path: artifacts/unreal-speccy-portable-wx-0*x86_64.rpm
+          if-no-files-found: warn
+          archive: false
+
+      - name: Upload debug .rpms
+        uses: actions/upload-artifact@v6
+        with:
+          name: unreal-speccy-portable-wx_all_rpms.zip
+          path: artifacts/*.rpm
+          if-no-files-found: warn
