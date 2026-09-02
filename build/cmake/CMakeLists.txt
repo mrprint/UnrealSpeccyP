@@ -6,6 +6,7 @@ option(USE_WX_WIDGETS "wxWidgets + OpenAL + OpenGL version" OFF)
 option(USE_SYS_LIBS "use system libraries (wxWidgets/minizip/tinyxml2) instead of bundled ones - Linux packaging only, default keeps existing bundled behavior" OFF)
 option(USE_SDL "SDL version" ON)
 option(USE_SDL2 "SDL2 version" OFF)
+option(USE_SDL2_DESKTOP "SDL2 + desktop OpenGL + Dear ImGui version (new platform)" OFF)
 option(USE_HAIKU "Haiku version" OFF)
 option(USE_BENCHMARK "benchmark mode (console)" OFF)
 option(USE_LIBRARY "library mode" OFF)
@@ -749,6 +750,138 @@ endforeach(_file)
 
 endif(APPLE)
 
+elseif(USE_SDL2_DESKTOP)
+
+#SDL2 + desktop OpenGL + Dear ImGui ("sdl2_desktop").
+#Not to be confused with USE_SDL2 above (GLES2, aimed at Windows/ANGLE,
+#UWP, Emscripten): this is a new platform for classic desktop Linux/
+#Windows/macOS, reusing platform/gl (the same desktop GL renderer
+#USE_WX_WIDGETS uses - gigascreen/scanlines/PAL effects/mipmapping) for
+#video, and platform/sdl2/sdl2_{keys,mouse,joystick,audio}.cpp as-is for
+#input/audio. Everything (event polling, emulator tick, video+UI render)
+#runs on a single thread - see platform/sdl2_desktop/*.cpp.
+
+if(WIN32 AND USE_SDL2_DESKTOP)
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    add_subdirectory("../../3rdparty/SDL2" "SDL2")
+    list(APPEND THIRDPARTY_LIBRARIES SDL2::SDL2main SDL2::SDL2-static)
+else()
+    find_package(SDL2 REQUIRED)
+    include_directories(${SDL2_INCLUDE_DIRS})
+    list(APPEND THIRDPARTY_LIBRARIES ${SDL2_LIBRARIES})
+endif(WIN32 AND USE_SDL2_DESKTOP)
+
+if(APPLE)
+add_definitions(-D_MAC)
+elseif(UNIX)
+add_definitions(-D_LINUX)
+elseif(WIN32)
+add_definitions(-D_WINAPI)
+endif()
+
+#Same icon resource platform/wxwidgets' Windows build embeds (see
+#platform/sdl2_desktop/sdl2_desktop_video.cpp's InitVideo(), which pulls it
+#back out via ExtractIconExA() for the window/system-menu/taskbar icon).
+IF(WIN32)
+SET(SRCRES "../win/unreal_speccy_portable.rc")
+source_group("platform\\win\\res" FILES ${SRCRES})
+ENDIF(WIN32)
+
+#GLEW + desktop OpenGL - same pattern as USE_WX_WIDGETS above.
+if(WIN32)
+add_definitions(-DGLEW_STATIC)
+if(NOT GLEW_INCLUDE_DIR OR NOT GLEW_LIBRARY)
+message(FATAL_ERROR "USE_SDL2_DESKTOP on Windows requires -DGLEW_INCLUDE_DIR and -DGLEW_LIBRARY (see the USE_WX_WIDGETS Windows job for the pattern)")
+endif(NOT GLEW_INCLUDE_DIR OR NOT GLEW_LIBRARY)
+include_directories(${GLEW_INCLUDE_DIR})
+if(NOT TARGET GLEW::GLEW)
+add_library(GLEW::GLEW UNKNOWN IMPORTED)
+set_target_properties(GLEW::GLEW PROPERTIES
+	IMPORTED_LOCATION "${GLEW_LIBRARY}"
+	INTERFACE_INCLUDE_DIRECTORIES "${GLEW_INCLUDE_DIR}")
+endif(NOT TARGET GLEW::GLEW)
+list(APPEND THIRDPARTY_LIBRARIES GLEW::GLEW)
+else(WIN32)
+find_package(GLEW REQUIRED)
+include_directories(${GLEW_INCLUDE_DIRS})
+if(TARGET GLEW::GLEW)
+list(APPEND THIRDPARTY_LIBRARIES GLEW::GLEW)
+else()
+list(APPEND THIRDPARTY_LIBRARIES ${GLEW_LIBRARIES})
+endif()
+endif(WIN32)
+
+find_package(OpenGL REQUIRED)
+if(NOT WIN32)
+include_directories("${OPENGL_INCLUDE_DIR}")
+endif(NOT WIN32)
+list(APPEND THIRDPARTY_LIBRARIES ${OPENGL_LIBRARIES})
+
+file(GLOB SRCCXX_PLATFORM_OPENGL "../../platform/gl/*.cpp")
+list(APPEND SRCCXX ${SRCCXX_PLATFORM_OPENGL})
+source_group("platform\\gl" FILES ${SRCCXX_PLATFORM_OPENGL})
+
+#Dear ImGui (bundled submodule, see .gitmodules) + its official SDL2/OpenGL3
+#backends - no custom RenderInterface/SystemInterface needed.
+file(GLOB SRCCXX_IMGUI "../../3rdparty/imgui/*.cpp")
+file(GLOB SRCH_IMGUI "../../3rdparty/imgui/*.h")
+list(APPEND SRCCXX ${SRCCXX_IMGUI})
+list(APPEND SRCH ${SRCH_IMGUI})
+source_group("platform\\imgui" FILES ${SRCCXX_IMGUI} ${SRCH_IMGUI})
+include_directories("../../3rdparty/imgui")
+include_directories("../../3rdparty/imgui/backends")
+
+set(SRCCXX_IMGUI_BACKENDS
+	"../../3rdparty/imgui/backends/imgui_impl_sdl2.cpp"
+	"../../3rdparty/imgui/backends/imgui_impl_opengl3.cpp")
+set(SRCH_IMGUI_BACKENDS
+	"../../3rdparty/imgui/backends/imgui_impl_sdl2.h"
+	"../../3rdparty/imgui/backends/imgui_impl_opengl3.h")
+list(APPEND SRCCXX ${SRCCXX_IMGUI_BACKENDS})
+list(APPEND SRCH ${SRCH_IMGUI_BACKENDS})
+source_group("platform\\imgui\\backends" FILES ${SRCCXX_IMGUI_BACKENDS} ${SRCH_IMGUI_BACKENDS})
+
+#This platform's own files (main loop, video, ImGui menu/glue).
+file(GLOB SRCCXX_PLATFORM_SDL2_DESKTOP "../../platform/sdl2_desktop/*.cpp")
+list(APPEND SRCCXX ${SRCCXX_PLATFORM_SDL2_DESKTOP})
+source_group("platform\\sdl2_desktop" FILES ${SRCCXX_PLATFORM_SDL2_DESKTOP})
+
+#Reused as-is from platform/sdl2/: keyboard, mouse, gamepad, audio.
+#Deliberately NOT globbing the whole directory - sdl2.cpp/sdl2_video.cpp/
+#sdl2_imgui.cpp there are the GLES2 platform's own main/video/ImGui files,
+#replaced here by platform/sdl2_desktop/'s versions.
+#Reused as-is from platform/sdl2/: mouse (Kempston grab) and audio.
+#sdl2_keys.cpp and sdl2_joystick.cpp are NOT reused - see
+#platform/sdl2_desktop/sdl2_desktop_keys.cpp and sdl2_desktop_gamepad.*'s
+#file comments for why (different, incompatible shortcut/gamepad schemes
+#from the wx GUI this platform reproduces).
+set(SRCCXX_PLATFORM_SDL2_REUSED
+	"../../platform/sdl2/sdl2_mouse.cpp"
+	"../../platform/sdl2/sdl2_audio.cpp")
+list(APPEND SRCCXX ${SRCCXX_PLATFORM_SDL2_REUSED})
+source_group("platform\\sdl2" FILES ${SRCCXX_PLATFORM_SDL2_REUSED})
+
+add_definitions(-DUSE_SDL2 -DUSE_SDL2_DESKTOP -DSDL_USE_JOYSTICK -DSDL_USE_MOUSE -DUSE_CONFIG -DUSE_ZIP -DUSE_GL)
+
+add_platform_io_stuff()
+
+add_executable(${PROJECT} WIN32 ${SRCCXX} ${SRCC} ${SRCH} ${SRCRES})
+set_target_properties(${PROJECT} PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+#GCC < 9 ships std::filesystem in a separate library instead of libstdc++ proper.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
+target_link_libraries(${PROJECT} stdc++fs)
+endif()
+
+if(UNIX AND NOT APPLE)
+find_package(X11 REQUIRED)
+find_package(OpenGL COMPONENTS OpenGL GLX)
+if(TARGET OpenGL::GLX)
+target_link_libraries(${PROJECT} OpenGL::GLX)
+endif()
+target_link_libraries(${PROJECT} ${X11_LIBRARIES})
+endif()
+
 elseif(USE_BENCHMARK)
 
 #benchmark mode (console)
@@ -799,7 +932,7 @@ if(MSVC AND NOT UWP)
 set_target_properties(${PROJECT} PROPERTIES LINK_FLAGS "/MANIFEST:NO /LARGEADDRESSAWARE")
 endif(MSVC AND NOT UWP)
 
-if(WIN32 AND (USE_WX_WIDGETS OR USE_SDL2))
+if(WIN32 AND (USE_WX_WIDGETS OR USE_SDL2 OR USE_SDL2_DESKTOP))
 install(TARGETS ${PROJECT} RUNTIME DESTINATION ".")
 set(CPACK_PACKAGE_EXECUTABLES ${PROJECT} "Unreal Speccy Portable")
 foreach(_lib ${THIRDPARTY_LIBRARIES})
@@ -822,6 +955,8 @@ if(USE_WX_WIDGETS)
 set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}_wxwidgets_openal")
 elseif(USE_SDL2)
 set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}_sdl2_gles2_angle_curl")
+elseif(USE_SDL2_DESKTOP)
+set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}_sdl2_desktop_imgui")
 endif()
 set(CPACK_GENERATOR WIX)
 set(CPACK_WIX_UPGRADE_GUID "039D5BD5-4261-4D6F-9291-F38BD84EF706")

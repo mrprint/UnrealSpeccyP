@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Unreal Speccy Portable (SDL2 Desktop)
+GenericName=ZX Spectrum Emulator
+Comment=Portable ZX-Spectrum emulator (SDL2 desktop OpenGL + Dear ImGui UI)
+Exec=unreal-speccy-portable-sdl2-desktop %F
+Icon=unreal_speccy_portable_sdl2_desktop
+Terminal=false
+Categories=Game;Emulator;
+StartupNotify=true
+StartupWMClass=unreal_speccy_portable_sdl2_desktop
+MimeType=application/usp-zx-snapshot;application/usp-zx-disk;application/usp-zx-replay;application/usp-zx-tape;
+Keywords=spectrum;zx;emulator;retro;sdl2;imgui;desktop;

@@ -126,3 +126,38 @@ jobs:
           if-no-files-found: warn
           path: |
             build/cmake/build_win32_wxwidgets/*.msi
+
+  windows-sdl2-desktop:
+    name: Windows SDL2 desktop OpenGL Dear ImGui
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Download prebuilt GLEW library
+        working-directory: build/cmake
+        shell: cmd
+        run: |
+          curl -O https://github.com/nigels-com/glew/releases/download/glew-2.2.0/glew-2.2.0-win32.zip --location
+          7z x glew-2.2.0-win32.zip
+
+      - name: Build SDL2 desktop OpenGL Dear ImGui version
+        working-directory: build/cmake
+        shell: cmd
+        run: |
+          mkdir build_win32_sdl2_desktop
+          cd build_win32_sdl2_desktop
+          cmake .. -A x64 -DUSE_SDL=0 -DUSE_SDL2_DESKTOP=1 ^
+            -DGLEW_INCLUDE_DIR=%CD%/../glew-2.2.0/include ^
+            -DGLEW_LIBRARY=%CD%/../glew-2.2.0/lib/Release/x64/glew32s.lib
+          cmake --build . --config Release --target PACKAGE
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          if-no-files-found: warn
+          path: |
+            build/cmake/build_win32_sdl2_desktop/*.msi
+"}]

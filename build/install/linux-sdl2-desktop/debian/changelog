@@ -1,0 +1,9 @@
+unreal-speccy-portable-sdl2-desktop (0.0.91-1) unstable; urgency=medium
+
+  * Initial source-based Debian package for the SDL2 + desktop OpenGL + Dear
+    ImGui desktop UI variant, packaged in parallel with unreal-speccy-portable
+    (SDL2 GLESv2) and unreal-speccy-portable-wx (wxWidgets).
+  * Build via CMake + SDL2 + GLEW + desktop OpenGL, using system libraries
+    (USE_SYS_LIBS=ON) for a fast, dependency-clean build.
+
+ -- djdron <djdron@gmail.com>  Mon, 17 Aug 2026 00:00:00 +0200

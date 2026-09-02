@@ -58,7 +58,7 @@ bool IsNvidiaGPU();
 void initGraphics(int scr_width, int scr_height);
 void cleanupGraphics();
 struct VideoSnapshot;
-bool DrawGL(int vport_width, int vport_height, const VideoSnapshot& snap);
+bool DrawGL(int vport_x, int vport_y, int vport_width, int vport_height, const VideoSnapshot& snap);
 
 wxWindow* CreateMouseCapture(wxWindow* parent);
 
@@ -776,7 +776,7 @@ wxThread::ExitCode RenderThread::Entry()
         {
             const wxSize sz = m_canvas->GetViewportSize();
             if (sz.x > 0 && sz.y > 0)
-                did_draw = DrawGL(sz.x, sz.y, *snap);
+                did_draw = DrawGL(0, 0, sz.x, sz.y, *snap);
         }
 
         // SwapGL (and any vsync stall) runs outside the emu lock so the main

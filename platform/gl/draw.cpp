@@ -894,8 +894,15 @@ void main()
     //  frame after OnLoop() returned.  Now receives a pre-built VideoSnapshot
     //  (copied under the emulator mutex in RenderThread::Entry) and reads only
     //  from it.  All logic below the pixel-conversion loop is unchanged.
+    //
+    //  vport_x / vport_y: offset of the viewport within the window's drawable
+    //  area.  In platforms with a single composited window (sdl2_desktop),
+    //  these exclude the menu bar and status bar so DrawGL only renders into
+    //  the non-UI region, preventing overlap between ImGui UI elements and
+    //  the emulator image.  Platforms without overlaid UI pass 0, 0.
     // =============================================================================
-    bool DrawGL(int vport_width, int vport_height, const VideoSnapshot& snap)
+    bool DrawGL(int vport_x, int vport_y, int vport_width, int vport_height,
+        const VideoSnapshot& snap)
     {
         PROFILER_BEGIN(draw_p);
 
@@ -974,7 +981,7 @@ void main()
         if (!OpPalEffects() && !op_mipmapping)
         {
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            glViewport(0, 0, vport_width, vport_height);
+            glViewport(vport_x, vport_y, vport_width, vport_height);
             HandleLayoutClear(vport_width, vport_height);
 
             UseProgram(lw_shader);
@@ -1053,7 +1060,7 @@ void main()
         }
 
         // --- Second pass: FBO → screen ---
-        glViewport(0, 0, vport_width, vport_height);
+        glViewport(vport_x, vport_y, vport_width, vport_height);
         HandleLayoutClear(vport_width, vport_height);
 
         UseProgram(screen_shader);
@@ -1101,3 +1108,4 @@ void main()
 }//namespace xPlatform
 
 #endif//USE_GL
+
