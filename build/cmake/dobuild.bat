@@ -83,6 +83,12 @@ if errorlevel 1 exit /b 1
 
 popd
 
+rem --- 3. Copy resources into the Release output folder (Release\res) ---
+
+set RES_SRC=%~dp0..\..\res
+xcopy /S /I /Y /Q "%RES_SRC%" "%BUILD_DIR%\Release\res"
+if errorlevel 1 exit /b 1
+
 echo.
 if "%DO_PACKAGE%"=="1" (
 	echo Done. Installer: %BUILD_DIR%\*.msi
