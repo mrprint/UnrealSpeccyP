@@ -21,6 +21,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
+#include <cstddef>
+#include <cstring>
+#include <string>
+
 // =============================================================================
 //  platform/sdl2_desktop/imgui_shared.h
 //
@@ -75,15 +79,30 @@ void CloseMenuDialogs();
 // wx_frame.cpp's SHORTCUT_* accelerator table, checked ahead of ZX keyboard
 // translation - called from sdl2_desktop_keys.cpp. Returns true if the event
 // was consumed as a shortcut.
-// (declared in options_common.h-visible form in sdl2_desktop_keys.cpp itself,
-// implemented in sdl2_desktop_menu.cpp - not redeclared here to avoid an SDL
-// dependency in this shared header.)
 
 // --- Options dialog (sdl2_desktop_options.cpp) ---
 void OpenOptionsDialog();
 void CloseOptionsDialog(); // see CloseMenuDialogs() above
 void DrawOptionsDialog();
 bool OptionsDialogActive();
+
+// --- small shared helpers ---
+// Copies `src` into the fixed-size `dst` buffer (capacity `cap`), truncating
+// if necessary and always NUL-terminating.
+inline void CopyToBuffer(char* dst, size_t cap, const std::string& src)
+{
+	if(!dst || cap == 0)
+		return;
+	const size_t n = (src.size() < cap - 1) ? src.size() : cap - 1;
+	if(n > 0)
+		memcpy(dst, src.data(), n);
+	dst[n] = 0;
+}
+
+inline void CopyToBuffer(char* dst, size_t cap, const char* src)
+{
+	CopyToBuffer(dst, cap, std::string(src ? src : ""));
+}
 
 }//namespace xImGui
 }//namespace xPlatform

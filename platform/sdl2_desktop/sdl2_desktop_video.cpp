@@ -21,16 +21,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 //  Window + desktop OpenGL context for the new "sdl2_desktop" platform.
 //
-//  Deliberately mirrors platform/sdl2/sdl2_video.cpp (same op_window_state /
-//  op_full_screen option names, so existing config files keep working if a
-//  user switches builds), but:
-//   - requests a desktop GL (core) context instead of GLES2,
-//   - draws the emulator screen through platform/gl/draw.cpp (DrawGL(), the
-//     same shader-based renderer platform/wxwidgets uses - gigascreen /
-//     scanlines / PAL effects / mipmapping), instead of platform/gles2,
-//   - renders the Dear ImGui overlay (menu, About window, ...) on top,
-//     after the emulator frame, still inside the single call to
-//     UpdateScreen() - one thread, one SDL_GL_SwapWindow() per frame.
+//  Desktop GL context for the "sdl2_desktop" platform. Draws the emulator
+//  screen through platform/gl/draw.cpp (DrawGL(), the same shader-based
+//  renderer platform/wxwidgets uses - gigascreen / scanlines / PAL effects /
+//  mipmapping), and renders the Dear ImGui overlay (menu, About window, ...)
+//  on top, after the emulator frame, still inside the single call to
+//  UpdateScreen() - one thread, one SDL_GL_SwapWindow() per frame.
 // =============================================================================
 
 #include "../platform.h"
@@ -39,6 +35,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <GL/glew.h> // must come before SDL.h/any gl.h-including header, per GLEW's own requirement
 #include <SDL.h>
+#include <memory>
 #include "imgui.h"
 #include "../../tools/options.h"
 #include "../../tools/point.h"
@@ -65,29 +62,93 @@ void Init(SDL_Window* window, SDL_GLContext context);
 void Done();
 void EndFrame();
 }
-//namespace xImGui
 
-SDL_Window* window = NULL;
-static SDL_GLContext context = NULL;
-// Guards DoneVideo()'s cleanup calls: initGlew()/initGraphics()/xImGui::Init()
-// are only reached after SDL_CreateWindow() *and* SDL_GL_CreateContext() both
-// succeed. If InitVideo() returns false before that point (e.g. no OpenGL
-// 3.3 support), those subsystems were never touched, and calling their
-// Done()/cleanup functions anyway means ImGui_ImplOpenGL3_Shutdown()/
-// ImGui_ImplSDL2_Shutdown() run without a matching Init()
-// (undefined: they read state Init() would have set up), and cleanupGraphics()
-// runs without GLEW's function pointers ever having been loaded
-// (calling through a NULL pointer). Both are real crash paths on any system
-// where context creation fails, not just a theoretical concern.
-static bool graphics_inited = false;
+// Backwards-compatible alias for sdl2_mouse.cpp (reused from platform/sdl2/),
+// which declares `extern SDL_Window* window;` and uses it directly. Rather than
+// modifying that shared file, we provide a global pointer that always mirrors
+// the current GLWindow's window handle — kept in sync by GLWindow::Create() and
+// GLWindow::Destroy(). When no window exists (before InitVideo or after DoneVideo),
+// this is nullptr, matching sdl2_mouse.cpp's null-check expectations.
+SDL_Window* window = nullptr;
 
-// Same option name/format as platform/sdl2/sdl2_video.cpp's eOptionWindowState,
-// on purpose - both platforms can share the same config file entry.
+// RAII wrapper for the SDL_Window + OpenGL context pair. The destructor
+// destroys them in the correct order (context before window — see DoneVideo()'s
+// comment about capture still being active when SDL_DestroyWindow() runs), so
+// the invariant that was previously held only by a code comment is now enforced
+// by the compiler: if InitVideo() returns false partway through, the GLWindow's
+// destructor simply never runs (the object was never fully constructed), and no
+// cleanup of partially-initialized state can happen.
+class GLWindow {
+public:
+    SDL_Window* window = nullptr;
+
+    // graphics_inited tracks whether initGlew()/initGraphics()/xImGui::Init()
+    // were reached — i.e. both CreateWindow *and* CreateContext succeeded. If
+    // InitVideo() returns false before that point (e.g. no OpenGL 3.3 support),
+    // those subsystems were never touched, and calling their Done()/cleanup
+    // functions anyway means ImGui_ImplOpenGL3_Shutdown()/ImGui_ImplSDL2_Shutdown()
+    // run without a matching Init() (undefined: they read state Init() would have
+    // set up), and cleanupGraphics() runs without GLEW's function pointers ever
+    // having been loaded (calling through a NULL pointer). Both are real crash
+    // paths on any system where context creation fails, not just theoretical.
+    bool graphics_inited = false;
+
+    ~GLWindow() {
+        Destroy();
+    }
+
+    void Destroy() {
+        if (!window) return;
+        // Release mouse grab/relative-mode before tearing down the window —
+        // see DoneVideo()'s comment for why this must happen first.
+        SDL_SetWindowGrab(window, SDL_FALSE);
+        SDL_SetRelativeMouseMode(SDL_FALSE);
+
+        if (graphics_inited) {
+            xImGui::Done();
+            cleanupGraphics();
+            graphics_inited = false;
+        }
+        // Destroy context before window — the GL context may still hold
+        // references to window-bound resources.
+        if (context_) SDL_GL_DeleteContext(context_);
+        context_ = nullptr;
+        SDL_DestroyWindow(window);
+        window = nullptr;
+        xPlatform::window = nullptr;  // keep extern alias in sync for sdl2_mouse.cpp
+    }
+
+    bool Create(const char* title, int x, int y, int w, int h, Uint32 flags) {
+        // If a previous window exists (e.g. re-init after DoneVideo), clean it up first.
+        Destroy();
+        window = SDL_CreateWindow(title, x, y, w, h, flags);
+        if (!window) return false;
+        xPlatform::window = window;  // keep extern alias in sync for sdl2_mouse.cpp
+        context_ = SDL_GL_CreateContext(window);
+        if (!context_) {
+            // Window created but no GL context — destructor will clean up the
+            // window. Don't set graphics_inited (nothing to undo there).
+            return false;
+        }
+        return true;
+    }
+
+    // Non-owning access to the GL context (needed by xImGui::Init and
+    // SDL_GL_MakeCurrent). The context is owned and destroyed by this class.
+    SDL_GLContext context() const { return context_; }
+
+private:
+    SDL_GLContext context_ = nullptr;
+};
+
+static GLWindow g_gl_window;
+
+// Same option name/format as platform/sdl2/sdl2_video.cpp's eOptionWindowState.
 class eOptionWindowState : public xOptions::eOptionString
 {
 public:
 	eOptionWindowState() { customizable = false; }
-	virtual const char* Name() const { return "window state"; }
+	const char* Name() const override { return "window state"; }
 
 	bool Get(ePoint* position, ePoint* size, bool* maximized) const
 	{
@@ -115,27 +176,27 @@ public:
 		if(maximized)
 			m = *maximized;
 		char buf[512];
-		sprintf(buf, FormatStr(), p.x, p.y, s.x, s.y, m ? 1 : 0);
+		snprintf(buf, sizeof(buf), FormatStr(), p.x, p.y, s.x, s.y, m ? 1 : 0);
 		Value(buf);
 	}
 	void Update()
 	{
-		Uint32 flags = SDL_GetWindowFlags(window);
+		Uint32 flags = SDL_GetWindowFlags(g_gl_window.window);
 		if(flags & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP))
 			return;
 		if(!(flags&SDL_WINDOW_MAXIMIZED) && !(flags&SDL_WINDOW_MINIMIZED))
 		{
 			ePoint p;
-			SDL_GetWindowPosition(window, &p.x, &p.y);
+			SDL_GetWindowPosition(g_gl_window.window, &p.x, &p.y);
 			ePoint s;
-			SDL_GetWindowSize(window, &s.x, &s.y);
+			SDL_GetWindowSize(g_gl_window.window, &s.x, &s.y);
 			bool m = false;
 			Set(&p, &s, &m);
 		}
 		else
 		{
 			bool m = (flags&SDL_WINDOW_MAXIMIZED) != 0;
-			Set(NULL, NULL, &m);
+			Set(nullptr, nullptr, &m);
 		}
 	}
 
@@ -145,24 +206,28 @@ private:
 
 static struct eOptionFullScreen : public xOptions::eOptionBool
 {
-	virtual const char* Name() const { return "full screen"; }
-	virtual int Order() const { return 32; }
-	virtual void Set(const bool& v)
+	const char* Name() const override { return "full screen"; }
+	int Order() const override { return 32; }
+	void Set(const bool& v) override
 	{
 		eOptionBool::Set(v);
 		Apply();
 	}
-	virtual void Apply()
+	void Apply() override
 	{
-		SDL_SetWindowFullscreen(window, (*this) ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+		SDL_SetWindowFullscreen(g_gl_window.window, (*this) ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
 	}
 	void Update()
 	{
-		bool fs = (SDL_GetWindowFlags(window) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)) != 0;
+		bool fs = (SDL_GetWindowFlags(g_gl_window.window) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)) != 0;
 		if(*this != fs)
 			Set(fs);
 	}
 } op_full_screen;
+
+// Non-owning access to the GLWindow's window handle, for sdl2_desktop.cpp's
+// grab-state status bar message. The window is owned and destroyed by g_gl_window.
+SDL_Window* GetVideoWindow() { return g_gl_window.window; }
 
 // sdl2_mouse.cpp (reused as-is from platform/sdl2/) needs this to map window
 // coordinates to the emulator's 320x240 screen space for Kempston mouse.
@@ -232,14 +297,10 @@ bool InitVideo()
 		flags |= SDL_WINDOW_MAXIMIZED;
 	if(op_full_screen)
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-	window = SDL_CreateWindow(Handler()->WindowCaption(), pos.x, pos.y, size.x, size.y, flags);
-	if(!window)
+	if(!g_gl_window.Create(Handler()->WindowCaption(), pos.x, pos.y, size.x, size.y, flags))
 		return false;
-	SDL_SetWindowMinimumSize(window, 320, 240); // org_size - matches wx_frame.cpp's SetMinSize(GetSize()) after SetClientSize(org_size)
-	context = SDL_GL_CreateContext(window);
-	if(!context)
-		return false;
-	SDL_GL_MakeCurrent(window, context);
+	SDL_SetWindowMinimumSize(g_gl_window.window, 320, 240); // org_size - matches wx_frame.cpp's SetMinSize(GetSize()) after SetClientSize(org_size)
+	SDL_GL_MakeCurrent(g_gl_window.window, g_gl_window.context());
 	SDL_GL_SetSwapInterval(1); // vsync - single thread, no render-thread hand-off needed
 
 	// SDL's default window has no icon of its own on Windows (unlike a
@@ -248,10 +309,15 @@ bool InitVideo()
 	// taskbar button, and Alt+Tab all end up with a blank/generic icon.
 #ifdef _LINUX
 	#include "../../build/linux/icon.c"
-	SDL_Surface* icon_sufrace = SDL_CreateRGBSurfaceFrom((void*)icon.pixel_data, icon.width, icon.height,
-		icon.bytes_per_pixel * 8, icon.bytes_per_pixel*icon.width, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
-	SDL_SetWindowIcon(window, icon_sufrace);
-	SDL_FreeSurface(icon_sufrace);
+	// RAII wrapper for SDL_Surface: auto-frees via SDL_FreeSurface on scope exit,
+	// so the surface is cleaned up even if an exception or early return occurs
+	// between CreateRGBSurfaceFrom and SetWindowIcon (currently safe — no such
+	// path exists — but this removes the need to prove it remains safe).
+	std::unique_ptr<SDL_Surface, decltype(&SDL_FreeSurface)> icon_surface(
+		SDL_CreateRGBSurfaceFrom((void*)icon.pixel_data, icon.width, icon.height,
+			icon.bytes_per_pixel * 8, icon.bytes_per_pixel*icon.width, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000),
+		SDL_FreeSurface);
+	SDL_SetWindowIcon(g_gl_window.window, icon_surface.get());
 #endif//_LINUX
 #ifdef _WINAPI
 	// Unlike _LINUX above, this doesn't go through SDL_SetWindowIcon() with a
@@ -269,13 +335,13 @@ bool InitVideo()
 	// Explorer/the taskbar before it's even running, instead of a generic
 	// default one.
 	char exe_path[MAX_PATH] = {};
-	GetModuleFileNameA(NULL, exe_path, MAX_PATH);
-	HICON icon_big = NULL, icon_small = NULL;
+	GetModuleFileNameA(nullptr, exe_path, MAX_PATH);
+	HICON icon_big = nullptr, icon_small = nullptr;
 	if(ExtractIconExA(exe_path, 0, &icon_big, &icon_small, 1) > 0)
 	{
 		SDL_SysWMinfo wm_info;
 		SDL_VERSION(&wm_info.version);
-		if(SDL_GetWindowWMInfo(window, &wm_info))
+		if(SDL_GetWindowWMInfo(g_gl_window.window, &wm_info))
 		{
 			HWND hwnd = wm_info.info.win.window;
 			if(icon_big)
@@ -288,7 +354,7 @@ bool InitVideo()
 
 	initGlew();
 	ePoint drawable;
-	SDL_GL_GetDrawableSize(window, &drawable.x, &drawable.y);
+	SDL_GL_GetDrawableSize(g_gl_window.window, &drawable.x, &drawable.y);
 
 	// Size the FBO from whichever is larger: the current drawable, or the
 	// biggest connected display (see GetMaxDisplayResolution() above). This
@@ -300,9 +366,9 @@ bool InitVideo()
 		(max_display.y > drawable.y) ? max_display.y : drawable.y);
 
 	initGraphics(init_size.x, init_size.y);
-	graphics_inited = true;
+	g_gl_window.graphics_inited = true;
 
-	xImGui::Init(window, context);
+	xImGui::Init(g_gl_window.window, g_gl_window.context());
 	return true;
 }
 
@@ -314,46 +380,14 @@ void ResizeToOrgSizeMultiple(int mult)
 {
 	if(op_full_screen)
 		op_full_screen.Set(false);
-	if(SDL_GetWindowFlags(window) & SDL_WINDOW_MAXIMIZED)
-		SDL_RestoreWindow(window);
-	SDL_SetWindowSize(window, 320 * mult, 240 * mult);
+	if(SDL_GetWindowFlags(g_gl_window.window) & SDL_WINDOW_MAXIMIZED)
+		SDL_RestoreWindow(g_gl_window.window);
+	SDL_SetWindowSize(g_gl_window.window, 320 * mult, 240 * mult);
 }
 
 void DoneVideo()
 {
-	// Release any active mouse grab/relative-mode *before* tearing down the
-	// window, regardless of how we got here. sdl2_mouse.cpp's ProcessMouse()
-	// (Kempston-mouse-style input, wired in via sdl2_desktop_keys.cpp) grabs
-	// the mouse with SDL_SetWindowGrab()+SDL_SetRelativeMouseMode() on the
-	// first click inside the window, and only releases it on Escape. If the
-	// app is closed some other way while still grabbed (Alt+F4, the window's
-	// close button, File > Exit, ...), that OS-level cursor clip/raw-input
-	// capture would otherwise still be active when SDL_DestroyWindow()/
-	// SDL_Quit() run. When launched from a console host such as FAR Manager,
-	// the console regaining input focus afterwards can then read one of its
-	// mouse buttons as still held, since it never saw the matching
-	// button-up while relative mode was intercepting input. Calling these
-	// unconditionally is harmless when nothing was ever grabbed.
-	if(window)
-		SDL_SetWindowGrab(window, SDL_FALSE);
-	SDL_SetRelativeMouseMode(SDL_FALSE);
-
-	if(graphics_inited)
-	{
-		xImGui::Done();
-		cleanupGraphics();
-		graphics_inited = false;
-	}
-	if(context)
-	{
-		SDL_GL_DeleteContext(context);
-		context = NULL;
-	}
-	if(window)
-	{
-		SDL_DestroyWindow(window);
-		window = NULL;
-	}
+	g_gl_window.Destroy();
 }
 
 void UpdateScreen()
@@ -362,7 +396,7 @@ void UpdateScreen()
 	op_full_screen.Update();
 
 	ePoint s;
-	SDL_GL_GetDrawableSize(window, &s.x, &s.y);
+	SDL_GL_GetDrawableSize(g_gl_window.window, &s.x, &s.y);
 
 	// --- Exclude ImGui menu/status bar from the emulator viewport ---
 	// DrawGL renders to fill its entire (vport_x, vport_y, width, height)
@@ -421,11 +455,9 @@ void UpdateScreen()
 	// (xImGui::BeginFrame() already ran earlier in Loop1(), right after this
 	// frame's SDL events were fed in and before they were routed - see there)
 
-	SDL_GL_SwapWindow(window); // the only swap for the whole frame (video + UI)
+	SDL_GL_SwapWindow(g_gl_window.window); // the only swap for the whole frame (video + UI)
 }
 
-}
-//namespace xPlatform
+}//namespace xPlatform
 
 #endif//USE_SDL2_DESKTOP
-

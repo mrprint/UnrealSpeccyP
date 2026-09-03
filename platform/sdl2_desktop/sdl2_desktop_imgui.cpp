@@ -39,6 +39,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cstdio>
 #include <cstring>
 #include <cmath>
+#include <memory>
 #include <SDL.h>
 
 #include "imgui.h"
@@ -69,10 +70,10 @@ namespace xImGui
 // overlay matches the desktop the same way platform/wxwidgets' native
 // widgets automatically do - ImGui isn't a native toolkit, so this has to
 // be done by hand, on all three supported platforms. Re-checked
-// periodically from BeginFrame() below (see g_last_theme_check_ms), not
-// just once here, so toggling the OS theme while the emulator is already
-// running updates the overlay too, instead of only taking effect on the
-// next launch.
+// periodically from ImGuiBackend::BeginFrame() below (see
+// ImGuiBackend::m_last_theme_check_ms), not just once here, so toggling the
+// OS theme while the emulator is already running updates the overlay too,
+// instead of only taking effect on the next launch.
 enum class eSystemTheme { Light, Dark };
 
 static eSystemTheme DetectSystemTheme()
@@ -86,7 +87,7 @@ static eSystemTheme DetectSystemTheme()
 	DWORD size = sizeof(value);
 	LONG result = RegGetValueW(HKEY_CURRENT_USER,
 		L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-		L"AppsUseLightTheme", RRF_RT_REG_DWORD, NULL, &value, &size);
+		L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &value, &size);
 	if(result == ERROR_SUCCESS && value == 0)
 		return eSystemTheme::Dark;
 	return eSystemTheme::Light;
@@ -94,15 +95,24 @@ static eSystemTheme DetectSystemTheme()
 	// Apple simply omits this key entirely in light mode - its absence *is*
 	// the light-mode signal here, not a lookup failure to fall back from.
 	eSystemTheme theme = eSystemTheme::Light;
-	CFStringRef value = (CFStringRef)CFPreferencesCopyAppValue(
+	// RAII: CFRelease on scope exit — no need for manual release or worrying
+	// about early returns between Copy and Release. CoreFoundation types are
+	// opaque pointer typedefs (CFStringRef is already a pointer), so we can't
+	// use unique_ptr<T> directly without getting the indirection wrong; instead
+	// a tiny scope-guard struct handles it cleanly.
+	struct CFScopeRelease {
+		CFStringRef ref = nullptr;
+		~CFScopeRelease() { if(ref) CFRelease(ref); }
+	};
+	CFScopeRelease cf_value;
+	cf_value.ref = (CFStringRef)CFPreferencesCopyAppValue(
 		CFSTR("AppleInterfaceStyle"), kCFPreferencesAnyApplication);
-	if(value)
+	if(cf_value.ref)
 	{
 		char buf[64] = {};
-		if(CFStringGetCString(value, buf, sizeof(buf), kCFStringEncodingUTF8)
+		if(CFStringGetCString(cf_value.ref, buf, sizeof(buf), kCFStringEncodingUTF8)
 			&& strcasecmp(buf, "Dark") == 0)
 			theme = eSystemTheme::Dark;
-		CFRelease(value);
 	}
 	return theme;
 #else//_LINUX
@@ -115,13 +125,16 @@ static eSystemTheme DetectSystemTheme()
 	// just for this one lookup. Falls back to light if gsettings isn't
 	// present at all (e.g. a minimal window-manager-only setup).
 	eSystemTheme theme = eSystemTheme::Light;
-	FILE* pipe = popen("gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null", "r");
+	// RAII: pclose on scope exit — no need for manual close or worrying about
+	// early returns between popen and pclose.
+	std::unique_ptr<FILE, decltype(&pclose)> pipe(
+		popen("gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null", "r"),
+		&pclose);
 	if(pipe)
 	{
 		char buf[128] = {};
-		if(fgets(buf, sizeof(buf), pipe) && strstr(buf, "dark"))
+		if(fgets(buf, sizeof(buf), pipe.get()) && strstr(buf, "dark"))
 			theme = eSystemTheme::Dark;
-		pclose(pipe);
 	}
 	return theme;
 #endif
@@ -211,19 +224,91 @@ static void ApplyStyle(float dpi_scale, eSystemTheme theme)
 		style.ScaleAllSizes(dpi_scale);
 }
 
-static bool g_imgui_inited = false; // guards Done() against running without a matching Init() (see sdl2_desktop_video.cpp's graphics_inited comment - same failure class)
-static float g_font_baked_scale = 0.0f;
-static eSystemTheme g_current_theme = eSystemTheme::Dark; // overwritten by DetectSystemTheme() before first use, in Init()
-static Uint32 g_last_theme_check_ms = 0;
+// ---------------------------------------------------------------------------
+// StatusBar - equivalent of wxFrame::SetStatusText(): one line, always
+// visible at the bottom, replaced (not queued) by the next call. Matches wx
+// exactly, including the default "Ready..." text (set from
+// sdl2_desktop_menu.cpp at startup, mirroring Frame::Frame()).
+//
+// Its only state is the text buffer below - a distinct concern from
+// ImGuiBackend's lifecycle/DPI/font/theme state further down.
+// ---------------------------------------------------------------------------
 
-// Loads (or reloads) the font atlas at the given DPI scale and uploads it to
-// the GPU. Called once from Init(), and again from BeginFrame() whenever the
-// effective scale changes (window dragged to a different-DPI monitor, or a
-// fullscreen toggle lands on a different effective resolution) - baking once
-// at startup and never adjusting left the fixed-resolution glyph bitmap
-// being GPU-scaled to whatever the *current* scale happened to be, which
-// looks aliased/blurry instead of crisp.
-static void LoadFont(float dpi_scale)
+class StatusBar
+{
+public:
+	void Set(const char* text)
+	{
+		CopyToBuffer(m_text, sizeof(m_text), text);
+	}
+
+	void Draw() const
+	{
+		const ImGuiViewport* vp = ImGui::GetMainViewport();
+		float h = ImGui::GetFrameHeight();
+		ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x, vp->WorkPos.y + vp->WorkSize.y - h));
+		ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x, h));
+		ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+			ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings |
+			ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 2));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+		if(ImGui::Begin("##statusbar", nullptr, flags))
+			ImGui::TextUnformatted(m_text);
+		ImGui::End();
+		ImGui::PopStyleVar(2);
+	}
+
+private:
+	char m_text[256] = "";
+};
+
+static StatusBar g_status_bar;
+
+// ---------------------------------------------------------------------------
+// ImGuiBackend - desktop GL backend init/shutdown, the per-frame Begin/End
+// split, and the DPI/theme/font upkeep that BeginFrame() runs each frame.
+// One instance only (g_backend below).
+// ---------------------------------------------------------------------------
+
+class ImGuiBackend
+{
+public:
+	void Init(SDL_Window* window, SDL_GLContext context);
+	void Done();
+
+	// Split in two (instead of one "Update()") on purpose: io.WantCaptureMouse/
+	// WantCaptureKeyboard only become correct for *this* batch of input AFTER
+	// ImGui::NewFrame() has processed it - so the caller must feed every SDL
+	// event first (FeedEvent), then call BeginFrame(), and only *after* that
+	// check WantCaptureMouse()/WantCaptureKeyboard() to decide whether each
+	// buffered keyboard/mouse event should also reach the emulator. Checking
+	// those flags before BeginFrame() makes the very first click on a
+	// still-unseen menu item read as "not over the UI" and leak through to
+	// the emulator - see platform/sdl2/sdl2_mouse.cpp, which has no bounds
+	// check of its own and grabs the mouse unconditionally on any click it
+	// receives while the window isn't already grabbed.
+	void BeginFrame();
+	void EndFrame();
+
+private:
+	bool m_inited = false; // guards Done() against running without a matching Init() (see sdl2_desktop_video.cpp's graphics_inited comment - same failure class)
+	float m_font_baked_scale = 0.0f;
+	eSystemTheme m_current_theme = eSystemTheme::Dark; // overwritten by DetectSystemTheme() before first use, in Init()
+	Uint32 m_last_theme_check_ms = 0;
+
+	// Loads (or reloads) the font atlas at the given DPI scale and uploads
+	// it to the GPU. Called once from Init(), and again from BeginFrame()
+	// whenever the effective scale changes (window dragged to a
+	// different-DPI monitor, or a fullscreen toggle lands on a different
+	// effective resolution) - baking once at startup and never adjusting
+	// left the fixed-resolution glyph bitmap being GPU-scaled to whatever
+	// the *current* scale happened to be, which looks aliased/blurry
+	// instead of crisp.
+	void LoadFont(float dpi_scale);
+};
+
+void ImGuiBackend::LoadFont(float dpi_scale)
 {
 	ImGuiIO& io = ImGui::GetIO();
 	io.Fonts->Clear();
@@ -234,7 +319,7 @@ static void LoadFont(float dpi_scale)
 	cfg.PixelSnapH = true; // snap glyph advances to whole pixels - keeps small text crisp instead of blurring across pixel boundaries
 
 	const char* font_path = "res/font/Roboto-Regular.ttf";
-	ImFont* font = NULL;
+	ImFont* font = nullptr;
 	if(FileExists(font_path))
 		font = io.Fonts->AddFontFromFileTTF(font_path, 18.0f * dpi_scale, &cfg, io.Fonts->GetGlyphRangesCyrillic());
 	if(!font)
@@ -242,15 +327,15 @@ static void LoadFont(float dpi_scale)
 
 	io.Fonts->Build();
 
-	g_font_baked_scale = dpi_scale;
+	m_font_baked_scale = dpi_scale;
 }
 
-void Init(SDL_Window* window, SDL_GLContext context)
+void ImGuiBackend::Init(SDL_Window* window, SDL_GLContext context)
 {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
-	io.IniFilename = NULL; // window state is already persisted via xOptions; skip imgui.ini
+	io.IniFilename = nullptr; // window state is already persisted via xOptions; skip imgui.ini
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
 	int win_w = 1, win_h = 1, drawable_w = 1, drawable_h = 1;
@@ -260,27 +345,100 @@ void Init(SDL_Window* window, SDL_GLContext context)
 	if(dpi_scale < 1.0f)
 		dpi_scale = 1.0f;
 
-	g_current_theme = DetectSystemTheme();
-	ApplyStyle(dpi_scale, g_current_theme);
-	g_last_theme_check_ms = SDL_GetTicks();
+	m_current_theme = DetectSystemTheme();
+	ApplyStyle(dpi_scale, m_current_theme);
+	m_last_theme_check_ms = SDL_GetTicks();
 
 	ImGui_ImplSDL2_InitForOpenGL(window, context);
 	ImGui_ImplOpenGL3_Init("#version 330");
 
 	LoadFont(dpi_scale); // after backend Init() - DestroyFontsTexture()/CreateFontsTexture() need it ready
 
-	g_imgui_inited = true;
+	m_inited = true;
 }
 
-void Done()
+void ImGuiBackend::Done()
 {
-	if(!g_imgui_inited)
+	if(!m_inited)
 		return;
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplSDL2_Shutdown();
 	ImGui::DestroyContext();
-	g_imgui_inited = false;
+	m_inited = false;
 }
+
+void ImGuiBackend::BeginFrame()
+{
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplSDL2_NewFrame();
+
+	// ImGui_ImplSDL2_NewFrame() just recomputed io.DisplayFramebufferScale
+	// from the window's current drawable-vs-logical size ratio - if that
+	// differs meaningfully from what the font/style were last baked/scaled
+	// for (window dragged to a different-DPI monitor, or a fullscreen
+	// toggle landed on a different effective resolution), rebake now rather
+	// than letting the old, fixed-resolution glyph bitmap get GPU-scaled to
+	// the new size, which is what read as aliased/blurry text.
+	float dpi_scale = ImGui::GetIO().DisplayFramebufferScale.x;
+	if(dpi_scale < 1.0f)
+		dpi_scale = 1.0f;
+	bool dpi_changed = std::abs(dpi_scale - m_font_baked_scale) > 0.05f;
+
+	// DetectSystemTheme() shells out on Linux (gsettings) and hits the
+	// registry/CFPreferences on Windows/macOS - cheap individually, but not
+	// something to redo every single frame at 60+ fps for no reason. Once a
+	// second is frequent enough that a live OS theme switch while the
+	// emulator is running feels immediate, without measurable overhead.
+	Uint32 now = SDL_GetTicks();
+	bool theme_changed = false;
+	if(now - m_last_theme_check_ms >= 1000)
+	{
+		m_last_theme_check_ms = now;
+		eSystemTheme detected = DetectSystemTheme();
+		if(detected != m_current_theme)
+		{
+			m_current_theme = detected;
+			theme_changed = true;
+		}
+	}
+
+	if(dpi_changed || theme_changed)
+	{
+		ApplyStyle(dpi_scale, m_current_theme);
+		if(dpi_changed)
+			LoadFont(dpi_scale);
+	}
+
+	ImGui::NewFrame();
+}
+
+void ImGuiBackend::EndFrame()
+{
+	// wx_frame.cpp's ShowFullScreen(true, wxFULLSCREEN_ALL) hides the menu
+	// bar and status bar along with the window chrome; matching that here
+	// means not drawing them at all while fullscreen, rather than leaving
+	// them floating over the game image. Already-open floating windows
+	// (Options, file browser, About) are left alone either way - a fullscreen
+	// toggle happening while one is open shouldn't make it unreachable.
+	bool fullscreen = false;
+	{
+		xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("full screen");
+		if(op)
+			fullscreen = *op;
+	}
+	if(!fullscreen)
+	{
+		DrawMenuBar();
+		g_status_bar.Draw();
+	}
+	DrawMenuDialogs();
+	DrawOptionsDialog();
+
+	ImGui::Render();
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+static ImGuiBackend g_backend;
 
 // ---------------------------------------------------------------------------
 // Generic xOptions <-> ImGui widget helpers - used by both the menu bar
@@ -336,117 +494,32 @@ void OptionSliderInt(const char* option_name, const char* label, int lo, int hi)
 }
 
 // ---------------------------------------------------------------------------
-// Persistent status bar - equivalent of wxFrame::SetStatusText(): one line,
-// always visible at the bottom, replaced (not queued) by the next call.
-// Matches wx exactly, including the default "Ready..." text (set from
-// sdl2_desktop_menu.cpp at startup, mirroring Frame::Frame()).
+// Public API - thin facades over the g_backend/g_status_bar instances above.
 // ---------------------------------------------------------------------------
-
-static char g_status_text[256] = "";
 
 void SetStatusText(const char* text)
 {
-	strncpy(g_status_text, text, sizeof(g_status_text) - 1);
-	g_status_text[sizeof(g_status_text) - 1] = 0;
+	g_status_bar.Set(text);
 }
 
-static void DrawStatusBar()
+void Init(SDL_Window* window, SDL_GLContext context)
 {
-	const ImGuiViewport* vp = ImGui::GetMainViewport();
-	float h = ImGui::GetFrameHeight();
-	ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x, vp->WorkPos.y + vp->WorkSize.y - h));
-	ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x, h));
-	ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-		ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings |
-		ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 2));
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-	if(ImGui::Begin("##statusbar", NULL, flags))
-		ImGui::TextUnformatted(g_status_text);
-	ImGui::End();
-	ImGui::PopStyleVar(2);
+	g_backend.Init(window, context);
 }
 
-// Split in two (instead of one "Update()") on purpose: io.WantCaptureMouse/
-// WantCaptureKeyboard only become correct for *this* batch of input AFTER
-// ImGui::NewFrame() has processed it - so the caller must feed every SDL
-// event first (FeedEvent), then call BeginFrame(), and only *after* that
-// check WantCaptureMouse()/WantCaptureKeyboard() to decide whether each
-// buffered keyboard/mouse event should also reach the emulator. Checking
-// those flags before BeginFrame() makes the very first click on a
-// still-unseen menu item read as "not over the UI" and leak through to the
-// emulator - see platform/sdl2/sdl2_mouse.cpp,
-// which has no bounds check of its own and grabs the mouse unconditionally
-// on any click it receives while the window isn't already grabbed.
+void Done()
+{
+	g_backend.Done();
+}
+
 void BeginFrame()
 {
-	ImGui_ImplOpenGL3_NewFrame();
-	ImGui_ImplSDL2_NewFrame();
-
-	// ImGui_ImplSDL2_NewFrame() just recomputed io.DisplayFramebufferScale
-	// from the window's current drawable-vs-logical size ratio - if that
-	// differs meaningfully from what the font/style were last baked/scaled
-	// for (window dragged to a different-DPI monitor, or a fullscreen
-	// toggle landed on a different effective resolution), rebake now rather
-	// than letting the old, fixed-resolution glyph bitmap get GPU-scaled to
-	// the new size, which is what read as aliased/blurry text.
-	float dpi_scale = ImGui::GetIO().DisplayFramebufferScale.x;
-	if(dpi_scale < 1.0f)
-		dpi_scale = 1.0f;
-	bool dpi_changed = std::abs(dpi_scale - g_font_baked_scale) > 0.05f;
-
-	// DetectSystemTheme() shells out on Linux (gsettings) and hits the
-	// registry/CFPreferences on Windows/macOS - cheap individually, but not
-	// something to redo every single frame at 60+ fps for no reason. Once a
-	// second is frequent enough that a live OS theme switch while the
-	// emulator is running feels immediate, without measurable overhead.
-	Uint32 now = SDL_GetTicks();
-	bool theme_changed = false;
-	if(now - g_last_theme_check_ms >= 1000)
-	{
-		g_last_theme_check_ms = now;
-		eSystemTheme detected = DetectSystemTheme();
-		if(detected != g_current_theme)
-		{
-			g_current_theme = detected;
-			theme_changed = true;
-		}
-	}
-
-	if(dpi_changed || theme_changed)
-	{
-		ApplyStyle(dpi_scale, g_current_theme);
-		if(dpi_changed)
-			LoadFont(dpi_scale);
-	}
-
-	ImGui::NewFrame();
+	g_backend.BeginFrame();
 }
 
 void EndFrame()
 {
-	// wx_frame.cpp's ShowFullScreen(true, wxFULLSCREEN_ALL) hides the menu
-	// bar and status bar along with the window chrome; matching that here
-	// means not drawing them at all while fullscreen, rather than leaving
-	// them floating over the game image. Already-open floating windows
-	// (Options, file browser, About) are left alone either way - a fullscreen
-	// toggle happening while one is open shouldn't make it unreachable.
-	bool fullscreen = false;
-	{
-		xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("full screen");
-		if(op)
-			fullscreen = *op;
-	}
-	if(!fullscreen)
-	{
-		DrawMenuBar();
-		DrawStatusBar();
-	}
-	DrawMenuDialogs();
-	DrawOptionsDialog();
-
-	ImGui::Render();
-	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	g_backend.EndFrame();
 }
 
 void FeedEvent(const SDL_Event& e)
@@ -476,4 +549,3 @@ void LightweightShadersMessage(bool prev_use_lightweight, bool use_lightweight)
 //namespace xPlatform
 
 #endif//USE_SDL2_DESKTOP
-

@@ -39,13 +39,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //  of SDL_PollEvent() there. Here SDL also owns the window/keyboard/mouse
 //  event queue, so there can only be one place draining it.
 //
-//  Deliberately NOT reusing platform/sdl2/sdl2_joystick.cpp: that file is a
-//  different, older gamepad model entirely - one fixed hard-coded mapping
-//  for a single controller, no per-player assignment, no remapping UI. The
-//  wx GUI this platform is replicating exposes the richer per-player/
-//  per-button-remappable model below, so this is what the "Gamepads" tab
-//  (sdl2_desktop_options.cpp) and gameplay input (sdl2_desktop.cpp) both
-//  need to actually match it.
 // =============================================================================
 
 #ifdef USE_SDL2_DESKTOP
@@ -54,6 +47,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <SDL.h>
 #include <array>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 #include <map>
@@ -150,10 +144,22 @@ public:
     void RefreshDeviceState(int device_index);
 
 private:
-    std::array<SDL_GameController*, 16> m_controllers{};
-    std::array<GamepadState, 16> m_states;
-    std::array<bool, 16> m_connected{false};
-    std::array<SDL_JoystickID, 16> m_instance_ids{};
+    static constexpr int kMaxControllers = 16;
+
+    // RAII wrapper for SDL_GameController*: each slot auto-closes on
+    // destruction or reassignment via SDL_GameControllerClose, eliminating
+    // the possibility of a forgotten close or double-close that the manual
+    // open/close in Initialize()/Shutdown()/HandleControllerEvent() carried.
+    // Stateful deleter: always callable regardless of how the unique_ptr was
+    // constructed.
+    struct ControllerDeleter {
+        void operator()(SDL_GameController* gc) const noexcept { SDL_GameControllerClose(gc); }
+    };
+    using ControllerPtr = std::unique_ptr<SDL_GameController, ControllerDeleter>;
+    std::array<ControllerPtr, kMaxControllers> m_controllers{};
+    std::array<GamepadState, kMaxControllers> m_states;
+    std::array<bool, kMaxControllers> m_connected{false};
+    std::array<SDL_JoystickID, kMaxControllers> m_instance_ids{};
 
     void UpdateDevice(int device_index);
     int SlotForInstanceId(SDL_JoystickID instance_id) const;
@@ -189,6 +195,22 @@ private:
         bool up = false, down = false, left = false, right = false;
         bool fire1 = false, fire2 = false;
     };
+
+    // Single source of truth for the emulated-input -> (per-player state bit,
+    // ZX keyboard key) mapping, shared by ProcessEvent() and ReleaseAll().
+    struct InputKey {
+        EEmulatedJoystickInput input;
+        bool PlayerInternalState::* state_ptr;
+        char key;
+    };
+    static constexpr std::array<InputKey, 6> kInputs = {{
+        {EEmulatedJoystickInput::UP,    &PlayerInternalState::up,    'u'},
+        {EEmulatedJoystickInput::DOWN,  &PlayerInternalState::down,  'd'},
+        {EEmulatedJoystickInput::LEFT,  &PlayerInternalState::left,  'l'},
+        {EEmulatedJoystickInput::RIGHT, &PlayerInternalState::right, 'r'},
+        {EEmulatedJoystickInput::FIRE1, &PlayerInternalState::fire1, 'f'},
+        {EEmulatedJoystickInput::FIRE2, &PlayerInternalState::fire2, 'e'}
+    }};
 
     std::array<PlayerInternalState, 2> m_player_states;
 

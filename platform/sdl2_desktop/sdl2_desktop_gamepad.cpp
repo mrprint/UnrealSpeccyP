@@ -16,9 +16,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Port of platform/wxwidgets/wx_gamepad.cpp + joystick_mapper.cpp - see the
-// header for why this is a copy rather than a shared #include.
-
 #include "../platform.h"
 
 #ifdef USE_SDL2_DESKTOP
@@ -57,12 +54,14 @@ void WxGamepadBackend::Initialize() {
         return;
     }
 
-    for (int i = 0; i < num_joysticks && i < 16; ++i) {
+    for (int i = 0; i < num_joysticks && i < kMaxControllers; ++i) {
         if (SDL_IsGameController(i)) {
-            m_controllers[i] = SDL_GameControllerOpen(i);
+            // unique_ptr takes ownership: auto-closes on slot reassignment or
+            // backend destruction, no manual SDL_GameControllerClose needed.
+            m_controllers[i].reset(SDL_GameControllerOpen(i));
             if (m_controllers[i]) {
                 m_connected[i] = true;
-                m_instance_ids[i] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_controllers[i]));
+                m_instance_ids[i] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_controllers[i].get()));
                 UpdateDevice(i);
             } else {
                 const char* error = SDL_GetError();
@@ -76,18 +75,18 @@ void WxGamepadBackend::Initialize() {
 }
 
 void WxGamepadBackend::Shutdown() {
-    for (int i = 0; i < 16; ++i) {
-        if (m_controllers[i]) {
-            SDL_GameControllerClose(m_controllers[i]);
-            m_controllers[i] = nullptr;
-            m_connected[i] = false;
-            m_instance_ids[i] = -1;
-        }
+    // unique_ptr's destructor calls SDL_GameControllerClose on each non-null
+    // slot automatically — no manual close loop needed. We still clear the
+    // bookkeeping arrays so a subsequent Initialize() starts clean.
+    for (int i = 0; i < kMaxControllers; ++i) {
+        m_controllers[i].reset();
+        m_connected[i] = false;
+        m_instance_ids[i] = -1;
     }
 }
 
 int WxGamepadBackend::SlotForInstanceId(SDL_JoystickID instance_id) const {
-    for (int i = 0; i < 16; ++i) {
+    for (int i = 0; i < kMaxControllers; ++i) {
         if (m_connected[i] && m_instance_ids[i] == instance_id)
             return i;
     }
@@ -102,10 +101,12 @@ void WxGamepadBackend::HandleControllerEvent(const SDL_Event& event,
         case SDL_CONTROLLERDEVICEADDED: {
             int which = event.cdevice.which; // device index for ADDED
 
-            if (which >= 0 && which < 16 && m_connected[which])
+            if (which >= 0 && which < kMaxControllers && m_connected[which])
                 break;
 
-            SDL_GameController* controller = SDL_GameControllerOpen(which);
+            // unique_ptr takes ownership on success; .reset() auto-closes the
+            // old controller in that slot (if any) before storing the new one.
+            ControllerPtr controller(SDL_GameControllerOpen(which), ControllerDeleter{});
             if (!controller) {
                 const char* err = SDL_GetError();
                 SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
@@ -115,14 +116,15 @@ void WxGamepadBackend::HandleControllerEvent(const SDL_Event& event,
                 break;
             }
 
-            if (which >= 0 && which < 16) {
-                m_controllers[which] = controller;
+            if (which >= 0 && which < kMaxControllers) {
+                m_controllers[which] = std::move(controller);
                 m_connected[which] = true;
-                m_instance_ids[which] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller));
+                m_instance_ids[which] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_controllers[which].get()));
                 UpdateDevice(which);
                 if (on_device_added) on_device_added(which);
             } else {
-                SDL_GameControllerClose(controller);
+                // Out of range — controller unique_ptr goes out of scope and
+                // auto-closes via its deleter. No manual close needed.
                 SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                     "Game controller index %d out of range", which);
             }
@@ -135,8 +137,8 @@ void WxGamepadBackend::HandleControllerEvent(const SDL_Event& event,
 
             if (slot >= 0 && m_controllers[slot]) {
                 m_connected[slot] = false;
-                SDL_GameControllerClose(m_controllers[slot]);
-                m_controllers[slot] = nullptr;
+                // unique_ptr's reset() calls SDL_GameControllerClose automatically.
+                m_controllers[slot].reset();
                 m_states[slot] = GamepadState();
                 if (on_device_removed) on_device_removed(slot);
             }
@@ -164,9 +166,6 @@ void WxGamepadBackend::HandleControllerEvent(const SDL_Event& event,
 void WxGamepadBackend::PollEvents(
     std::function<void(int)> on_device_added,
     std::function<void(int)> on_device_removed) {
-    // Not used by sdl2_desktop.cpp (it owns the single SDL_PollEvent() loop
-    // and calls HandleControllerEvent() per-event instead), kept for parity
-    // with the ported source and in case some future caller wants it.
     SDL_Event event;
     while (SDL_PollEvent(&event))
         HandleControllerEvent(event, on_device_added, on_device_removed);
@@ -208,7 +207,7 @@ std::vector<WxGamepadBackend::DeviceInfo> WxGamepadBackend::EnumerateDevices() {
 const GamepadState& WxGamepadBackend::GetState(int device_index) const {
     static const GamepadState empty_state{};
 
-    if (device_index >= 0 && device_index < 16 && m_connected[device_index])
+    if (device_index >= 0 && device_index < kMaxControllers && m_connected[device_index])
         return m_states[device_index];
 
     return empty_state;
@@ -217,7 +216,7 @@ const GamepadState& WxGamepadBackend::GetState(int device_index) const {
 void WxGamepadBackend::UpdateDevice(int device_index) {
     if (!m_controllers[device_index] || !m_connected[device_index]) return;
 
-    SDL_GameController* gc = m_controllers[device_index];
+    SDL_GameController* gc = m_controllers[device_index].get();
     GamepadState& state = m_states[device_index];
 
     SDL_GameControllerUpdate();
@@ -289,14 +288,16 @@ void WxGamepadBackend::UpdateDevice(int device_index) {
 }
 
 void WxGamepadBackend::RefreshDeviceState(int device_index) {
-    if (device_index < 0 || device_index >= 16) return;
+    if (device_index < 0 || device_index >= kMaxControllers) return;
 
     if (m_connected[device_index] && m_controllers[device_index]) {
         UpdateDevice(device_index);
         return;
     }
 
-    SDL_GameController* controller = SDL_GameControllerOpen(device_index);
+    // unique_ptr takes ownership: auto-closes on slot reassignment or backend
+    // destruction. .reset() replaces any existing controller in this slot.
+    ControllerPtr controller(SDL_GameControllerOpen(device_index), ControllerDeleter{});
     if (!controller) {
         const char* error = SDL_GetError();
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
@@ -306,9 +307,9 @@ void WxGamepadBackend::RefreshDeviceState(int device_index) {
         return;
     }
 
-    m_controllers[device_index] = controller;
+    m_controllers[device_index] = std::move(controller);
     m_connected[device_index] = true;
-    m_instance_ids[device_index] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller));
+    m_instance_ids[device_index] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_controllers[device_index].get()));
     UpdateDevice(device_index);
 }
 
@@ -555,22 +556,7 @@ std::vector<JoystickMapper::EmulatedKeyEvent> JoystickMapper::ProcessEvent(
 
     auto& internal_state = m_player_states[player_index];
 
-    struct InputCheck {
-        EEmulatedJoystickInput input;
-        bool PlayerInternalState::* state_ptr;
-        char key;
-    };
-
-    static const std::array<InputCheck, 6> checks = {{
-        {EEmulatedJoystickInput::UP,    &PlayerInternalState::up,    'u'},
-        {EEmulatedJoystickInput::DOWN,  &PlayerInternalState::down,  'd'},
-        {EEmulatedJoystickInput::LEFT,  &PlayerInternalState::left,  'l'},
-        {EEmulatedJoystickInput::RIGHT, &PlayerInternalState::right, 'r'},
-        {EEmulatedJoystickInput::FIRE1, &PlayerInternalState::fire1, 'f'},
-        {EEmulatedJoystickInput::FIRE2, &PlayerInternalState::fire2, 'e'}
-    }};
-
-    for (const auto& check : checks) {
+    for (const auto& check : kInputs) {
         auto it = profile.input_map.find(check.input);
         if (it == profile.input_map.end()) continue;
 
@@ -593,24 +579,10 @@ std::vector<JoystickMapper::EmulatedKeyEvent> JoystickMapper::ReleaseAll(int pla
 
     auto& internal_state = m_player_states[player_index];
 
-    struct HeldKey {
-        bool PlayerInternalState::* state_ptr;
-        char key;
-    };
-
-    static const std::array<HeldKey, 6> keys = {{
-        {&PlayerInternalState::up,    'u'},
-        {&PlayerInternalState::down,  'd'},
-        {&PlayerInternalState::left,  'l'},
-        {&PlayerInternalState::right, 'r'},
-        {&PlayerInternalState::fire1, 'f'},
-        {&PlayerInternalState::fire2, 'e'}
-    }};
-
-    for (const auto& k : keys) {
-        if (internal_state.*(k.state_ptr)) {
-            result.push_back({k.key, false});
-            internal_state.*(k.state_ptr) = false;
+    for (const auto& check : kInputs) {
+        if (internal_state.*(check.state_ptr)) {
+            result.push_back({check.key, false});
+            internal_state.*(check.state_ptr) = false;
         }
     }
     return result;

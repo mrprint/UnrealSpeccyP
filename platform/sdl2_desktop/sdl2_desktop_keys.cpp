@@ -16,27 +16,11 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// =============================================================================
-//  platform/sdl2_desktop/sdl2_desktop_keys.cpp
-//
-//  NOT a reuse of platform/sdl2/sdl2_keys.cpp - that file's PreProcessKey()
-//  hard-codes its own, different shortcut scheme (F2=quicksave, F3=quickload,
-//  F8=hold-to-fast-forward), which collides with wxwidgets's actual F-key
-//  menu accelerators (F2=Save dialog, F3=Open dialog, F8=True speed toggle,
-//  etc - see platform/wxwidgets/wx_frame.cpp's SHORTCUT_* defines). Since
-//  the goal here is to reproduce the wx GUI exactly, this platform needs its
-//  own shortcut set, not the old SDL2 platform's.
-//
-//  TranslateKey() below - the actual physical-key -> ZX-Spectrum-key table -
-//  is copied verbatim from sdl2_keys.cpp: that part is not GUI/shortcut
-//  logic, just raw keyboard mapping, and is correct as-is.
-//
-//  In the wx build, F-keys/Ctrl+.../Ctrl+Shift+... never reach TranslateKey()
-//  at all - wx's own menu accelerator table intercepts them before they
-//  become ordinary key events (see wx_keys.cpp, which has no F-key handling
-//  whatsoever). HandleMenuShortcut() (sdl2_desktop_menu.cpp) reproduces that
-//  interception here.
-// =============================================================================
+// In the wx build, F-keys/Ctrl+.../Ctrl+Shift+... never reach TranslateKey()
+// at all - wx's own menu accelerator table intercepts them before they
+// become ordinary key events (see wx_keys.cpp, which has no F-key handling
+// whatsoever). HandleMenuShortcut() (sdl2_desktop_menu.cpp) reproduces that
+// interception here.
 
 #include "../platform.h"
 

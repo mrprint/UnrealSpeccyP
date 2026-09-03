@@ -25,28 +25,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //  wording, order, grouping and the SHORTCUT_* keys below are copied from
 //  wx_frame.cpp as closely as ImGui's model allows.
 //
-//  Differences from wx_frame.cpp, and why:
-//   - No wxMenuItem::Check() bookkeeping: every checkable item just reads
-//     its xOption live each frame (xImGui::OptionCheckbox et al.), so there
-//     is nothing to keep in sync after the Options dialog closes - wx's
-//     Frame::OnOptions() has to manually re-run UpdateBoolOption() for the
-//     three View toggles after ShowModal() returns; here that call simply
-//     isn't needed.
-//   - Open/Save use the in-engine file browser (sdl2_desktop_filedialog.*)
-//     instead of a native wxFileDialog - see that header for why (no OS
-//     modal loop to keep the single-threaded frame model simple). Wildcard
-//     groups and the save-time default-extension logic are copied from
-//     Frame::OnOpenFile()/OnSaveFile() as closely as that model allows.
-//   - No NVIDIA-driver warning dialog: that warning exists in the wx build
-//     specifically because of NVIDIA's "Threaded Optimization" driver
-//     feature interacting badly with wx_canvas.cpp's cross-thread GL
-//     context hand-off (see the architecture discussion on why this
-//     platform is single-threaded in the first place). That failure mode
-//     does not exist here, so showing the same warning would be actively
-//     misleading.
-//   - No Mac-only items (Minimize/Zoom window-menu entries, RawCtrl
-//     shortcuts, About-in-File-menu) - this platform targets the same
-//     non-Mac accelerator set wx_frame.cpp uses for Windows/Linux.
 // =============================================================================
 
 #include "../platform.h"
@@ -158,12 +136,23 @@ static void OnTapeToggle()
 	}
 }
 
-static void OnTapeFastToggle()
+// Flips a bool xOption and reports the result on the status bar - the exact
+// same three lines that OnTrueSpeedToggle/OnMode48kToggle/
+// OnViewGigascreenToggle/OnViewScanlinesToggle/OnViewPalEffectsToggle used to
+// each repeat as a whole separate function, with only the option name and
+// on/off message text changed; call sites now just pass those three things
+// in directly (see DrawMenuBar()/HandleMenuShortcut() below) instead of
+// going through a named wrapper per option.
+// (OnFullScreenToggle/OnPauseToggle/OnTapeToggle/OnQuickLoad/OnQuickSave/
+// OnReset each do something extra beyond this shape - no status message, an
+// additional Handler() call, ->Change() instead of ->Set(!*) - so those keep
+// their own functions rather than being forced in here.
+static void ToggleBoolOption(const char* option_name, const char* on_msg, const char* off_msg)
 {
-	xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("fast tape");
+	xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find(option_name);
 	if(!op) return;
 	op->Set(!*op);
-	SetStatusText(*op ? "Fast tape on" : "Fast tape off");
+	SetStatusText(*op ? on_msg : off_msg);
 }
 
 static void OnPauseToggle()
@@ -181,62 +170,6 @@ static void OnPauseToggle()
 		Handler()->VideoPaused(false);
 		SetStatusText("Ready...");
 	}
-}
-
-static void OnTrueSpeedToggle()
-{
-	xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("true speed");
-	if(!op) return;
-	op->Set(!*op);
-	SetStatusText(*op ? "True speed (50Hz mode) on" : "True speed off");
-}
-
-static void OnMode48kToggle()
-{
-	xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("mode 48k");
-	if(!op) return;
-	op->Set(!*op);
-	SetStatusText(*op ? "Mode 48k on" : "Mode 48k off");
-}
-
-static void OnResetToServiceRomToggle()
-{
-	xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("reset to service rom");
-	if(!op) return;
-	op->Set(!*op);
-	SetStatusText(*op ? "Reset to service ROM" : "Reset to usual ROM");
-}
-
-static void OnAutoPlayImageToggle()
-{
-	xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("auto play image");
-	if(!op) return;
-	op->Set(!*op);
-	SetStatusText(*op ? "Auto launch on" : "Auto launch off");
-}
-
-static void OnViewGigascreenToggle()
-{
-	xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("gigascreen");
-	if(!op) return;
-	op->Set(!*op);
-	SetStatusText(*op ? "Gigascreen on" : "Gigascreen off");
-}
-
-static void OnViewScanlinesToggle()
-{
-	xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("scanlines");
-	if(!op) return;
-	op->Set(!*op);
-	SetStatusText(*op ? "CRT scanlines simulation on" : "CRT scanlines simulation off");
-}
-
-static void OnViewPalEffectsToggle()
-{
-	xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("pal effects");
-	if(!op) return;
-	op->Set(!*op);
-	SetStatusText(*op ? "PAL effects on" : "PAL effects off");
 }
 
 static void OnQuickLoad()
@@ -294,8 +227,8 @@ bool HandleMenuShortcut(SDL_Event& e)
 		case SDLK_F6:  if(down && g_quick_save_enabled) OnQuickSave(); return true;
 		case SDLK_F5:  if(down) OnTapeToggle();               return true;
 		case SDLK_F7:  if(down) OnPauseToggle();              return true;
-		case SDLK_F8:  if(down) OnTrueSpeedToggle();          return true;
-		case SDLK_F9:  if(down) OnMode48kToggle();            return true;
+		case SDLK_F8:  if(down) ToggleBoolOption("true speed", "True speed (50Hz mode) on", "True speed off"); return true;
+		case SDLK_F9:  if(down) ToggleBoolOption("mode 48k", "Mode 48k on", "Mode 48k off"); return true;
 		case SDLK_F12: if(down) OnReset();                    return true;
 		default: break;
 		}
@@ -318,9 +251,9 @@ bool HandleMenuShortcut(SDL_Event& e)
 		case SDLK_1: if(down) SetZoom(0);                return true;
 		case SDLK_2: if(down) SetZoom(1);                return true;
 		case SDLK_3: if(down) SetZoom(2);                return true;
-		case SDLK_g: if(down) OnViewGigascreenToggle();  return true;
-		case SDLK_s: if(down) OnViewScanlinesToggle();   return true;
-		case SDLK_p: if(down) OnViewPalEffectsToggle();  return true;
+		case SDLK_g: if(down) ToggleBoolOption("gigascreen", "Gigascreen on", "Gigascreen off"); return true;
+		case SDLK_s: if(down) ToggleBoolOption("scanlines", "CRT scanlines simulation on", "CRT scanlines simulation off"); return true;
+		case SDLK_p: if(down) ToggleBoolOption("pal effects", "PAL effects on", "PAL effects off"); return true;
 		default: break;
 		}
 	}
@@ -371,17 +304,17 @@ void DrawMenuBar()
 		{
 			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("gigascreen");
 			if(op && ImGui::MenuItem("Gigascreen", "Ctrl+Shift+G", *op))
-				OnViewGigascreenToggle();
+				ToggleBoolOption("gigascreen", "Gigascreen on", "Gigascreen off");
 		}
 		{
 			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("scanlines");
 			if(op && ImGui::MenuItem("CRT scanlines", "Ctrl+Shift+S", *op))
-				OnViewScanlinesToggle();
+				ToggleBoolOption("scanlines", "CRT scanlines simulation on", "CRT scanlines simulation off");
 		}
 		{
 			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("pal effects");
 			if(op && ImGui::MenuItem("PAL effects", "Ctrl+Shift+P", *op))
-				OnViewPalEffectsToggle();
+				ToggleBoolOption("pal effects", "PAL effects on", "PAL effects off");
 		}
 		ImGui::Separator();
 		if(ImGui::MenuItem("Full screen", "Ctrl+F"))
@@ -404,12 +337,12 @@ void DrawMenuBar()
 		{
 			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("true speed");
 			if(op && ImGui::MenuItem("True speed", "F8", *op))
-				OnTrueSpeedToggle();
+				ToggleBoolOption("true speed", "True speed (50Hz mode) on", "True speed off");
 		}
 		{
 			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("mode 48k");
 			if(op && ImGui::MenuItem("Mode 48k", "F9", *op))
-				OnMode48kToggle();
+				ToggleBoolOption("mode 48k", "Mode 48k on", "Mode 48k off");
 		}
 		OptionCheckbox("reset to service rom", "Reset to service ROM");
 		if(ImGui::MenuItem("Reset", "F12"))
@@ -511,9 +444,7 @@ void DrawMenuDialogs()
 	DrawFileBrowser();
 }
 
-// See imgui_shared.h - deliberately excludes the file browser (checked via
-// FileBrowserActive(), already declared in this file for HandleMenuShortcut()
-// above).
+// See imgui_shared.h - deliberately excludes the file browser.
 bool AnyMenuDialogActive()
 {
 	return g_show_about || OptionsDialogActive();

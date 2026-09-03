@@ -71,26 +71,58 @@ namespace xPlatform
 // split across our own window's grab-driven handling and the console's
 // blind queuing) - looking exactly like a stuck mouse button. Suppressing
 // ENABLE_MOUSE_INPUT for the lifetime of our process stops any of this from
-// being queued in the first place; see Init()/Done() below.
+// being queued in the first place; see ConsoleModeGuard below.
+
 #ifdef _WINAPI
-static HANDLE s_console_input_handle = INVALID_HANDLE_VALUE;
-static DWORD s_console_input_mode = 0;
-static bool s_console_mode_saved = false;
+// RAII guard: saves the console input mode on construction, disables
+// ENABLE_MOUSE_INPUT (see comment above), and restores it + flushes stale
+// events on destruction — so whatever launched us (FAR Manager, cmd.exe)
+// resumes reading its console input from a clean slate instead of replaying
+// a stray, unmatched button transition. The destructor runs automatically at
+// scope exit or program termination, eliminating the manual save/restore pair
+// that was previously spread across Init()/Done().
+class ConsoleModeGuard {
+public:
+    ConsoleModeGuard() : handle_(INVALID_HANDLE_VALUE), mode_(0), saved_(false) {
+        handle_ = GetStdHandle(STD_INPUT_HANDLE);
+        if (handle_ != INVALID_HANDLE_VALUE && GetConsoleMode(handle_, &mode_)) {
+            saved_ = true;
+            SetConsoleMode(handle_, mode_ & ~ENABLE_MOUSE_INPUT);
+        }
+    }
+
+    ~ConsoleModeGuard() {
+        if (!saved_) return;
+        // Restore the console's own mouse-tracking mode exactly as we found it,
+        // then discard anything that queued up regardless (e.g. from a click
+        // right at the Init()/Done() edge, before/after the mode change above
+        // took effect) - so whatever launched us resumes reading its console
+        // input from a clean slate instead of replaying a stray, unmatched
+        // button transition. No-op if we were never attached to a real console.
+        SetConsoleMode(handle_, mode_);
+        FlushConsoleInputBuffer(handle_);
+    }
+
+private:
+    HANDLE handle_;
+    DWORD mode_;
+    bool saved_;
+};
 #endif//_WINAPI
 
 static struct eOptionSpeed : public xOptions::eOptionInt
 {
-	virtual const char* Name() const { return "speed"; }
-	virtual const char** Values() const
+	const char* Name() const override { return "speed"; }
+	const char** Values() const override
 	{
-		static const char* values[] = { "1x", "2x", "3x", "4x", "5x", "6x", "7x", "8x", "9x", "10x", NULL };
+		static const char* values[] = { "1x", "2x", "3x", "4x", "5x", "6x", "7x", "8x", "9x", "10x", nullptr };
 		return values;
 	}
-	virtual void Change(bool next = true)
+	void Change(bool next = true) override
 	{
 		eOptionInt::Change(0, 10, next);
 	}
-	virtual int Order() const { return 69; }
+	int Order() const override { return 69; }
 } op_speed;
 
 int OpSpeed() { return op_speed; }
@@ -118,7 +150,9 @@ void InitMenu();
 
 #ifdef SDL_USE_MOUSE
 void ProcessMouse(SDL_Event& e);
-extern SDL_Window* window; // sdl2_desktop_video.cpp - only used here to watch grab state for the status bar message
+// Non-owning access to the GLWindow's window handle (owned by sdl2_desktop_video.cpp).
+// Used here only to watch grab state for the status bar message.
+SDL_Window* GetVideoWindow();
 #endif//SDL_USE_MOUSE
 
 #ifndef SDL_DEFAULT_FOLDER
@@ -152,7 +186,7 @@ static const char* USP_HomePath()
 		return usp_home_path;
 	}
 #endif
-	return NULL;
+	return nullptr;
 }
 #endif//SDL_DEFAULT_FOLDER
 
@@ -189,16 +223,11 @@ bool Init()
 	SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
 
 #ifdef _WINAPI
-	// See the comment on s_console_mode_saved above. Independent of SDL/GL
-	// setup, so it doesn't matter whether this runs before or after
-	// SDL_Init() - only that it's undone in Done() below.
-	s_console_input_handle = GetStdHandle(STD_INPUT_HANDLE);
-	if(s_console_input_handle != INVALID_HANDLE_VALUE
-		&& GetConsoleMode(s_console_input_handle, &s_console_input_mode))
-	{
-		s_console_mode_saved = true;
-		SetConsoleMode(s_console_input_handle, s_console_input_mode & ~ENABLE_MOUSE_INPUT);
-	}
+	// RAII: ConsoleModeGuard saves the console mode on construction (disabling
+	// ENABLE_MOUSE_INPUT) and restores it + flushes stale events on destruction.
+	// Placed in a function-local static so its destructor runs at program exit,
+	// matching the previous Init()/Done() lifecycle without manual cleanup code.
+	static ConsoleModeGuard g_console_mode_guard;
 #endif//_WINAPI
 
 	Uint32 init_flags = SDL_INIT_VIDEO|SDL_INIT_AUDIO;
@@ -255,30 +284,12 @@ void Done()
 	DoneVideo();
 	if(sdl_inited)
 		SDL_Quit();
-#ifdef _WINAPI
-	// Restore the console's own mouse-tracking mode exactly as we found it,
-	// then discard anything that queued up regardless (e.g. from a click
-	// right at the Init()/Done() edge, before/after the mode change above
-	// took effect) - so whatever launched us (FAR Manager, cmd.exe, ...)
-	// resumes reading its console input from a clean slate instead of
-	// replaying a stray, unmatched button transition. No-op if we were
-	// never attached to a real console (s_console_mode_saved stays false).
-	if(s_console_mode_saved)
-	{
-		SetConsoleMode(s_console_input_handle, s_console_input_mode);
-		FlushConsoleInputBuffer(s_console_input_handle);
-		s_console_mode_saved = false;
-	}
-#endif//_WINAPI
 	Handler()->OnDone();
 }
 
 static bool quit = false;
 
 #ifdef SDL_USE_JOYSTICK
-// File-scope rather than function-local static: purely for readability (a
-// local `static` inside Loop1() is easy to misread as "reset every call"),
-// since this only ever runs from the one single-threaded loop either way.
 static JoystickMapper joystick_mapper;
 #endif//SDL_USE_JOYSTICK
 
@@ -389,9 +400,10 @@ void Loop1()
 				// (reused as-is) has no such notification of its own, so the
 				// same message is derived here instead, from the grab state
 				// before/after the call that might change it.
-				bool grabbed_before = SDL_GetWindowGrab(window) != SDL_FALSE;
+				SDL_Window* win = GetVideoWindow();
+				bool grabbed_before = SDL_GetWindowGrab(win) != SDL_FALSE;
 				ProcessMouse(ge);
-				bool grabbed_after = SDL_GetWindowGrab(window) != SDL_FALSE;
+				bool grabbed_after = SDL_GetWindowGrab(win) != SDL_FALSE;
 				if(grabbed_after != grabbed_before)
 					xImGui::SetStatusText(grabbed_after ? "Mouse captured, press ESC to cancel" : "Mouse released");
 			}
