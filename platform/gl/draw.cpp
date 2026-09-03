@@ -318,7 +318,7 @@ uniform int maskScale;        // Phosphor mask column width (pixels per phase)
 uniform vec2 fbSize;          // Size of input framebuffer
 
 // Precomputed constants (for readability and optimization)
-const float PI = 3.141592653589793;          // Precise π value
+const float PI = 3.141592653589793;          // Precise Pi value
 const float SLINES_CNT = 256.0;              // PAL scanline count per frame
 const float SLINE_LEN = 512.0;               // Horizontal scan line length
 
