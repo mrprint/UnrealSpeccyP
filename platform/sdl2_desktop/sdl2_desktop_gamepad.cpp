@@ -585,6 +585,37 @@ std::vector<JoystickMapper::EmulatedKeyEvent> JoystickMapper::ProcessEvent(
     return result;
 }
 
+std::vector<JoystickMapper::EmulatedKeyEvent> JoystickMapper::ReleaseAll(int player_index) {
+    std::vector<EmulatedKeyEvent> result;
+
+    if (player_index < 0 || player_index >= 2)
+        return result;
+
+    auto& internal_state = m_player_states[player_index];
+
+    struct HeldKey {
+        bool PlayerInternalState::* state_ptr;
+        char key;
+    };
+
+    static const std::array<HeldKey, 6> keys = {{
+        {&PlayerInternalState::up,    'u'},
+        {&PlayerInternalState::down,  'd'},
+        {&PlayerInternalState::left,  'l'},
+        {&PlayerInternalState::right, 'r'},
+        {&PlayerInternalState::fire1, 'f'},
+        {&PlayerInternalState::fire2, 'e'}
+    }};
+
+    for (const auto& k : keys) {
+        if (internal_state.*(k.state_ptr)) {
+            result.push_back({k.key, false});
+            internal_state.*(k.state_ptr) = false;
+        }
+    }
+    return result;
+}
+
 int ResolveDeviceIndexForGuid(const std::string& guid, int hinted_index, std::string* out_resolved_guid) {
     auto devices = GamepadBackend().EnumerateDevices();
 

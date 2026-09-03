@@ -405,7 +405,7 @@ void DrawVideoTab()
 	ImGui::SeparatorText("PAL Effects");
 	ImGui::Checkbox("Enable PAL effects", &g_pal_effects);
 	SliderRow("PAL Strength", &g_pal_strength, 0, 100, "%d%%");
-	SliderRow("Beam Spread", &g_beam_spread, 0, 200, "%.0f");
+	SliderRow("Beam Spread", &g_beam_spread, 0, 200, "%d");
 
 	ImGui::Spacing();
 	ImGui::Spacing();
@@ -533,9 +533,7 @@ void DrawPlayerSection(int player_idx)
 void DrawGamepadsTab()
 {
 	PollCapture();
-#ifdef SDL_USE_JOYSTICK
 	PollDeviceChanges();
-#endif
 
 	float half_w = ImGui::GetContentRegionAvail().x * 0.5f - 8.0f;
 	ImGui::BeginChild("##p1", ImVec2(half_w, 260), true);
@@ -688,4 +686,3 @@ void DrawOptionsDialog()
 }//namespace xPlatform
 
 #endif//USE_SDL2_DESKTOP
-

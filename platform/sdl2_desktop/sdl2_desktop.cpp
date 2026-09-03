@@ -423,12 +423,22 @@ void Loop1()
 		int hinted_index = OpHostGamepadDevice(player);
 		std::string resolved_guid;
 		profile.host_device_index = ResolveDeviceIndexForGuid(profile.device_guid, hinted_index, &resolved_guid);
-		if(!profile.IsEnabled())
-			continue;
 
-		GamepadBackend().RefreshDeviceState(profile.host_device_index);
-		const GamepadState& state = GamepadBackend().GetState(profile.host_device_index);
-		auto key_events = joystick_mapper.ProcessEvent(profile, player, state, profile.host_device_index);
+		std::vector<JoystickMapper::EmulatedKeyEvent> key_events;
+		if(profile.IsEnabled())
+		{
+			GamepadBackend().RefreshDeviceState(profile.host_device_index);
+			const GamepadState& state = GamepadBackend().GetState(profile.host_device_index);
+			key_events = joystick_mapper.ProcessEvent(profile, player, state, profile.host_device_index);
+		}
+		else
+		{
+			// Device just vanished for this player (unplugged, or its GUID no
+			// longer resolves to a live one) - release anything still held so
+			// it doesn't get stuck down. See ReleaseAll()'s comment.
+			key_events = joystick_mapper.ReleaseAll(player);
+		}
+
 		for(const auto& ke : key_events)
 		{
 			dword flags = OpJoyKeyFlags();
@@ -481,4 +491,3 @@ int main(int argc, char* argv[])
 }
 
 #endif//USE_SDL2_DESKTOP
-

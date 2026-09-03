@@ -23,6 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "sdl2_desktop_filedialog.h"
 #include "imgui.h"
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
 
@@ -44,7 +45,8 @@ struct BrowserState {
     std::string title;
     fs::path current_dir;
     std::vector<FileDialogFilter> filters;
-    int filter_index = 0; // index into filters; filters.size() itself means "All files"
+    int filter_index = 0; // index into filters; "All files" (if present) is just a normal
+                           // entry in filters with an empty extension list, not a sentinel value
     std::function<void(const std::string&)> on_confirm;
 
     std::vector<Entry> entries;
@@ -209,7 +211,7 @@ void OpenFileBrowser(const std::string& title, const std::string& start_dir,
     g_state.on_confirm = std::move(on_confirm);
 
     std::error_code ec;
-    fs::path dir = start_dir.empty() ? fs::current_path(ec) : fs::path(start_dir);
+    fs::path dir = start_dir.empty() ? fs::current_path(ec) : Utf8ToPath(start_dir);
     if (dir.empty() || !fs::exists(dir, ec))
         dir = fs::current_path(ec);
 
@@ -349,7 +351,8 @@ void DrawFileBrowser() {
                         name += "." + default_ext;
                 }
                 fs::path full = g_state.current_dir / Utf8ToPath(name);
-                if (fs::exists(full)) {
+                std::error_code exists_ec;
+                if (fs::exists(full, exists_ec)) {
                     g_state.show_overwrite_confirm = true;
                     g_state.overwrite_popup_pending_open = true;
                     g_state.overwrite_path = PathToUtf8(full);

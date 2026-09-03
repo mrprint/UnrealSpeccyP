@@ -175,6 +175,15 @@ public:
         const GamepadState& current_state,
         int device_index);
 
+    // Force-releases any keys still marked "held" for this player, without
+    // needing a live GamepadState. Call this when a profile's device has
+    // just gone from enabled to disabled (e.g. unplugged mid-press) -
+    // ProcessEvent() is never invoked in that case (see the SDL_USE_JOYSTICK
+    // block in sdl2_desktop.cpp), so without this the emulated key would
+    // stay stuck down until the device reconnects and its state happens to
+    // differ from what was last recorded here.
+    std::vector<EmulatedKeyEvent> ReleaseAll(int player_index);
+
 private:
     struct PlayerInternalState {
         bool up = false, down = false, left = false, right = false;
