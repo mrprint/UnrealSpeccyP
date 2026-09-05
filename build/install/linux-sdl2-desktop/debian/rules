@@ -14,7 +14,7 @@ LIBDIR = usr/lib/unreal-speccy-portable-sdl2-desktop
 override_dh_auto_configure:
 	dh_auto_configure --sourcedirectory=$(CMAKE_SOURCE) -- \
 		-DUSE_SDL=OFF \
-		-DUSE_SDL2=ON \
+		-DUSE_SDL2=OFF \
 		-DUSE_WX_WIDGETS=OFF \
 		-DUSE_SDL2_DESKTOP=ON \
 		-DUSE_SYS_LIBS=ON \

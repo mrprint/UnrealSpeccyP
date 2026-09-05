@@ -185,7 +185,7 @@ jobs:
         run: |
           dnf install -y \
             rpm-build rpmdevtools cmake gcc-c++ make \
-            pkgconfig(sdl2) glew-devel \
+            SDL2-devel glew-devel \
             mesa-libGL-devel libX11-devel \
             zlib-devel libpng-devel \
             minizip-ng-compat-devel tinyxml2-devel \

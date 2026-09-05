@@ -52,7 +52,7 @@ unreal-speccy-portable-wx (wxWidgets).
 %build
 %cmake -S build/cmake \
     -DUSE_SDL=OFF \
-    -DUSE_SDL2=ON \
+    -DUSE_SDL2=OFF \
     -DUSE_WX_WIDGETS=OFF \
     -DUSE_SDL2_DESKTOP=ON \
     -DUSE_SYS_LIBS=ON \
