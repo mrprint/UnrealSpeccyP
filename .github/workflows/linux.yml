@@ -149,6 +149,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: recursive
 
       - name: Install dependencies
         run: |
@@ -179,7 +181,12 @@ jobs:
     container:
       image: fedora:latest
     steps:
+      - name: Install git (needed by actions/checkout for submodules)
+        run: dnf install -y git
+
       - uses: actions/checkout@v7
+        with:
+          submodules: recursive
 
       - name: Install dependencies
         run: |
@@ -190,7 +197,7 @@ jobs:
             zlib-devel libpng-devel \
             minizip-ng-compat-devel tinyxml2-devel \
             desktop-file-utils shared-mime-info libappstream-glib \
-            rsync git findutils
+            rsync findutils
 
       - name: Build .rpm
         run: |
