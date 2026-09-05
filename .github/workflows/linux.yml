@@ -214,4 +214,3 @@ jobs:
           name: unreal-speccy-portable-sdl2-desktop_all_rpms.zip
           path: artifacts/*.rpm
           if-no-files-found: warn
-"}]

@@ -160,4 +160,3 @@ jobs:
           if-no-files-found: warn
           path: |
             build/cmake/build_win32_sdl2_desktop/*.msi
-"}]
