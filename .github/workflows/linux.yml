@@ -8,10 +8,17 @@ on:
 
 jobs:
   deb-ubuntu:
-    name: Deb (Ubuntu) SDL2 GLESv2 curl
-    runs-on: ubuntu-latest
+    name: Deb (${{ matrix.runner }}) SDL2 GLESv2 curl
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 100
+          fetch-tags: true
 
       - name: Install dependencies
         run: |
@@ -30,15 +37,23 @@ jobs:
       - name: Upload .deb
         uses: actions/upload-artifact@v7
         with:
+          name: linux-${{ matrix.runner }}
           path: artifacts/*.deb
           if-no-files-found: warn
           archive: false
 
   deb-ubuntu-wx:
-    name: Deb (Ubuntu) wxWidgets OpenAL GLEW
-    runs-on: ubuntu-latest
+    name: Deb (${{ matrix.runner }}) wxWidgets OpenAL GLEW
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 100
+          fetch-tags: true
 
       - name: Install dependencies
         run: |
@@ -59,17 +74,38 @@ jobs:
       - name: Upload .deb
         uses: actions/upload-artifact@v7
         with:
+          name: linux-${{ matrix.runner }}-wx
           path: artifacts/*.deb
           if-no-files-found: warn
           archive: false
 
   rpm-fedora:
-    name: RPM (Fedora) SDL2 GLESv2 curl
-    runs-on: ubuntu-latest
+    name: RPM (Fedora ${{ matrix.arch }}) SDL2 GLESv2 curl
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
     container:
       image: fedora:latest
     steps:
+      - name: Install git
+        run: dnf install -y git
+
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 100
+          fetch-tags: true
+
+      - id: ver
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          v=$(git describe --tags --always --dirty="-dev" 2>/dev/null || echo "unknown")
+          echo "version=${v#v}" >> $GITHUB_OUTPUT
 
       - name: Install dependencies
         run: |
@@ -77,7 +113,7 @@ jobs:
             rpm-build rpmdevtools cmake gcc-c++ make \
             SDL2-devel libcurl-devel zlib-devel libpng-devel \
             desktop-file-utils shared-mime-info libappstream-glib \
-            rsync git findutils
+            rsync findutils
 
       - name: Build .rpm
         run: |
@@ -91,24 +127,45 @@ jobs:
       - name: Upload .rpm
         uses: actions/upload-artifact@v7
         with:
-          path: artifacts/unreal-speccy-portable-0*x86_64.rpm
+          name: rpm-${{ matrix.arch }}
+          path: artifacts/unreal-speccy-portable-0*.${{ matrix.arch }}.rpm
           if-no-files-found: warn
           archive: false
 
       - name: Upload debug .rpms
         uses: actions/upload-artifact@v6
         with:
-          name: unreal-speccy-portable_all_rpms.zip
+          name: unreal-speccy-portable-${{ steps.ver.outputs.version }}-rpm-all-${{ matrix.arch }}.zip
           path: artifacts/*.rpm
           if-no-files-found: warn
 
   rpm-fedora-wx:
-    name: RPM (Fedora) wxWidgets OpenAL GLEW
-    runs-on: ubuntu-latest
+    name: RPM (Fedora ${{ matrix.arch }}) wxWidgets OpenAL GLEW
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
     container:
       image: fedora:latest
     steps:
+      - name: Install git
+        run: dnf install -y git
+
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 100
+          fetch-tags: true
+
+      - id: ver
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          v=$(git describe --tags --always --dirty="-dev" 2>/dev/null || echo "unknown")
+          echo "version=${v#v}" >> $GITHUB_OUTPUT
 
       - name: Install dependencies
         run: |
@@ -119,7 +176,7 @@ jobs:
             SDL2-devel zlib-devel libpng-devel \
             minizip-ng-compat-devel tinyxml2-devel \
             desktop-file-utils shared-mime-info libappstream-glib \
-            rsync git findutils
+            rsync findutils
 
       - name: Build .rpm
         run: |
@@ -133,24 +190,31 @@ jobs:
       - name: Upload .rpm
         uses: actions/upload-artifact@v7
         with:
-          path: artifacts/unreal-speccy-portable-wx-0*x86_64.rpm
+          name: rpm-${{ matrix.arch }}-wx
+          path: artifacts/unreal-speccy-portable-wx-0*.${{ matrix.arch }}.rpm
           if-no-files-found: warn
           archive: false
 
       - name: Upload debug .rpms
         uses: actions/upload-artifact@v6
         with:
-          name: unreal-speccy-portable-wx_all_rpms.zip
+          name: unreal-speccy-portable-wx-${{ steps.ver.outputs.version }}-rpm-all-${{ matrix.arch }}.zip
           path: artifacts/*.rpm
           if-no-files-found: warn
 
   deb-ubuntu-sdl2-desktop:
-    name: Deb (Ubuntu) SDL2 desktop OpenGL Dear ImGui
-    runs-on: ubuntu-latest
+    name: Deb (${{ matrix.runner }}) SDL2 desktop OpenGL Dear ImGui
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+          fetch-depth: 100
+          fetch-tags: true
 
       - name: Install dependencies
         run: |
@@ -171,22 +235,39 @@ jobs:
       - name: Upload .deb
         uses: actions/upload-artifact@v7
         with:
+          name: linux-${{ matrix.runner }}-sdl2-desktop
           path: artifacts/*.deb
           if-no-files-found: warn
           archive: false
 
   rpm-fedora-sdl2-desktop:
-    name: RPM (Fedora) SDL2 desktop OpenGL Dear ImGui
-    runs-on: ubuntu-latest
+    name: RPM (Fedora ${{ matrix.arch }}) SDL2 desktop OpenGL Dear ImGui
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
     container:
       image: fedora:latest
     steps:
-      - name: Install git (needed by actions/checkout for submodules)
+      - name: Install git
         run: dnf install -y git
 
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+          fetch-depth: 100
+          fetch-tags: true
+
+      - id: ver
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          v=$(git describe --tags --always --dirty="-dev" 2>/dev/null || echo "unknown")
+          echo "version=${v#v}" >> $GITHUB_OUTPUT
 
       - name: Install dependencies
         run: |
@@ -211,13 +292,14 @@ jobs:
       - name: Upload .rpm
         uses: actions/upload-artifact@v7
         with:
-          path: artifacts/unreal-speccy-portable-sdl2-desktop-0*x86_64.rpm
+          name: rpm-${{ matrix.arch }}-sdl2-desktop
+          path: artifacts/unreal-speccy-portable-sdl2-desktop-0*.${{ matrix.arch }}.rpm
           if-no-files-found: warn
           archive: false
 
       - name: Upload debug .rpms
         uses: actions/upload-artifact@v6
         with:
-          name: unreal-speccy-portable-sdl2-desktop_all_rpms.zip
+          name: unreal-speccy-portable-sdl2-desktop-${{ steps.ver.outputs.version }}-rpm-all-${{ matrix.arch }}.zip
           path: artifacts/*.rpm
           if-no-files-found: warn

@@ -11,6 +11,11 @@
 # CI: collect packages into a directory
 #   OUTPUT_DIR="${GITHUB_WORKSPACE}/artifacts" ./build/install/linux-wx/make_deb.sh
 #
+# Version from git:
+#   git describe --tags --always --dirty="-dev"
+#   tag 0.0.86.30           > 0.0.86.30-1
+#   0.0.86.30-3-g1abebfd    > 0.0.86.30+3.g1abebfd-1
+#
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -18,16 +23,39 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 DEBIAN_SRC="$SCRIPT_DIR/debian"
 DEBIAN_LINK="$REPO_ROOT/debian"
 OUTPUT_DIR="${OUTPUT_DIR:-}"
+CHANGELOG_BAK=""
 
 cd "$REPO_ROOT"
 
 cleanup() {
+    if [ -n "$CHANGELOG_BAK" ] && [ -f "$CHANGELOG_BAK" ]; then
+        mv -f "$CHANGELOG_BAK" "$DEBIAN_SRC/changelog"
+    fi
     if [ -L "$DEBIAN_LINK" ]; then
         echo "==> Removing temporary symlink $DEBIAN_LINK"
         rm -f "$DEBIAN_LINK"
     fi
 }
 trap cleanup EXIT
+
+# --- version from git --------------------------------------------------------
+DESC=$(git -C "$REPO_ROOT" describe --tags --always --dirty="-dev" 2>/dev/null || echo "unknown")
+DESC="${DESC#v}"
+
+if [[ "$DESC" =~ ^([0-9]+(\.[0-9]+)*)-(.+)$ ]]; then
+    VER="${BASH_REMATCH[1]}"
+    SUFFIX="${BASH_REMATCH[3]}"
+    SUFFIX="${SUFFIX//-/.}"
+    UPSTREAM="${VER}+${SUFFIX}"
+elif [[ "$DESC" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+    UPSTREAM="$DESC"
+else
+    UPSTREAM="${DESC//-/.}"
+fi
+DEB_VERSION="${UPSTREAM}-1"
+
+echo "==> git describe: $DESC"
+echo "==> deb version:  $DEB_VERSION"
 
 if [ ! -d "$DEBIAN_SRC" ]; then
     echo "ERROR: packaging directory not found: $DEBIAN_SRC"
@@ -43,6 +71,19 @@ fi
 if [ -L "$DEBIAN_LINK" ]; then
     rm -f "$DEBIAN_LINK"
 fi
+
+# Inject version into changelog for this build (restored on exit)
+CHANGELOG_BAK=$(mktemp)
+cp -a "$DEBIAN_SRC/changelog" "$CHANGELOG_BAK"
+{
+    echo "unreal-speccy-portable-wx (${DEB_VERSION}) unstable; urgency=medium"
+    echo
+    echo "  * Build from git describe: ${DESC}."
+    echo
+    echo " -- djdron <djdron@gmail.com>  $(date -R)"
+    echo
+    cat "$CHANGELOG_BAK"
+} > "$DEBIAN_SRC/changelog"
 
 echo "==> Creating temporary symlink:"
 echo "    $DEBIAN_LINK  ->  $DEBIAN_SRC"
@@ -70,7 +111,13 @@ PARENT="$(cd "$REPO_ROOT/.." && pwd)"
 DEBS=()
 while IFS= read -r f; do
     DEBS+=("$f")
+done < <(find "$PARENT" -maxdepth 1 -name "unreal-speccy-portable-wx_${DEB_VERSION}_*.deb" 2>/dev/null | sort)
+
+if [ ${#DEBS[@]} -eq 0 ]; then
+while IFS= read -r f; do
+    DEBS+=("$f")
 done < <(find "$PARENT" -maxdepth 1 -name 'unreal-speccy-portable-wx_*.deb' 2>/dev/null | sort)
+fi
 
 if [ ${#DEBS[@]} -eq 0 ]; then
     while IFS= read -r f; do

@@ -10,6 +10,12 @@
 #   OUTPUT_DIR="${GITHUB_WORKSPACE}/artifacts" \
 #   ./build/install/fedora-sdl2-desktop/make_rpm.sh
 #
+# Version from git only:
+#   git describe --tags --always --dirty="-dev"
+#
+# Tag commit    → Version=<tag>  Release=1%{?dist}          (final release)
+# Later commits → Version=<tag>  Release=1.<n>.g…%{?dist}  (newer than release 1)
+#
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -17,12 +23,38 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 SPEC="$SCRIPT_DIR/unreal-speccy-portable-sdl2-desktop.spec"
 
 NAME="unreal-speccy-portable-sdl2-desktop"
-VERSION="0.0.86.28"
-TARBALL="${NAME}-${VERSION}.tar.gz"
 OUTPUT_DIR="${OUTPUT_DIR:-}"
 
 cd "$REPO_ROOT"
 
+# --- version from git --------------------------------------------------------
+# v0.0.86.28              → Version 0.0.86.28   Release 1%{?dist}
+# v0.0.86.28-5-g1a2b3c4   → Version 0.0.86.28   Release 1.5.g1a2b3c4%{?dist}
+# v0.0.86.28-dev          → Version 0.0.86.28   Release 1.dev%{?dist}
+# abcdef1 (no tags)       → Version abcdef1     Release 0%{?dist}
+DESC=$(git -C "$REPO_ROOT" describe --tags --always --dirty="-dev" 2>/dev/null || echo "unknown")
+DESC="${DESC#v}"
+
+if [[ "$DESC" =~ ^([0-9]+(\.[0-9]+)*)-(.+)$ ]]; then
+    # commits (and optional dirty) after the last tag — still same Version, Release > 1
+    VERSION="${BASH_REMATCH[1]}"
+    SUFFIX="${BASH_REMATCH[3]}"
+    SUFFIX="${SUFFIX//-/.}"          # 5-g1a2b3c4-dev → 5.g1a2b3c4.dev
+    RELEASE="1.${SUFFIX}%{?dist}"
+elif [[ "$DESC" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+    # exact tag — final release of this Version
+    VERSION="$DESC"
+    RELEASE="1%{?dist}"
+else
+    # bare hash / unknown — no numeric tag yet
+    VERSION="${DESC//-/.}"
+    RELEASE="0%{?dist}"
+fi
+
+echo "==> git describe: $DESC"
+echo "==> RPM Version=$VERSION  Release=$RELEASE"
+
+TARBALL="${NAME}-${VERSION}.tar.gz"
 if [ ! -f "$SPEC" ]; then
     echo "ERROR: spec file not found: $SPEC"
     exit 1
@@ -65,7 +97,10 @@ cp -a "$SCRIPT_DIR"/* "$TMPDIR/${NAME}-${VERSION}/build/install/fedora-sdl2-desk
 tar -C "$TMPDIR" -czf "$RPMBUILD_DIR/SOURCES/$TARBALL" "${NAME}-${VERSION}"
 echo "    -> $RPMBUILD_DIR/SOURCES/$TARBALL"
 
-cp "$SPEC" "$RPMBUILD_DIR/SPECS/"
+sed -e "s/^Version:.*/Version:        ${VERSION}/" \
+    -e "s/^Release:.*/Release:        ${RELEASE}/" \
+    -e "s/^Source0:.*/Source0:        %{name}-%{version}.tar.gz/" \
+    "$SPEC" > "$RPMBUILD_DIR/SPECS/unreal-speccy-portable-sdl2-desktop.spec"
 
 echo "==> Building RPM..."
 rpmbuild -ba "$RPMBUILD_DIR/SPECS/unreal-speccy-portable-sdl2-desktop.spec" \
