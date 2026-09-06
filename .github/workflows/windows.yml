@@ -19,7 +19,10 @@ jobs:
       - id: ver
         shell: bash
         run: |
-          v=$(git describe --tags --always --dirty="-dev" 2>/dev/null || echo "unknown")
+          v=$(git describe --tags --always --dirty="-dev" --match 'v[0-9]*' 2>/dev/null || echo "unknown")
+          if [[ ! "$v" =~ ^v?[0-9] ]]; then
+            v="0.0.0-g${v}"
+          fi
           echo "version=${v#v}" >> $GITHUB_OUTPUT
 
       - name: Build library
@@ -50,7 +53,10 @@ jobs:
       - id: ver
         shell: bash
         run: |
-          v=$(git describe --tags --always --dirty="-dev" 2>/dev/null || echo "unknown")
+          v=$(git describe --tags --always --dirty="-dev" --match 'v[0-9]*' 2>/dev/null || echo "unknown")
+          if [[ ! "$v" =~ ^v?[0-9] ]]; then
+            v="0.0.0-g${v}"
+          fi
           echo "version=${v#v}" >> $GITHUB_OUTPUT
 
       - name: Build benchmark
@@ -81,7 +87,10 @@ jobs:
       - id: ver
         shell: bash
         run: |
-          v=$(git describe --tags --always --dirty="-dev" 2>/dev/null || echo "unknown")
+          v=$(git describe --tags --always --dirty="-dev" --match 'v[0-9]*' 2>/dev/null || echo "unknown")
+          if [[ ! "$v" =~ ^v?[0-9] ]]; then
+            v="0.0.0-g${v}"
+          fi
           echo "version=${v#v}" >> $GITHUB_OUTPUT
 
       - name: Download prebuilt SDL2 GLESv2 (ANGLE) curl libraries
@@ -131,7 +140,10 @@ jobs:
       - id: ver
         shell: bash
         run: |
-          v=$(git describe --tags --always --dirty="-dev" 2>/dev/null || echo "unknown")
+          v=$(git describe --tags --always --dirty="-dev" --match 'v[0-9]*' 2>/dev/null || echo "unknown")
+          if [[ ! "$v" =~ ^v?[0-9] ]]; then
+            v="0.0.0-g${v}"
+          fi
           echo "version=${v#v}" >> $GITHUB_OUTPUT
 
       - name: Download prebuilt GLEW library
@@ -173,7 +185,10 @@ jobs:
       - id: ver
         shell: bash
         run: |
-          v=$(git describe --tags --always --dirty="-dev" 2>/dev/null || echo "unknown")
+          v=$(git describe --tags --always --dirty="-dev" --match 'v[0-9]*' 2>/dev/null || echo "unknown")
+          if [[ ! "$v" =~ ^v?[0-9] ]]; then
+            v="0.0.0-g${v}"
+          fi
           echo "version=${v#v}" >> $GITHUB_OUTPUT
 
       - name: Download prebuilt GLEW library

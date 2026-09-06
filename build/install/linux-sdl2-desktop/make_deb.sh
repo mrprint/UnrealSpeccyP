@@ -42,8 +42,12 @@ cleanup() {
 trap cleanup EXIT
 
 # --- version from git --------------------------------------------------------
-DESC=$(git -C "$REPO_ROOT" describe --tags --always --dirty="-dev" 2>/dev/null || echo "unknown")
+DESC=$(git -C "$REPO_ROOT" describe --tags --always --dirty="-dev" --match 'v[0-9]*' 2>/dev/null || echo "unknown")
 DESC="${DESC#v}"
+
+if [[ ! "$DESC" =~ ^[0-9] ]]; then
+    DESC="0.0.0-g${DESC}"
+fi
 
 if [[ "$DESC" =~ ^([0-9]+(\.[0-9]+)*)-(.+)$ ]]; then
     VER="${BASH_REMATCH[1]}"

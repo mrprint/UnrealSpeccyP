@@ -31,8 +31,12 @@ cd "$REPO_ROOT"
 # v0.0.86.28-5-g1a2b3c4   → Version 0.0.86.28   Release 1.5.g1a2b3c4%{?dist}
 # v0.0.86.28-dev          → Version 0.0.86.28   Release 1.dev%{?dist}
 # abcdef1 (no tags)       → Version abcdef1     Release 0%{?dist}
-DESC=$(git -C "$REPO_ROOT" describe --tags --always --dirty="-dev" 2>/dev/null || echo "unknown")
+DESC=$(git -C "$REPO_ROOT" describe --tags --always --dirty="-dev" --match 'v[0-9]*' 2>/dev/null || echo "unknown")
 DESC="${DESC#v}"
+
+if [[ ! "$DESC" =~ ^[0-9] ]]; then
+    DESC="0.0.0-g${DESC}"
+fi
 
 if [[ "$DESC" =~ ^([0-9]+(\.[0-9]+)*)-(.+)$ ]]; then
     # commits (and optional dirty) after the last tag — still same Version, Release > 1
