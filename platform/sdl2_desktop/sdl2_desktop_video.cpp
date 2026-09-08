@@ -36,6 +36,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <GL/glew.h> // must come before SDL.h/any gl.h-including header, per GLEW's own requirement
 #include <SDL.h>
 #include <memory>
+#include <string>
+#include <vector>
 #include "imgui.h"
 #include "../../tools/options.h"
 #include "../../tools/point.h"
@@ -44,6 +46,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifdef _WINAPI
 #include <SDL_syswm.h>
 #include <shellapi.h> // ExtractIconExA()
+#include <cwchar> // wcscmp() - GetStableDisplayIdWindows()
 #endif//_WINAPI
 
 namespace xPlatform
@@ -143,7 +146,120 @@ private:
 
 static GLWindow g_gl_window;
 
-// Same option name/format as platform/sdl2/sdl2_video.cpp's eOptionWindowState.
+#ifdef _WINAPI
+// SDL_GetDisplayName() on Windows comes from EnumDisplayDevices()'s
+// DeviceString field - for the overwhelming majority of monitors (anything
+// without its own vendor INF driver, which is nearly everything) that
+// field is just the generic Plug-and-Play class name, "Generic PnP
+// Monitor", for every single display. Fine for telling "a display" from
+// "no display", useless for telling *which* one.
+//
+// The identity Windows itself actually uses (what Settings > Display
+// shows, what a monitor-management tool reads) comes from a different,
+// Vista+ API instead: QueryDisplayConfig() walks active display *paths*
+// (source = a GPU output, target = the monitor wired to it) down to the
+// target's own EDID data. SDL doesn't expose a display's GDI device name
+// ("\\.\DISPLAY1") to bridge to that path table directly, so this finds it
+// independently: locate the HMONITOR at the SDL display's bounds, read its
+// GDI device name via GetMonitorInfoW(), then find the QueryDisplayConfig
+// path whose *source* reports that same GDI name, and read that path's
+// *target* device name - monitorDevicePath there is manufacturer+product+
+// connector-instance derived from EDID (e.g.
+// "\\?\DISPLAY#SAM0304#5&9a89472&0&UID33554704#{...}"), stable across
+// reboots for the same physical monitor on the same port - unlike the
+// string SDL_GetDisplayName() gives on this platform.
+//
+// Any failure along the way (remote desktop session, a forced/virtual
+// display with no EDID, an unexpected API error) returns an empty string;
+// GetDisplayIdentity() below falls back to SDL_GetDisplayName() when that
+// happens rather than recording nothing.
+static std::string GetStableDisplayIdWindows(int sdl_display_index)
+{
+	SDL_Rect bounds;
+	if(SDL_GetDisplayBounds(sdl_display_index, &bounds) != 0)
+		return std::string();
+
+	RECT rect{ bounds.x, bounds.y, bounds.x + bounds.w, bounds.y + bounds.h };
+	HMONITOR hmon = MonitorFromRect(&rect, MONITOR_DEFAULTTONULL);
+	if(!hmon)
+		return std::string();
+
+	MONITORINFOEXW mi;
+	mi.cbSize = sizeof(mi);
+	if(!GetMonitorInfoW(hmon, &mi))
+		return std::string();
+
+	UINT32 path_count = 0, mode_count = 0;
+	if(GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &path_count, &mode_count) != ERROR_SUCCESS)
+		return std::string();
+
+	std::vector<DISPLAYCONFIG_PATH_INFO> paths(path_count);
+	std::vector<DISPLAYCONFIG_MODE_INFO> modes(mode_count);
+	if(QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &path_count, paths.data(), &mode_count, modes.data(), nullptr) != ERROR_SUCCESS)
+		return std::string();
+
+	for(UINT32 i = 0; i < path_count; ++i)
+	{
+		DISPLAYCONFIG_SOURCE_DEVICE_NAME source_name = {};
+		source_name.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+		source_name.header.size = sizeof(source_name);
+		source_name.header.adapterId = paths[i].sourceInfo.adapterId;
+		source_name.header.id = paths[i].sourceInfo.id;
+		if(DisplayConfigGetDeviceInfo(&source_name.header) != ERROR_SUCCESS)
+			continue;
+		if(wcscmp(source_name.viewGdiDeviceName, mi.szDevice) != 0)
+			continue;
+
+		DISPLAYCONFIG_TARGET_DEVICE_NAME target_name = {};
+		target_name.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
+		target_name.header.size = sizeof(target_name);
+		target_name.header.adapterId = paths[i].targetInfo.adapterId;
+		target_name.header.id = paths[i].targetInfo.id;
+		// Matched the source but couldn't read the target, or it has no
+		// EDID (empty monitorDevicePath) - stop rather than keep scanning
+		// into another, wrong path; GetDisplayIdentity() falls back to
+		// SDL_GetDisplayName() either way.
+		if(DisplayConfigGetDeviceInfo(&target_name.header) != ERROR_SUCCESS)
+			break;
+		if(target_name.monitorDevicePath[0] == L'\0')
+			break;
+
+		// Narrow via WideCharToMultiByte rather than a naive char-by-char
+		// cast - this string is US-ASCII by construction (hex IDs and a
+		// GUID, per Microsoft's documented format for it), but being
+		// explicit here costs nothing and doesn't rely on that never
+		// changing.
+		int len = WideCharToMultiByte(CP_UTF8, 0, target_name.monitorDevicePath, -1, nullptr, 0, nullptr, nullptr);
+		if(len <= 0)
+			break;
+		std::string result(len - 1, '\0'); // len includes the null terminator
+		WideCharToMultiByte(CP_UTF8, 0, target_name.monitorDevicePath, -1, &result[0], len, nullptr, nullptr);
+		return result;
+	}
+	return std::string();
+}
+#endif//_WINAPI
+
+// Best available stable-ish identity string for a display, used both when
+// saving (eOptionWindowDisplay::Update() below) and resolving
+// (ResolveDisplayIndexForName()) - the two must agree on what "the same
+// display" means, or a restore would silently never match. SDL_GetDisplayName()
+// already returns a connector-based name on Linux (X11/Wayland, e.g. "DP-1")
+// and a real product name via CGDisplay on macOS, so only Windows needs its
+// own path - see GetStableDisplayIdWindows() above for why.
+static std::string GetDisplayIdentity(int display_index)
+{
+#ifdef _WINAPI
+	std::string stable_id = GetStableDisplayIdWindows(display_index);
+	if(!stable_id.empty())
+		return stable_id;
+#endif//_WINAPI
+	const char* name = SDL_GetDisplayName(display_index);
+	return name ? name : std::string();
+}
+
+// Same option name/format as platform/sdl2/sdl2_video.cpp's eOptionWindowState,
+// on purpose - both platforms can share the same config file entry.
 class eOptionWindowState : public xOptions::eOptionString
 {
 public:
@@ -203,6 +319,49 @@ public:
 private:
 	const char* FormatStr() const { return "position(%d, %d); size(%d, %d); maximized(%d)"; }
 } op_window_state;
+
+// Which display op_window_state's position was captured on, saved
+// alongside it (not merged into the same field-count sscanf format above -
+// SDL display names are free-form and can contain spaces/parentheses,
+// which isn't safe to pack into that fixed positional format without
+// inventing an escaping scheme). Absolute desktop coordinates alone survive
+// a plain resolution change on the *same* display fine (SDL just places
+// the window as given), but not a removed display, and not a rearranged
+// multi-monitor layout where the old coordinates now happen to land on a
+// different, wrong display. Recording which display they were relative to
+// lets InitVideo() tell those cases apart - the same reasoning
+// ResolveDeviceIndexForGuid() in sdl2_desktop_gamepad.h already applies to
+// gamepad profiles, just for monitors instead of controllers.
+//
+// Empty (never saved - fresh config, or a config from before this option
+// existed) is deliberately treated as "nothing to validate against" by
+// InitVideo(), not "display gone" - see the comment there.
+static struct eOptionWindowDisplay : public xOptions::eOptionString
+{
+	eOptionWindowDisplay() { customizable = false; }
+	const char* Name() const override { return "window display"; }
+
+	void Update()
+	{
+		// Same guard as eOptionWindowState::Update() (independently, not
+		// shared - this only ever means anything paired with a position
+		// that update captures too, but it's its own small option/class,
+		// consistent with eOptionWindowState/eOptionFullScreen already
+		// being separate classes each reading SDL_GetWindowFlags() on
+		// their own).
+		Uint32 flags = SDL_GetWindowFlags(g_gl_window.window);
+		if(flags & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP))
+			return;
+		if(flags & (SDL_WINDOW_MAXIMIZED | SDL_WINDOW_MINIMIZED))
+			return;
+		int display_index = SDL_GetWindowDisplayIndex(g_gl_window.window);
+		if(display_index < 0)
+			return;
+		std::string identity = GetDisplayIdentity(display_index);
+		if(!identity.empty())
+			Value(identity.c_str());
+	}
+} op_window_display;
 
 static struct eOptionFullScreen : public xOptions::eOptionBool
 {
@@ -281,6 +440,64 @@ static ePoint GetMaxDisplayResolution()
 	return result;
 }
 
+// Mirrors ResolveDeviceIndexForGuid() in sdl2_desktop_gamepad.h. Two
+// identical monitor models can still legitimately produce the same
+// identity (GetDisplayIdentity() narrows this a lot on Windows compared to
+// SDL_GetDisplayName() alone, but doesn't eliminate it - two identical
+// monitors do have the same EDID manufacturer/product too) - this returns
+// the first match. Unlike gamepads, where picking the wrong one of two
+// identical controllers matters for gameplay, this only matters when
+// InitVideo() has *already* decided the saved position is unusable on any
+// current display (see PositionIsOnSomeDisplay() there) - the recovery
+// landing on the wrong one of two identical, equally-sized screens is a
+// minor inconvenience, not the kind of "window unreachable" failure this
+// exists to prevent.
+static int ResolveDisplayIndexForName(const std::string& name)
+{
+	int count = SDL_GetNumVideoDisplays();
+	for(int i = 0; i < count; ++i)
+	{
+		if(GetDisplayIdentity(i) == name)
+			return i;
+	}
+	return -1;
+}
+
+// True if pos (a window's top-left corner) falls within display_index's
+// current bounds. Deliberately just the corner, not a full rect/size
+// check - size alone spilling past a shrunk display isn't "unreachable"
+// the way a stray top-left corner is (nothing to grab with the mouse to
+// drag it back), and either way the recovery in InitVideo() is the same:
+// re-center on some display.
+static bool PositionFitsDisplay(const ePoint& pos, int display_index)
+{
+	SDL_Rect bounds;
+	if(SDL_GetDisplayBounds(display_index, &bounds) != 0)
+		return false;
+	return pos.x >= bounds.x && pos.x < bounds.x + bounds.w
+		&& pos.y >= bounds.y && pos.y < bounds.y + bounds.h;
+}
+
+// True if pos falls within *any* currently connected display's bounds -
+// checked before InitVideo() ever consults op_window_display/
+// ResolveDisplayIndexForName() below, and deliberately independent of
+// which display pos happens to be on. A saved position that's still
+// visible on some display, right now, is left alone no matter what the
+// saved display name resolves to - resolving to the wrong one of two
+// same-named displays (see ResolveDisplayIndexForName()'s comment) must
+// never be able to drag an already-fine window off to a different,
+// "corrected" monitor. Name resolution below only ever runs as a recovery
+// path for when this is false - a position that's actually unusable
+// everywhere - never as a trigger for relocating a working one.
+static bool PositionIsOnSomeDisplay(const ePoint& pos)
+{
+	int count = SDL_GetNumVideoDisplays();
+	for(int i = 0; i < count; ++i)
+		if(PositionFitsDisplay(pos, i))
+			return true;
+	return false;
+}
+
 bool InitVideo()
 {
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -292,6 +509,28 @@ bool InitVideo()
 	ePoint pos, size;
 	bool maximized;
 	op_window_state.Get(&pos, &size, &maximized);
+
+	// A monitor unplugged, or a multi-monitor layout rearranged,
+	// since the last run can leave the saved position opening off every
+	// currently connected display, with nothing on-screen to drag it back
+	// by. Only reached for a position that's already broken this way - see
+	// PositionIsOnSomeDisplay()'s comment for why a position that's still
+	// valid anywhere is never touched, regardless of op_window_display.
+	if(!PositionIsOnSomeDisplay(pos))
+	{
+		std::string saved_display = op_window_display.Value();
+		int resolved_display = saved_display.empty() ? -1 : ResolveDisplayIndexForName(saved_display);
+		pos = (resolved_display >= 0)
+			// Recover onto the display it was last on, rather than an
+			// arbitrary default.
+			? ePoint(SDL_WINDOWPOS_CENTERED_DISPLAY(resolved_display), SDL_WINDOWPOS_CENTERED_DISPLAY(resolved_display))
+			// Never recorded (fresh config, or one from before this option
+			// existed) or that display genuinely isn't connected anymore -
+			// let the OS/WM place the window, same default a first-ever
+			// launch gets.
+			: ePoint(SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED);
+	}
+
 	Uint32 flags = SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE|SDL_WINDOW_ALLOW_HIGHDPI;
 	if(maximized)
 		flags |= SDL_WINDOW_MAXIMIZED;
@@ -393,6 +632,7 @@ void DoneVideo()
 void UpdateScreen()
 {
 	op_window_state.Update();
+	op_window_display.Update();
 	op_full_screen.Update();
 
 	ePoint s;
