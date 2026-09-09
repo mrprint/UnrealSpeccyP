@@ -418,15 +418,34 @@ static double EmulatedFieldRateHz()
 	return frame_tacts ? Z80_CLOCK_HZ / frame_tacts : 50.0;
 }
 
-// Looks for the fullscreen video mode on 'display_index', at the same
-// resolution the desktop is currently using there (so switching to it
-// doesn't change anything else about the picture), whose refresh rate is
-// closest to EmulatedFieldRateHz() - integer-Hz display modes can't hit a
-// fractional target like 48.828125 exactly, so this picks the nearest one
-// available rather than requiring an exact match. Only accepts it if that
-// candidate is a strict improvement over the desktop's own current rate:
-// with nothing closer available than what's already running, switching
-// mode would just add the disruption of a modeset for no accuracy gain.
+// Max distance (Hz) from the emulated field rate at which a display mode is
+// still considered a usable "sync" target - beyond that, vsync'ing the swap
+// to it would only make the emulated /INT cadence drift against the real
+// one slower, not match it.
+static const double FIELD_RATE_TOLERANCE_HZ = 5.0;
+
+// Looks for the exclusive-fullscreen video mode on 'display_index' to run
+// the emulator at, in two stages:
+//
+// 1. Primary: any of the display's modes whose refresh rate is within
+//    FIELD_RATE_TOLERANCE_HZ of EmulatedFieldRateHz() (integer-Hz display
+//    modes can't hit a fractional target like 48.828125 exactly, so this is
+//    a window, not an exact match), with the desktop's own aspect ratio (so
+//    the picture's shape/letterbox is unchanged) and not larger than the
+//    desktop's current resolution in either dimension. Among those, the
+//    rate closest to the target wins - rate has priority over resolution;
+//    the larger resolution only breaks an exact rate tie.
+// 2. Fallback: the pre-existing behaviour - the desktop's own resolution
+//    at whatever rate is closest to the target.
+//
+// A mode only wins if it's a strict improvement over the desktop's own
+// current rate: with nothing closer available than what's already running,
+// switching mode would just add the disruption of a modeset for no
+// accuracy gain. (The desktop mode itself satisfies the stage-1 filters
+// trivially, so the strict comparison is what keeps it from winning when
+// it's already the best option.)
+// Returns false if neither stage finds anything - the caller then falls
+// back to borderless fullscreen at the desktop's own rate.
 static bool FindBestFieldRateDisplayMode(int display_index, SDL_DisplayMode* out)
 {
 	SDL_DisplayMode desktop_mode;
@@ -434,10 +453,49 @@ static bool FindBestFieldRateDisplayMode(int display_index, SDL_DisplayMode* out
 		return false;
 
 	double target = EmulatedFieldRateHz();
-	double best_diff = (desktop_mode.refresh_rate > 0) ? fabs(desktop_mode.refresh_rate - target) : 1e9;
+	// Strict-improvement guard shared by both stages: a candidate must beat
+	// the desktop's own distance-from-target, not merely match it.
+	double limit = (desktop_mode.refresh_rate > 0) ? fabs(desktop_mode.refresh_rate - target) : 1e9;
+
 	bool found = false;
+	double best_diff = 1e9;
+	int best_area = 0;
 
 	int num_modes = SDL_GetNumDisplayModes(display_index);
+	// --- Stage 1: the desktop's aspect ratio, <= the desktop resolution,
+	// rate within tolerance of the target. ---
+	for(int i = 0; i < num_modes; ++i)
+	{
+		SDL_DisplayMode mode;
+		if(SDL_GetDisplayMode(display_index, i, &mode) != 0)
+			continue;
+		if(mode.refresh_rate <= 0) // unknown/variable rate - nothing to compare against
+			continue;
+		double diff = fabs(mode.refresh_rate - target);
+		if(diff > FIELD_RATE_TOLERANCE_HZ)
+			continue;
+		if(diff >= limit) // not a strict improvement over the desktop's own rate
+			continue;
+		// Same aspect ratio as the desktop's current mode - cross-multiply
+		// rather than divide, so the comparison stays exact for integer
+		// sizes.
+		if((long long)mode.w * desktop_mode.h != (long long)desktop_mode.w * mode.h)
+			continue;
+		if(mode.w > desktop_mode.w || mode.h > desktop_mode.h)
+			continue;
+		if(diff < best_diff || (diff == best_diff && mode.w * mode.h > best_area))
+		{
+			best_diff = diff;
+			best_area = mode.w * mode.h;
+			*out = mode;
+			found = true;
+		}
+	}
+	if(found)
+		return true;
+
+	// --- Stage 2: the pre-existing fallback - the desktop's own resolution
+	// at whatever rate is closest to the target. ---
 	for(int i = 0; i < num_modes; ++i)
 	{
 		SDL_DisplayMode mode;
@@ -445,9 +503,11 @@ static bool FindBestFieldRateDisplayMode(int display_index, SDL_DisplayMode* out
 			continue;
 		if(mode.w != desktop_mode.w || mode.h != desktop_mode.h)
 			continue;
-		if(mode.refresh_rate <= 0) // unknown/variable rate - nothing to compare against
+		if(mode.refresh_rate <= 0)
 			continue;
 		double diff = fabs(mode.refresh_rate - target);
+		if(diff >= limit)
+			continue;
 		if(diff < best_diff)
 		{
 			best_diff = diff;
@@ -808,6 +868,15 @@ void UpdateScreen()
 	op_window_display.Update();
 	op_full_screen.Update();
 
+	// Drawing resolution. In exclusive fullscreen (see
+	// TryEnableFieldRateSyncFullscreen()) the drawable is exactly the
+	// selected display mode's resolution, which may now differ from the
+	// desktop's own (FindBestFieldRateDisplayMode()'s stage 1 may pick a
+	// smaller one) - this is what passes the correct resolution to
+	// DrawGL() below. The full-quality FBO in draw.cpp is deliberately
+	// left at its init-time size (the largest connected display) and simply
+	// scaled to this vport - no FBO rebuild when the fullscreen resolution
+	// changes.
 	ePoint s;
 	SDL_GL_GetDrawableSize(g_gl_window.window, &s.x, &s.y);
 
