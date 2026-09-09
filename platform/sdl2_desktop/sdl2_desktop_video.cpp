@@ -35,13 +35,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <GL/glew.h> // must come before SDL.h/any gl.h-including header, per GLEW's own requirement
 #include <SDL.h>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
 #include "imgui.h"
+#include "imgui_shared.h"
 #include "../../tools/options.h"
 #include "../../tools/point.h"
 #include "../../devices/video_snapshot.h"
+#include "../../speccy.h"
+#include "../../z80/z80.h"
 
 #ifdef _WINAPI
 #include <SDL_syswm.h>
@@ -363,6 +367,168 @@ static struct eOptionWindowDisplay : public xOptions::eOptionString
 	}
 } op_window_display;
 
+// --- Fullscreen + real field-rate sync -----------------------------------
+//
+// On real ZX-Spectrum-family hardware the Z80's /INT is tied to the video
+// field rate. sdl2_desktop's own main loop (see Loop()/Loop1() in
+// sdl2_desktop.cpp) already calls Handler()->OnLoop() - which runs exactly
+// one emulated frame, /INT included - exactly once per SDL_GL_SwapWindow()
+// at 1x speed, and that swap already blocks for one real display refresh
+// (SDL_GL_SetSwapInterval(1) below, in InitVideo()). So the only thing
+// actually needed to make the emulated /INT cadence match real hardware
+// while fullscreen is to make sure the *display* is really running at that
+// same field rate then - vsync does the rest, no extra timer/pacing logic
+// required.
+//
+// That field rate is NOT a flat 50Hz, and hardcoding 50 here would in fact
+// be wrong for this specific codebase: eSpeccy always drives the Z80 with
+// Pentagon-style video timing (speccy.cpp: frame_tacts = 71680, "// pentagon
+// timings" - not switched per loaded ROM/snapshot) at the fixed 3.5MHz Z80
+// clock used throughout this codebase (see Z80FQ in devices/fdd/wd1793.cpp,
+// devices/fdd/fdd.cpp, devices/input/tape.cpp). 3500000/71680 is
+// 48.828125Hz, not 50 - the "50Hz PAL Spectrum" figure people know is
+// specifically the 48K machine's 69888-T-state frame (69888 gives
+// 50.08Hz); Pentagon's 320-line video timing is a well-known deviation from
+// that. EmulatedFieldRateHz() below reads frame_tacts back out of the
+// running Z80 core rather than hardcoding either number, so this keeps
+// tracking reality if that ever changes upstream instead of silently
+// drifting out of sync with a stale magic number here.
+//
+// Windowed mode is deliberately left alone: it runs at whatever rate the
+// desktop compositor uses (unrelated to what op_full_screen does at all).
+
+// Whether the display is currently showing a verified exclusive-fullscreen
+// mode picked to match the emulator's real field rate - see
+// ApplyFullScreen() below.
+static bool g_field_rate_synced = false;
+
+// The Z80 clock this codebase assumes everywhere (see the comment above) -
+// not read from anywhere more "canonical" because nothing more canonical
+// exists here: it's a plain duplicated magic number in three .cpp files
+// already, this is a fourth, equally well-commented copy rather than a new
+// shared header invented just for this.
+static const double Z80_CLOCK_HZ = 3500000.0;
+
+// The exact field rate (in Hz) the running emulation core's /INT cadence
+// implies: one Z80 clock tick per T-state, one /INT every FrameTacts()
+// T-states.
+static double EmulatedFieldRateHz()
+{
+	dword frame_tacts = Handler()->Speccy()->CPU()->FrameTacts();
+	return frame_tacts ? Z80_CLOCK_HZ / frame_tacts : 50.0;
+}
+
+// Looks for the fullscreen video mode on 'display_index', at the same
+// resolution the desktop is currently using there (so switching to it
+// doesn't change anything else about the picture), whose refresh rate is
+// closest to EmulatedFieldRateHz() - integer-Hz display modes can't hit a
+// fractional target like 48.828125 exactly, so this picks the nearest one
+// available rather than requiring an exact match. Only accepts it if that
+// candidate is a strict improvement over the desktop's own current rate:
+// with nothing closer available than what's already running, switching
+// mode would just add the disruption of a modeset for no accuracy gain.
+static bool FindBestFieldRateDisplayMode(int display_index, SDL_DisplayMode* out)
+{
+	SDL_DisplayMode desktop_mode;
+	if(SDL_GetDesktopDisplayMode(display_index, &desktop_mode) != 0)
+		return false;
+
+	double target = EmulatedFieldRateHz();
+	double best_diff = (desktop_mode.refresh_rate > 0) ? fabs(desktop_mode.refresh_rate - target) : 1e9;
+	bool found = false;
+
+	int num_modes = SDL_GetNumDisplayModes(display_index);
+	for(int i = 0; i < num_modes; ++i)
+	{
+		SDL_DisplayMode mode;
+		if(SDL_GetDisplayMode(display_index, i, &mode) != 0)
+			continue;
+		if(mode.w != desktop_mode.w || mode.h != desktop_mode.h)
+			continue;
+		if(mode.refresh_rate <= 0) // unknown/variable rate - nothing to compare against
+			continue;
+		double diff = fabs(mode.refresh_rate - target);
+		if(diff < best_diff)
+		{
+			best_diff = diff;
+			*out = mode;
+			found = true;
+		}
+	}
+	return found;
+}
+
+// Tries to enter *exclusive* fullscreen (SDL_WINDOW_FULLSCREEN, not
+// _DESKTOP - only the exclusive mode actually lets SDL change the display's
+// refresh rate at all) at the mode FindBestFieldRateDisplayMode() finds, if
+// any.
+static bool TryEnableFieldRateSyncFullscreen()
+{
+	int display_index = SDL_GetWindowDisplayIndex(g_gl_window.window);
+	if(display_index < 0)
+		return false;
+
+	SDL_DisplayMode mode;
+	if(!FindBestFieldRateDisplayMode(display_index, &mode))
+		return false;
+
+	if(SDL_SetWindowDisplayMode(g_gl_window.window, &mode) != 0)
+		return false;
+	if(SDL_SetWindowFullscreen(g_gl_window.window, SDL_WINDOW_FULLSCREEN) != 0)
+		return false;
+
+	// Verify what actually got applied rather than trusting the return codes
+	// alone: some backends (Wayland in particular - SDL2 has no real
+	// exclusive-fullscreen modesetting there) accept both calls above
+	// without error but silently keep running at the compositor's own rate,
+	// which would otherwise look like a successful sync that isn't one.
+	SDL_DisplayMode current;
+	if(SDL_GetCurrentDisplayMode(display_index, &current) != 0 || current.refresh_rate != mode.refresh_rate)
+	{
+		SDL_SetWindowFullscreen(g_gl_window.window, 0); // undo; caller falls back
+		return false;
+	}
+	return true;
+}
+
+// Shared by eOptionFullScreen::Apply() (runtime toggle, via the menu/Ctrl+F/
+// double-click) and InitVideo()'s launch-already-fullscreen path - both need
+// the exact same try-sync/fall-back-to-desktop-rate behaviour, not two
+// copies of it that could drift apart.
+static void ApplyFullScreen(bool enable)
+{
+	if(!enable)
+	{
+		SDL_SetWindowFullscreen(g_gl_window.window, 0);
+		g_field_rate_synced = false;
+		return;
+	}
+
+	if(TryEnableFieldRateSyncFullscreen())
+	{
+		g_field_rate_synced = true;
+		SDL_DisplayMode applied;
+		int display_index = SDL_GetWindowDisplayIndex(g_gl_window.window);
+		char msg[128];
+		if(display_index >= 0 && SDL_GetCurrentDisplayMode(display_index, &applied) == 0)
+			snprintf(msg, sizeof(msg), "Fullscreen: %dHz sync enabled (emulator runs at %.2fHz)", applied.refresh_rate, EmulatedFieldRateHz());
+		else
+			snprintf(msg, sizeof(msg), "Fullscreen: frame sync enabled");
+		xImGui::SetStatusText(msg);
+		return;
+	}
+
+	// No display mode here beats the desktop's own current rate, or the
+	// platform doesn't support exclusive fullscreen mode-setting at all
+	// (e.g. Wayland) - fall back to the plain borderless-fullscreen-at-
+	// desktop-refresh behaviour this already had; frame/interrupt cadence
+	// then simply follows whatever rate the desktop itself runs at, same as
+	// before this feature existed.
+	SDL_SetWindowFullscreen(g_gl_window.window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+	g_field_rate_synced = false;
+	xImGui::SetStatusText("Fullscreen: no better refresh rate available, using desktop rate");
+}
+
 static struct eOptionFullScreen : public xOptions::eOptionBool
 {
 	const char* Name() const override { return "full screen"; }
@@ -374,7 +540,7 @@ static struct eOptionFullScreen : public xOptions::eOptionBool
 	}
 	void Apply() override
 	{
-		SDL_SetWindowFullscreen(g_gl_window.window, (*this) ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+		ApplyFullScreen(*this);
 	}
 	void Update()
 	{
@@ -534,13 +700,20 @@ bool InitVideo()
 	Uint32 flags = SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE|SDL_WINDOW_ALLOW_HIGHDPI;
 	if(maximized)
 		flags |= SDL_WINDOW_MAXIMIZED;
-	if(op_full_screen)
-		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+	// Fullscreen (if op_full_screen was saved on from a previous run) is
+	// applied below via ApplyFullScreen(), *after* creation, rather than as
+	// a SDL_WINDOW_FULLSCREEN_DESKTOP creation flag here - so launching
+	// straight into fullscreen gets the same field-rate-sync-if-available/
+	// desktop-rate-otherwise handling that toggling it at runtime does (see
+	// ApplyFullScreen()'s comment above), instead of unconditionally
+	// landing on the desktop's own refresh rate.
 	if(!g_gl_window.Create(Handler()->WindowCaption(), pos.x, pos.y, size.x, size.y, flags))
 		return false;
 	SDL_SetWindowMinimumSize(g_gl_window.window, 320, 240); // org_size - matches wx_frame.cpp's SetMinSize(GetSize()) after SetClientSize(org_size)
 	SDL_GL_MakeCurrent(g_gl_window.window, g_gl_window.context());
 	SDL_GL_SetSwapInterval(1); // vsync - single thread, no render-thread hand-off needed
+	if(op_full_screen)
+		ApplyFullScreen(true);
 
 	// SDL's default window has no icon of its own on Windows (unlike a
 	// standard Win32/wx window, which normally picks one up from the
