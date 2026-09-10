@@ -155,6 +155,15 @@ void ProcessMouse(SDL_Event& e);
 SDL_Window* GetVideoWindow();
 #endif//SDL_USE_MOUSE
 
+namespace xImGui
+{
+// sdl2_desktop_filedialog.cpp - not otherwise needed in this file, so
+// forward-declared here rather than pulling in the whole header, same as
+// the FeedEvent/BeginFrame/etc. block above.
+bool FileBrowserActive();
+}
+//namespace xImGui
+
 #ifndef SDL_DEFAULT_FOLDER
 // Use standard platform config paths to stay consistent with wxwidgets:
 // Windows: %APPDATA%/unreal_speccy_portable/
@@ -298,6 +307,43 @@ static JoystickMapper joystick_mapper;
 // see the big comment in Loop1() for why.
 static std::vector<SDL_Event> game_input_events;
 
+#ifdef SDL_USE_MOUSE
+// Recomputes and applies OS cursor visibility from every reason it might
+// need to be hidden, in one authoritative place, rather than letting each
+// reason toggle SDL_ShowCursor() independently - which is exactly how a
+// naive "hide it in fullscreen" would otherwise fight sdl2_mouse.cpp's own
+// grab/release cursor handling (each thinking it alone owns cursor state,
+// the last one to run each frame winning by accident).
+//
+// Hidden when either:
+//  - the window has an active Kempston-mouse grab (sdl2_mouse.cpp,
+//    SDL_SetWindowGrab(), reused as-is from platform/sdl2/) - pre-existing
+//    behaviour, unrelated to fullscreen;
+//  - fullscreen with nothing on screen for the cursor to point at: the menu
+//    bar and status bar aren't drawn while fullscreen (see EndFrame() in
+//    sdl2_desktop_imgui.cpp), and none of the floating windows (Options,
+//    About, file browser) can be newly opened without the menu bar to click
+//    them from - so once none of those already happen to be open (carried
+//    over from before the fullscreen toggle), there is genuinely nothing
+//    left to point at.
+// Visible otherwise - including fullscreen with a floating window still
+// open from before the toggle, so it doesn't become unreachable.
+static void UpdateCursorVisibility()
+{
+	bool grabbed = SDL_GetWindowGrab(GetVideoWindow()) != SDL_FALSE;
+
+	bool fullscreen = false;
+	{
+		xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("full screen");
+		if(op)
+			fullscreen = *op;
+	}
+	bool dialog_open = xImGui::AnyMenuDialogActive() || xImGui::FileBrowserActive();
+
+	SDL_ShowCursor((grabbed || (fullscreen && !dialog_open)) ? SDL_DISABLE : SDL_ENABLE);
+}
+#endif//SDL_USE_MOUSE
+
 void Loop1()
 {
 	game_input_events.clear();
@@ -417,6 +463,15 @@ void Loop1()
 			break;
 		}
 	}
+
+#ifdef SDL_USE_MOUSE
+	// After this frame's input is fully settled (including any fullscreen
+	// toggle from a shortcut just above, and any grab change from the
+	// ProcessMouse() calls above) - see UpdateCursorVisibility()'s own
+	// comment for why this one call is the only thing allowed to touch
+	// SDL_ShowCursor().
+	UpdateCursorVisibility();
+#endif//SDL_USE_MOUSE
 
 #ifdef SDL_USE_JOYSTICK
 	// Per-player gamepad -> ZX-keyboard translation, once a frame - the same
