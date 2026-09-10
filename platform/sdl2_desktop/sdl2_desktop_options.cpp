@@ -467,6 +467,7 @@ private:
 	int m_beam_spread = 30;
 	bool m_mipmapping = true;
 	int m_mask_scale = 1;
+	bool m_prefer_pal_refresh = false;
 
 	int m_joystick = J_KEMPSTON;
 
@@ -503,6 +504,7 @@ void OptionsDialog::LoadCurrentSettings()
 	op = xOptions::eOption<int>::Find("beam spread");    if(op) m_beam_spread = *op;
 	opb = xOptions::eOption<bool>::Find("mipmapping");   m_mipmapping = opb ? (bool)*opb : DEFAULT_MIPMAPPING;
 	op = xOptions::eOption<int>::Find("mask scale");     m_mask_scale = op ? *op : DEFAULT_MASK_SCALE;
+	opb = xOptions::eOption<bool>::Find("Prefer PAL refresh"); m_prefer_pal_refresh = opb ? (bool)*opb : DEFAULT_PAL_REFRESH_RATE;
 
 	m_drive = OpDrive();
 	m_joystick = OpJoystick();
@@ -525,6 +527,7 @@ void OptionsDialog::CommitToOptions()
 	op = xOptions::eOption<int>::Find("beam spread");   if(op) { op->Set(m_beam_spread); op->Apply(); }
 	opb = xOptions::eOption<bool>::Find("mipmapping");  if(opb) { opb->Set(m_mipmapping); opb->Apply(); }
 	op = xOptions::eOption<int>::Find("mask scale");    if(op) { op->Set(m_mask_scale); op->Apply(); }
+	opb = xOptions::eOption<bool>::Find("Prefer PAL refresh"); if(opb) { opb->Set(m_prefer_pal_refresh); opb->Apply(); }
 
 #ifdef SDL_USE_JOYSTICK
 	m_gamepad.Commit();
@@ -570,6 +573,7 @@ void OptionsDialog::DrawVideoTab()
 	ImGui::Checkbox("Enable Mipmapping", &m_mipmapping);
 	ImGui::Checkbox("Enable Gigascreen", &m_gigascreen);
 	ImGui::Checkbox("Enable CRT Scanlines", &m_scanlines);
+	ImGui::Checkbox("Prefer PAL refresh", &m_prefer_pal_refresh);
 
 	ImGui::Spacing();
 	SliderRow("CRT Mask Scale", &m_mask_scale, 0, 4, "%d");
@@ -591,6 +595,7 @@ void OptionsDialog::DrawVideoTab()
 		m_beam_spread = DEFAULT_BEAM_SPREAD;
 		m_mipmapping = DEFAULT_MIPMAPPING;
 		m_mask_scale = DEFAULT_MASK_SCALE;
+		m_prefer_pal_refresh = DEFAULT_PAL_REFRESH_RATE;
 	}
 }
 

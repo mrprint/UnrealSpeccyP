@@ -55,6 +55,7 @@ const int DEFAULT_BEAM_SPREAD = 30; // 0-200 range
 const bool DEFAULT_FILTERING = true;
 const bool DEFAULT_GIGASCREEN = false;
 const bool DEFAULT_SCANLINES = false;
+const bool DEFAULT_PAL_REFRESH_RATE = true; // try a display mode close to the emulated field rate when going fullscreen
 const float DEFAULT_ZOOM_VALUE = 1.0f;
 const bool DEFAULT_MIPMAPPING = true;
 const int DEFAULT_MASK_SCALE = 1; // CRT mask scale (0=disabled, 1-4=visible)

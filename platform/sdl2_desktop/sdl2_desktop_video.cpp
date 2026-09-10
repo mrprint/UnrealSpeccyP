@@ -402,6 +402,17 @@ static struct eOptionWindowDisplay : public xOptions::eOptionString
 // ApplyFullScreen() below.
 static bool g_field_rate_synced = false;
 
+// Exposed to platform/gl/draw.cpp (DrawGL()) so it can ignore the
+// "gigascreen" option for as long as this holds: true only while fullscreen,
+// "Prefer PAL refresh" is on, AND a matching display mode was actually
+// found and applied - exactly the condition g_field_rate_synced already
+// tracks, so this is a plain read of it rather than a separate flag that
+// could drift out of sync.
+bool FieldRateSyncActive()
+{
+	return g_field_rate_synced;
+}
+
 // The Z80 clock this codebase assumes everywhere (see the comment above) -
 // not read from anywhere more "canonical" because nothing more canonical
 // exists here: it's a plain duplicated magic number in three .cpp files
@@ -551,6 +562,50 @@ static bool TryEnableFieldRateSyncFullscreen()
 	return true;
 }
 
+// Forward declaration - eOptionPreferPalRefresh::Apply() below re-applies
+// the current fullscreen state, and ApplyFullScreen() (defined right after
+// the option) reads the option to decide whether to try the field-rate-
+// synced exclusive mode at all.
+static void ApplyFullScreen(bool enable);
+
+static struct eOptionPreferPalRefresh : public xOptions::eOptionBool
+{
+	// Off by default - unlike the field-rate-sync behaviour itself (which
+	// predates this option and so used to just default-on to preserve
+	// pre-existing behaviour), a fresh config now starts with plain
+	// borderless fullscreen at the desktop's own rate, and only switches
+	// display modes once the person explicitly opts in.
+	eOptionPreferPalRefresh() { Set(false); }
+	const char* Name() const override { return "Prefer PAL refresh"; }
+	int Order() const override { return 33; }
+	void Set(const bool& v) override
+	{
+		eOptionBool::Set(v);
+		Apply();
+	}
+	void Apply() override
+	{
+		// Re-apply the current fullscreen state so a toggle takes effect
+		// immediately while fullscreen is active (off -> plain borderless at
+		// the desktop's own rate, on -> try the field-rate-synced mode).
+		// No-op while windowed, and no-op at Load() time, when the window
+		// doesn't exist yet - InitVideo() applies the state itself after
+		// window creation.
+		if(!g_gl_window.window)
+			return;
+		Uint32 flags = SDL_GetWindowFlags(g_gl_window.window);
+		if(!(flags & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)))
+			return;
+		// Already in the state this option wants - re-entering fullscreen
+		// would just add a redundant modeset for no visible change (this is
+		// what makes the Options dialog's OK button, which calls Set()+
+		// Apply() in that order, a no-op when nothing changed).
+		if((*this) ? g_field_rate_synced : !g_field_rate_synced)
+			return;
+		ApplyFullScreen(true);
+	}
+} op_prefer_pal_refresh;
+
 // Shared by eOptionFullScreen::Apply() (runtime toggle, via the menu/Ctrl+F/
 // double-click) and InitVideo()'s launch-already-fullscreen path - both need
 // the exact same try-sync/fall-back-to-desktop-rate behaviour, not two
@@ -561,6 +616,16 @@ static void ApplyFullScreen(bool enable)
 	{
 		SDL_SetWindowFullscreen(g_gl_window.window, 0);
 		g_field_rate_synced = false;
+		return;
+	}
+
+	// Prefer PAL refresh is off - plain borderless fullscreen at the
+	// desktop's own refresh rate, no modesetting at all.
+	if(!op_prefer_pal_refresh)
+	{
+		SDL_SetWindowFullscreen(g_gl_window.window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+		g_field_rate_synced = false;
+		xImGui::SetStatusText("Fullscreen: Prefer PAL refresh off, using desktop rate");
 		return;
 	}
 

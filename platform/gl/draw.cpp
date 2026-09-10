@@ -259,6 +259,15 @@ namespace xPlatform
     static int   video_frame_last = -1;
     static bool  giga_was_enabled = false;
 
+#ifdef USE_SDL2_DESKTOP
+    // sdl2_desktop/sdl2_desktop_video.cpp - true only while fullscreen with
+    // "Prefer PAL refresh" on and a matching display mode actually applied.
+    // Forward-declared here rather than pulled in via a shared header,
+    // matching how this codebase already wires up other cross-file calls
+    // (see e.g. ResizeToOrgSizeMultiple() in sdl2_desktop_menu.cpp).
+    bool FieldRateSyncActive();
+#endif
+
     // Layout-change tracking for glClear.
     // pending_clear starts true so HandleLayoutClear clears both swap-chain
     // buffers on the first two frames, preventing driver-default gray at startup.
@@ -907,6 +916,15 @@ void main()
         PROFILER_BEGIN(draw_p);
 
         bool giga_enabled = op_gigascreen;
+#ifdef USE_SDL2_DESKTOP
+        // A field-rate-synced fullscreen mode is actually running - Prefer
+        // PAL refresh takes priority over Gigascreen rather than the other
+        // way round, so ignore Gigascreen for as long as that holds. Only
+        // this condition suppresses it; windowed mode and plain (non-PAL-
+        // synced) fullscreen leave Gigascreen exactly as configured.
+        if (FieldRateSyncActive())
+            giga_enabled = false;
+#endif
         giga_was_enabled = giga_enabled;
 
         if (giga_enabled && video_frame_last != snap.frame)

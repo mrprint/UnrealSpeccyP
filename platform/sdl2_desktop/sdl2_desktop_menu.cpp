@@ -254,6 +254,7 @@ bool HandleMenuShortcut(SDL_Event& e)
 		case SDLK_g: if(down) ToggleBoolOption("gigascreen", "Gigascreen on", "Gigascreen off"); return true;
 		case SDLK_s: if(down) ToggleBoolOption("scanlines", "CRT scanlines simulation on", "CRT scanlines simulation off"); return true;
 		case SDLK_p: if(down) ToggleBoolOption("pal effects", "PAL effects on", "PAL effects off"); return true;
+		case SDLK_r: if(down) ToggleBoolOption("Prefer PAL refresh", "Prefer PAL refresh on", "Prefer PAL refresh off"); return true;
 		default: break;
 		}
 	}
@@ -319,6 +320,11 @@ void DrawMenuBar()
 		ImGui::Separator();
 		if(ImGui::MenuItem("Full screen", "Ctrl+F"))
 			OnFullScreenToggle();
+		{
+			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("Prefer PAL refresh");
+			if(op && ImGui::MenuItem("Prefer PAL refresh", "Ctrl+Shift+R", *op))
+				ToggleBoolOption("Prefer PAL refresh", "Prefer PAL refresh on", "Prefer PAL refresh off");
+		}
 		ImGui::EndMenu();
 	}
 
