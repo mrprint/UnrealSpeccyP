@@ -21,12 +21,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifdef USE_SDL2_DESKTOP
 
 #include "sdl2_desktop_filedialog.h"
+#include "sdl2_desktop_dirwatch.h"
 #include "imgui_shared.h"
 #include "imgui.h"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
 #include <filesystem>
+
+#ifdef _WINAPI
+#include <windows.h> // GetLogicalDrives() - see FileDialog::ShowDriveList()
+#endif
 
 namespace fs = std::filesystem;
 
@@ -124,8 +129,30 @@ private:
     std::vector<Entry> m_entries;
     int m_selected = -1; // index into m_entries
 
+    // Windows-only virtual level above every real drive root, listing drive
+    // letters as pseudo-directories (m_entries filled by ShowDriveList()
+    // rather than RefreshEntries() while this is true) - std::filesystem has
+    // no notion of "My Computer"/"This PC" above "C:\" and friends, so Up
+    // from a drive root needs somewhere to go that isn't just a no-op. See
+    // GoUp(). m_current_dir is empty while this is true - nothing else may
+    // read it in that state (NavigateTo() clears the flag again before it
+    // sets a real m_current_dir).
+    bool m_showing_drives = false;
+
     char m_path_buf[1024] = {};
     char m_name_buf[512] = {};   // save-mode only
+
+    // Auto-refreshes m_entries when something outside this process changes
+    // m_current_dir - see Watch() call in NavigateTo() and the PollChanged()
+    // check at the top of Draw().
+    DirWatcher m_watcher;
+    // Set from the path-bar InputText's own ImGui::IsItemActive() at the end
+    // of every Draw(); read back at the *start* of the next Draw() to skip
+    // that frame's auto-refresh while the user still has the path bar
+    // focused, so a background change can't clobber text they're mid-typing
+    // (RefreshEntries() below always overwrites m_path_buf from
+    // m_current_dir).
+    bool m_path_bar_was_active = false;
 
     bool m_show_overwrite_confirm = false;
     bool m_overwrite_popup_pending_open = false; // OpenPopup() must fire exactly once per confirm request, not every frame - see Draw()
@@ -136,6 +163,11 @@ private:
     static bool MatchesFilter(const std::string& filename, const FileDialogFilter& filter);
     void RefreshEntries();
     void NavigateTo(const fs::path& dir);
+    void GoUp(); // "Up" button - handles the drive-root -> virtual drive list step itself
+    void GoRoot(); // "Root" button - jumps straight to the top in one click
+#ifdef _WINAPI
+    void ShowDriveList(); // populates m_entries with drive letters - see m_showing_drives
+#endif
     std::string CurrentFilterFirstExtension() const;
     void Confirm(const std::string& path);
 };
@@ -202,11 +234,79 @@ void FileDialog::RefreshEntries() {
 }
 
 void FileDialog::NavigateTo(const fs::path& dir) {
+    m_showing_drives = false; // always navigating to a real, concrete directory
     std::error_code ec;
     fs::path canon = fs::weakly_canonical(dir, ec);
     m_current_dir = ec ? dir : canon;
     RefreshEntries();
+    // (Re)start watching whatever we actually ended up showing - harmless,
+    // and cheap, even if it's the same directory as before (Watch() just
+    // tears down and re-creates the native watch).
+    m_watcher.Watch(PathToUtf8(m_current_dir));
 }
+
+void FileDialog::GoUp() {
+    if (m_showing_drives)
+        return; // already at the top - nothing above the virtual drive list
+#ifdef _WINAPI
+    // A drive root (e.g. "C:\") has no parent of its own in
+    // std::filesystem's model (parent_path() of a root just returns itself)
+    // - comparing against root_path() detects that directly rather than
+    // relying on that self-referential quirk. Surface one more, virtual
+    // level here (mirroring Explorer's "This PC") instead of Up silently
+    // doing nothing once you reach a drive's root.
+    if (m_current_dir == m_current_dir.root_path()) {
+        ShowDriveList();
+        return;
+    }
+#endif
+    fs::path parent = m_current_dir.parent_path();
+    if (!parent.empty() && parent != m_current_dir)
+        NavigateTo(parent);
+}
+
+void FileDialog::GoRoot() {
+    if (m_showing_drives)
+        return; // already at the top
+#ifdef _WINAPI
+    // No single "/" on Windows - the nearest equivalent to "jump to the top
+    // in one click" is the virtual drive list itself (see ShowDriveList()),
+    // the same place repeatedly pressing Up would eventually land on.
+    ShowDriveList();
+#else
+    NavigateTo(fs::path("/"));
+#endif
+}
+
+#ifdef _WINAPI
+void FileDialog::ShowDriveList() {
+    m_showing_drives = true;
+    m_current_dir.clear();
+    m_selected = -1;
+    m_error_text.clear();
+    m_entries.clear();
+    m_watcher.Reset(); // nothing real to watch at this virtual level
+
+    // GetLogicalDrives() bit i (0-based) set = drive letter 'A'+i exists -
+    // simplest way to enumerate drive letters; doesn't distinguish an empty
+    // optical drive from a populated one, but neither does Explorer's "This
+    // PC" list, and RefreshEntries()'s existing fs::exists()/try-catch
+    // handling already copes fine with a drive that turns out to be
+    // inaccessible once actually entered.
+    DWORD mask = GetLogicalDrives();
+    for (int i = 0; i < 26; ++i) {
+        if (!(mask & (1u << i)))
+            continue;
+        std::string name;
+        name += char('A' + i);
+        name += ":\\";
+        m_entries.push_back({ name, true });
+    }
+    // Already in A -> Z order from the bit scan above - no sort needed.
+
+    CopyToBuffer(m_path_buf, sizeof(m_path_buf), "This PC");
+}
+#endif//_WINAPI
 
 std::string FileDialog::CurrentFilterFirstExtension() const {
     if (m_filters.empty()) return "";
@@ -252,6 +352,13 @@ void FileDialog::Draw() {
     if (!m_open)
         return;
 
+    // Pick up changes made outside this process (another app touching the
+    // folder we're showing) before drawing anything else this frame - see
+    // m_path_bar_was_active's comment for why this is skipped while the
+    // path bar is focused.
+    if (!m_path_bar_was_active && m_watcher.PollChanged())
+        RefreshEntries();
+
     ImGui::SetNextWindowSize(ImVec2(620, 440), ImGuiCond_FirstUseEver);
     bool open = m_open;
     if (!ImGui::Begin(m_title.c_str(), &open, ImGuiWindowFlags_NoCollapse)) {
@@ -261,12 +368,14 @@ void FileDialog::Draw() {
     }
 
     // --- path bar ---
-    if (ImGui::Button("Up")) {
-        fs::path parent = m_current_dir.parent_path();
-        if (!parent.empty())
-            NavigateTo(parent);
+    if (!m_showing_drives) {
+        if (ImGui::Button("Up"))
+            GoUp();
+        ImGui::SameLine();
+        if (ImGui::Button("Root"))
+            GoRoot();
+        ImGui::SameLine();
     }
-    ImGui::SameLine();
     ImGui::SetNextItemWidth(-1.0f);
     if (ImGui::InputText("##path", m_path_buf, sizeof(m_path_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
         // m_path_buf holds UTF-8 (it's what PathToUtf8() wrote into it, and
@@ -276,6 +385,7 @@ void FileDialog::Draw() {
         // constructor to round-trip correctly for non-ASCII paths.
         NavigateTo(Utf8ToPath(m_path_buf));
     }
+    m_path_bar_was_active = ImGui::IsItemActive();
 
     // --- filter combo ---
     if (!m_filters.empty()) {
@@ -287,7 +397,12 @@ void FileDialog::Draw() {
                 bool sel = (i == m_filter_index);
                 if (ImGui::Selectable(m_filters[i].label.c_str(), sel)) {
                     m_filter_index = i;
-                    RefreshEntries();
+                    // Filters only affect real directory listings - the
+                    // virtual drive list has no files to filter, and
+                    // RefreshEntries() would just misread the empty
+                    // m_current_dir as "can't open this folder" and wipe it.
+                    if (!m_showing_drives)
+                        RefreshEntries();
                 }
                 if (sel) ImGui::SetItemDefaultFocus();
             }
@@ -325,9 +440,13 @@ void FileDialog::Draw() {
             if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                 if (e.is_dir) {
                     // e.name is UTF-8 (from PathToUtf8() in RefreshEntries) -
-                    // same u8path() reasoning as the path bar above.
+                    // same u8path() reasoning as the path bar above. While
+                    // showing the virtual drive list, e.name ("C:\\" etc.)
+                    // is already an absolute root on its own, not something
+                    // to join under m_current_dir (which is empty there).
                     pending_navigate = Utf8ToPath(e.name);
-                    pending_navigate = m_current_dir / pending_navigate;
+                    if (!m_showing_drives)
+                        pending_navigate = m_current_dir / pending_navigate;
                     has_pending_navigate = true;
                 } else if (!m_save_mode) {
                     pending_confirm = PathToUtf8(m_current_dir / Utf8ToPath(e.name));
@@ -363,9 +482,12 @@ void FileDialog::Draw() {
     if (do_confirm) {
         if (m_save_mode) {
             // m_name_buf is UTF-8 (Dear ImGui's InputText works in UTF-8) -
-            // same u8path() reasoning as elsewhere in this file.
+            // same u8path() reasoning as elsewhere in this file. Nothing to
+            // save into yet while m_current_dir is the empty, virtual drive
+            // list - m_current_dir / name would silently produce a bogus
+            // *relative* path instead.
             std::string name = m_name_buf;
-            if (!name.empty()) {
+            if (!name.empty() && !m_showing_drives) {
                 std::string ext = ToLower(PathToUtf8(Utf8ToPath(name).extension()));
                 if (ext.empty() || ext == ".") {
                     std::string default_ext = CurrentFilterFirstExtension();
