@@ -24,20 +24,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // =============================================================================
 //  platform/sdl2_desktop/sdl2_desktop_gamepad.h
 //
-//  Per-player, remappable gamepad backend for the "sdl2_desktop" platform -
-//  the same data model and logic as platform/wxwidgets/wx_gamepad.h +
-//  joystick_mapper.h (GamepadState / EHostSourceType / EEmulatedJoystickInput
-//  / JoystickProfile / JoystickMapper / (de)serialization / GUID resolution),
-//  copied verbatim where possible; that code has no wxWidgets dependency at
-//  all, only an `#ifdef USE_WXWIDGETS` guard around the whole file. This is
-//  the same file with that guard swapped for USE_SDL2_DESKTOP, plus one
-//  addition: HandleControllerEvent(), which lets a single, already-running
-//  SDL_PollEvent() loop (this platform's own, in sdl2_desktop.cpp) feed
-//  events in one at a time instead of PollEvents() draining the queue itself
-//  - the wx build has SDL initialized *only* for the gamepad subsystem, so
-//  wx_canvas.cpp's polling timer calling PollEvents() is the sole consumer
-//  of SDL_PollEvent() there. Here SDL also owns the window/keyboard/mouse
-//  event queue, so there can only be one place draining it.
+//  Per-player, remappable gamepad backend for the "sdl2_desktop" platform:
+//  GamepadState / EHostSourceType / EEmulatedJoystickInput / JoystickProfile
+//  / JoystickMapper / (de)serialization / GUID resolution.
+//
+//  HandleControllerEvent() lets a single, already-running SDL_PollEvent()
+//  loop (this platform's own, in sdl2_desktop.cpp) feed events in one at a
+//  time instead of PollEvents() draining the queue itself - here SDL also
+//  owns the window/keyboard/mouse event queue, so there can only be one
+//  place draining it.
 //
 // =============================================================================
 
@@ -124,7 +119,7 @@ public:
     void Initialize();
     void Shutdown();
 
-    // Event polling — call from wxTimer on the main thread (wx build only).
+    // Drains the SDL event queue, dispatching controller add/remove events.
     void PollEvents(std::function<void(int device_index)> on_device_added,
                     std::function<void(int device_index)> on_device_removed);
 
@@ -147,9 +142,7 @@ private:
     static constexpr int kMaxControllers = 16;
 
     // RAII wrapper for SDL_GameController*: each slot auto-closes on
-    // destruction or reassignment via SDL_GameControllerClose, eliminating
-    // the possibility of a forgotten close or double-close that the manual
-    // open/close in Initialize()/Shutdown()/HandleControllerEvent() carried.
+    // destruction or reassignment via SDL_GameControllerClose.
     // Stateful deleter: always callable regardless of how the unique_ptr was
     // constructed.
     struct ControllerDeleter {

@@ -16,11 +16,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// In the wx build, F-keys/Ctrl+.../Ctrl+Shift+... never reach TranslateKey()
-// at all - wx's own menu accelerator table intercepts them before they
-// become ordinary key events (see wx_keys.cpp, which has no F-key handling
-// whatsoever). HandleMenuShortcut() (sdl2_desktop_menu.cpp) reproduces that
-// interception here.
+// F-keys/Ctrl+.../Ctrl+Shift+... are intercepted before TranslateKey() by
+// HandleMenuShortcut() (sdl2_desktop_menu.cpp) - the menu accelerator table.
 
 #include "../platform.h"
 
@@ -34,11 +31,11 @@ namespace xPlatform
 {
 
 #ifdef SDL_USE_MOUSE
-bool ProcessMouseGrab(SDL_Event& e); // sdl2_mouse.cpp, reused as-is
+bool ProcessMouseGrab(SDL_Event& e); // sdl2_mouse.cpp
 #endif//SDL_USE_MOUSE
 
-// sdl2_desktop_menu.cpp - wx-equivalent menu accelerators (File/View/Device/
-// Window). Returns true if this event was consumed as a shortcut and must
+// sdl2_desktop_menu.cpp - menu accelerators (File/View/Device/Window).
+// Returns true if this event was consumed as a shortcut and must
 // not also reach the ZX keyboard emulation below.
 namespace xImGui { bool HandleMenuShortcut(SDL_Event& e); }
 

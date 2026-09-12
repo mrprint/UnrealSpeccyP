@@ -26,12 +26,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 //  In-engine, non-native file browser overlay, drawn by Dear ImGui like
 //  every other window on this platform - no OS modal dialog, no second
-//  thread needed to keep the emulator alive while it's open (see the
-//  original architecture writeup on why that matters here).
+//  thread needed to keep the emulator alive while it's open.
 //
-//  Stands in for wxFileDialog's two uses in platform/wxwidgets/wx_frame.cpp:
-//  Frame::OnOpenFile() (wxFD_OPEN, wildcard-filtered) and
-//  Frame::OnSaveFile() (wxFD_SAVE, wxFD_OVERWRITE_PROMPT).
+//  Covers two use cases: Open (wildcard-filtered) and Save (with overwrite
+//  prompt).
 // =============================================================================
 
 #include <string>

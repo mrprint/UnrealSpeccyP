@@ -19,10 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // =============================================================================
 //  platform/sdl2_desktop/sdl2_desktop.cpp
 //
-//  Entry point + single-threaded main loop for the new "sdl2_desktop"
-//  platform. Deliberately close to platform/sdl2/sdl2.cpp (same eOptionSpeed,
-//  same home-path/profile setup, same Init/Done/Loop/Loop1 structure), with
-//  two real differences:
+//  Entry point + single-threaded main loop for the "sdl2_desktop" platform.
 //   - every SDL event is fed to Dear ImGui and, for keyboard/mouse events,
 //     buffered; only *after* xImGui::BeginFrame() has processed the whole
 //     batch (so io.WantCaptureKeyboard/Mouse are current) are the buffered
@@ -78,9 +75,8 @@ namespace xPlatform
 // ENABLE_MOUSE_INPUT (see comment above), and restores it + flushes stale
 // events on destruction — so whatever launched us (FAR Manager, cmd.exe)
 // resumes reading its console input from a clean slate instead of replaying
-// a stray, unmatched button transition. The destructor runs automatically at
-// scope exit or program termination, eliminating the manual save/restore pair
-// that was previously spread across Init()/Done().
+// a stray, unmatched button transition. The destructor runs automatically
+// at scope exit or program termination.
 class ConsoleModeGuard {
 public:
     ConsoleModeGuard() : handle_(INVALID_HANDLE_VALUE), mode_(0), saved_(false) {
@@ -157,15 +153,12 @@ SDL_Window* GetVideoWindow();
 
 namespace xImGui
 {
-// sdl2_desktop_filedialog.cpp - not otherwise needed in this file, so
-// forward-declared here rather than pulling in the whole header, same as
-// the FeedEvent/BeginFrame/etc. block above.
 bool FileBrowserActive();
 }
 //namespace xImGui
 
 #ifndef SDL_DEFAULT_FOLDER
-// Use standard platform config paths to stay consistent with wxwidgets:
+// Standard platform config paths:
 // Windows: %APPDATA%/unreal_speccy_portable/
 // Linux:   ~/.config/unreal_speccy_portable/
 // macOS:   ~/Library/Application Support/unreal_speccy_portable/
@@ -221,10 +214,9 @@ bool Init()
 	// but very visible on fine periodic detail like the CRT phosphor-mask
 	// columns, and Windows applies it most aggressively to fullscreen/
 	// maximized windows (matching the "fullscreen only, any windowed size is
-	// fine" symptom). platform/wxwidgets doesn't hit this because wxWidgets
-	// links its own manifest declaring DPI awareness by default; this SDL2
-	// executable has no manifest at all, so it needs the equivalent
-	// declared explicitly. "permonitorv2" doesn't switch SDL to a virtualized
+	// fine" symptom). This SDL2 executable has no manifest at all, so DPI
+	// awareness must be declared explicitly. "permonitorv2" doesn't switch SDL
+	// to a virtualized
 	// coordinate system (unlike SDL_HINT_WINDOWS_DPI_SCALING), so it stays a
 	// no-op for every raw-pixel size/position value already used elsewhere in
 	// this file (op_window_state, SDL_GL_GetDrawableSize, ...). Ignored on
@@ -234,8 +226,7 @@ bool Init()
 #ifdef _WINAPI
 	// RAII: ConsoleModeGuard saves the console mode on construction (disabling
 	// ENABLE_MOUSE_INPUT) and restores it + flushes stale events on destruction.
-	// Placed in a function-local static so its destructor runs at program exit,
-	// matching the previous Init()/Done() lifecycle without manual cleanup code.
+	// Placed in a function-local static so its destructor runs at program exit.
 	static ConsoleModeGuard g_console_mode_guard;
 #endif//_WINAPI
 
@@ -252,7 +243,7 @@ bool Init()
 	// controller connected before the app starts would otherwise only be
 	// picked up once SDL happens to deliver a queued
 	// SDL_CONTROLLERDEVICEADDED, which HandleControllerEvent() already
-	// guards against double-opening. Matches Frame::Frame() in wx_frame.cpp.
+	// guards against double-opening.
 	GamepadBackend().Initialize();
 #endif//SDL_USE_JOYSTICK
 
@@ -265,22 +256,20 @@ bool Init()
 
 	xImGui::InitMenu();
 
-	// Deliberately NOT registering an SDL_AddEventWatch()/SDL_WINDOWEVENT_EXPOSED
-	// handler here, unlike platform/sdl2/sdl2.cpp. That handler runs
-	// synchronously *from inside* SDL_PollEvent()/SDL_PumpEvents() - on
-	// Windows, SDL_WINDOWEVENT_EXPOSED fires liberally while the window is
-	// being interacted with (including an interactive resize-drag, or just
-	// clicking a menu), which would call back into this same frame's
-	// in-progress event handling. That is harmless for platform/gles2's
-	// stateless per-frame draw, but Dear ImGui's NewFrame()/Render() pairing
-	// must never nest or repeat without a fresh NewFrame() in between - doing
-	// so corrupts its popup/ID stack (menus stop closing on outside click,
-	// overlay text can render twice in the same spot). The trade-off is a
-	// window that can go blank for the brief duration of an actual live
-	// resize-drag on Windows (SDL's own nested modal loop blocks regular
-	// SDL_PollEvent() during that drag either way) - correctness of the UI
-	// state machine matters more than smooth repaint during that one
-	// interaction, and this is the trade most non-ImGui SDL apps make anyway.
+	// No SDL_AddEventWatch()/SDL_WINDOWEVENT_EXPOSED redraw handler here.
+	// That handler runs synchronously *from inside* SDL_PollEvent()/
+	// SDL_PumpEvents() - on Windows, SDL_WINDOWEVENT_EXPOSED fires liberally
+	// while the window is being interacted with (including an interactive
+	// resize-drag, or just clicking a menu), which would call back into this
+	// same frame's in-progress event handling. Dear ImGui's
+	// NewFrame()/Render() pairing must never nest or repeat without a fresh
+	// NewFrame() in between - doing so corrupts its popup/ID stack (menus
+	// stop closing on outside click, overlay text can render twice in the
+	// same spot). The trade-off is a window that can go blank for the brief
+	// duration of an actual live resize-drag on Windows (SDL's own nested
+	// modal loop blocks regular SDL_PollEvent() during that drag either
+	// way) - correctness of the UI state machine matters more than smooth
+	// repaint during that one interaction.
 	return true;
 }
 
@@ -317,8 +306,7 @@ static std::vector<SDL_Event> game_input_events;
 //
 // Hidden when either:
 //  - the window has an active Kempston-mouse grab (sdl2_mouse.cpp,
-//    SDL_SetWindowGrab(), reused as-is from platform/sdl2/) - pre-existing
-//    behaviour, unrelated to fullscreen;
+//    SDL_SetWindowGrab()) - unrelated to fullscreen;
 //  - fullscreen with nothing on screen for the cursor to point at: the menu
 //    bar and status bar aren't drawn while fullscreen (see EndFrame() in
 //    sdl2_desktop_imgui.cpp), and none of the floating windows (Options,
@@ -372,7 +360,7 @@ void Loop1()
 			// event as it's polled, makes the very first click on a
 			// still-unseen menu item read as
 			// "not over the UI" and leak through to the emulator. That
-			// matters here specifically because platform/sdl2/sdl2_mouse.cpp
+			// matters here specifically because sdl2_mouse.cpp
 			// has no bounds check of its own: it grabs the mouse
 			// unconditionally on any click it receives while the window
 			// isn't already grabbed, trusting the caller to have already
@@ -387,7 +375,7 @@ void Loop1()
 		case SDL_CONTROLLERDEVICEREMOVED:
 			// Per-player button mapping/gameplay translation happens once a
 			// frame below (see the JoystickMapper polling loop after this
-			// switch), same as GLCanvas::OnGamepadPoll() in wx_canvas.cpp -
+			// switch) -
 			// this only needs to keep GamepadBackend's raw per-device state
 			// (open/closed, button/axis values) current.
 			GamepadBackend().HandleControllerEvent(e);
@@ -440,12 +428,10 @@ void Loop1()
 					xImGui::CloseMenuDialogs();
 					break;
 				}
-				// wx's evtMouseCapture (posted from wx_mouse.cpp whenever
-				// SDL_SetWindowGrab()'s state actually changes) drives
-				// Frame::OnMouseCapture()'s status text; sdl2_mouse.cpp
-				// (reused as-is) has no such notification of its own, so the
-				// same message is derived here instead, from the grab state
-				// before/after the call that might change it.
+				// sdl2_mouse.cpp has no grab-change notification of its
+				// own, so the "Mouse captured/released" status message is
+				// derived here from the grab state before/after the call
+				// that might change it.
 				SDL_Window* win = GetVideoWindow();
 				bool grabbed_before = SDL_GetWindowGrab(win) != SDL_FALSE;
 				ProcessMouse(ge);
@@ -474,15 +460,11 @@ void Loop1()
 #endif//SDL_USE_MOUSE
 
 #ifdef SDL_USE_JOYSTICK
-	// Per-player gamepad -> ZX-keyboard translation, once a frame - the same
-	// thing GLCanvas::OnGamepadPoll() does on its own wxTimer in the wx
-	// build, just driven by this platform's single frame loop instead.
+	// Per-player gamepad -> ZX-keyboard translation, once a frame.
 	// Profiles are re-read from xOptions every frame rather than cached:
 	// parsing a short string is free next to everything else this loop
 	// already does each frame, and it means the Options dialog's OK handler
-	// doesn't need to separately poke this file to pick up a change (unlike
-	// wx_canvas.cpp's ReloadGamepadProfiles(), called explicitly from both
-	// wx_frame.cpp and wx_optionsdialog.cpp for exactly that reason).
+	// doesn't need to separately poke this file to pick up a change.
 	for(int player = 0; player < 2; ++player)
 	{
 		JoystickProfile profile;

@@ -27,9 +27,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //  (sdl2_desktop_menu.cpp) and the Options dialog (sdl2_desktop_options.cpp).
 //
 //  The actual GUI content - menu bar, About window, Options dialog - lives
-//  in sdl2_desktop_menu.cpp / sdl2_desktop_options.cpp, mirroring
-//  platform/wxwidgets/wx_frame.cpp / wx_optionsdialog.cpp respectively; see
-//  imgui_shared.h for how the pieces connect.
+//  in sdl2_desktop_menu.cpp / sdl2_desktop_options.cpp; see imgui_shared.h
+//  for how the pieces connect.
 // =============================================================================
 
 #include "../platform.h"
@@ -67,9 +66,8 @@ namespace xImGui
 #endif//defined(_WINAPI) && defined(_MSC_VER)
 
 // Detects the OS-level light/dark appearance preference so the ImGui
-// overlay matches the desktop the same way platform/wxwidgets' native
-// widgets automatically do - ImGui isn't a native toolkit, so this has to
-// be done by hand, on all three supported platforms. Re-checked
+// overlay matches the desktop - ImGui isn't a native toolkit, so this has
+// to be done by hand, on all three supported platforms. Re-checked
 // periodically from ImGuiBackend::BeginFrame() below (see
 // ImGuiBackend::m_last_theme_check_ms), not just once here, so toggling the
 // OS theme while the emulator is already running updates the overlay too,
@@ -225,10 +223,9 @@ static void ApplyStyle(float dpi_scale, eSystemTheme theme)
 }
 
 // ---------------------------------------------------------------------------
-// StatusBar - equivalent of wxFrame::SetStatusText(): one line, always
-// visible at the bottom, replaced (not queued) by the next call. Matches wx
-// exactly, including the default "Ready..." text (set from
-// sdl2_desktop_menu.cpp at startup, mirroring Frame::Frame()).
+// StatusBar: one line, always visible at the bottom, replaced (not queued)
+// by the next call. The default "Ready..." text is set from
+// sdl2_desktop_menu.cpp at startup.
 //
 // Its only state is the text buffer below - a distinct concern from
 // ImGuiBackend's lifecycle/DPI/font/theme state further down.
@@ -285,7 +282,7 @@ public:
 	// buffered keyboard/mouse event should also reach the emulator. Checking
 	// those flags before BeginFrame() makes the very first click on a
 	// still-unseen menu item read as "not over the UI" and leak through to
-	// the emulator - see platform/sdl2/sdl2_mouse.cpp, which has no bounds
+	// the emulator - see sdl2_mouse.cpp, which has no bounds
 	// check of its own and grabs the mouse unconditionally on any click it
 	// receives while the window isn't already grabbed.
 	void BeginFrame();
@@ -414,12 +411,11 @@ void ImGuiBackend::BeginFrame()
 
 void ImGuiBackend::EndFrame()
 {
-	// wx_frame.cpp's ShowFullScreen(true, wxFULLSCREEN_ALL) hides the menu
-	// bar and status bar along with the window chrome; matching that here
-	// means not drawing them at all while fullscreen, rather than leaving
-	// them floating over the game image. Already-open floating windows
-	// (Options, file browser, About) are left alone either way - a fullscreen
-	// toggle happening while one is open shouldn't make it unreachable.
+	// While fullscreen, don't draw the menu bar and status bar at all
+	// (rather than leaving them floating over the game image). Already-open
+	// floating windows (Options, file browser, About) are left alone either
+	// way - a fullscreen toggle happening while one is open shouldn't make
+	// it unreachable.
 	bool fullscreen = false;
 	{
 		xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("full screen");
@@ -535,9 +531,7 @@ bool WantCaptureMouse() { return ImGui::GetIO().WantCaptureMouse; }
 
 // Called from platform/gl/draw.cpp (USE_GL) whenever it switches between the
 // full and the lightweight shader path - every USE_GL platform must provide
-// this. platform/wxwidgets/wx_canvas.cpp posts the wx equivalent to its
-// native status bar via evtSetStatusText; here it's the exact same status
-// bar (sdl2_desktop_imgui.cpp's, not a separate notification mechanism).
+// this.
 void LightweightShadersMessage(bool prev_use_lightweight, bool use_lightweight)
 {
 	if(prev_use_lightweight == use_lightweight)

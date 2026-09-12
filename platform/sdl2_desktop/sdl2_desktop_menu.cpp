@@ -20,10 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //  platform/sdl2_desktop/sdl2_desktop_menu.cpp
 //
 //  Menu bar (File/View/Device/Window/Help), status bar text, About window,
-//  and keyboard-shortcut table - a port of platform/wxwidgets/wx_frame.cpp's
-//  Frame class to this platform's free-function/xOptions style. Menu item
-//  wording, order, grouping and the SHORTCUT_* keys below are copied from
-//  wx_frame.cpp as closely as ImGui's model allows.
+//  and keyboard-shortcut table.
 //
 // =============================================================================
 
@@ -52,14 +49,12 @@ namespace xImGui
 // ---------------------------------------------------------------------------
 
 static bool g_show_about = false;
-// Mirrors wx's menu_quick_save->Enable(false) at startup, ->Enable(true)
-// after a successful Open or Quick Load - see Frame::OnOpenFile()/OnQuickLoad().
+// Disabled at startup, enabled after a successful Open or Quick Load.
 static bool g_quick_save_enabled = false;
 
 // ---------------------------------------------------------------------------
 // Actions - each one is both a menu command and (via HandleMenuShortcut)
-// a keyboard shortcut target, exactly like a single wx EVT_MENU handler
-// serves both the menu click and the accelerator.
+// a keyboard shortcut target.
 // ---------------------------------------------------------------------------
 
 static void OnReset()
@@ -136,17 +131,7 @@ static void OnTapeToggle()
 	}
 }
 
-// Flips a bool xOption and reports the result on the status bar - the exact
-// same three lines that OnTrueSpeedToggle/OnMode48kToggle/
-// OnViewGigascreenToggle/OnViewScanlinesToggle/OnViewPalEffectsToggle used to
-// each repeat as a whole separate function, with only the option name and
-// on/off message text changed; call sites now just pass those three things
-// in directly (see DrawMenuBar()/HandleMenuShortcut() below) instead of
-// going through a named wrapper per option.
-// (OnFullScreenToggle/OnPauseToggle/OnTapeToggle/OnQuickLoad/OnQuickSave/
-// OnReset each do something extra beyond this shape - no status message, an
-// additional Handler() call, ->Change() instead of ->Set(!*) - so those keep
-// their own functions rather than being forced in here.
+// Flips a bool xOption and reports the result on the status bar.
 static void ToggleBoolOption(const char* option_name, const char* on_msg, const char* off_msg)
 {
 	xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find(option_name);
@@ -190,8 +175,8 @@ static void OnQuickSave()
 }
 
 // ---------------------------------------------------------------------------
-// Keyboard shortcuts - see wx_frame.cpp's SHORTCUT_* defines (non-_MAC set).
-// Called from sdl2_desktop_keys.cpp, ahead of ZX-keyboard translation.
+// Keyboard shortcuts. Called from sdl2_desktop_keys.cpp, ahead of
+// ZX-keyboard translation.
 // ---------------------------------------------------------------------------
 
 bool HandleMenuShortcut(SDL_Event& e)
@@ -199,15 +184,11 @@ bool HandleMenuShortcut(SDL_Event& e)
 	if(e.type != SDL_KEYDOWN && e.type != SDL_KEYUP)
 		return false;
 	// Let a focused text field (file browser path/name, gamepad rename in
-	// the Options dialog, ...) receive its keys normally - wx has no
-	// equivalent concern since its file/options dialogs are separate native
-	// windows that simply don't share the main frame's accelerator table
-	// while open.
+	// the Options dialog, ...) receive its keys normally.
 	if(ImGui::GetIO().WantTextInput)
 		return false;
-	// wx's modal wxFileDialog/OptionsDialog block the parent frame's own
-	// accelerator table for as long as they're open; these overlays aren't
-	// OS-modal, so that has to be done explicitly here instead.
+	// The file browser and Options dialog aren't OS-modal, so blocking the
+	// accelerator table while they're open has to be done explicitly here.
 	if(FileBrowserActive() || OptionsDialogActive())
 		return false;
 
@@ -399,8 +380,7 @@ void DrawMenuBar()
 }
 
 // ---------------------------------------------------------------------------
-// About window - content matches Frame::OnAbout()'s wxAboutDialogInfo
-// (non-_MAC branch).
+// About window
 // ---------------------------------------------------------------------------
 
 static void DrawAboutWindow()

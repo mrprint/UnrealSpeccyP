@@ -19,34 +19,27 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // =============================================================================
 //  platform/sdl2_desktop/sdl2_desktop_options.cpp
 //
-//  Options dialog - a port of platform/wxwidgets/wx_optionsdialog.cpp's 5
-//  tabs (Audio / Video / Input / Gamepads / Disk Drives) to this platform's
-//  ImGui overlay. Tab list is a manual left-side selectable list rather than
-//  ImGui's own top tab bar, on purpose: wx_optionsdialog.cpp deliberately
-//  uses a left-side wxListbook (its own comments note this was chosen so
-//  the tab captions read the same way across platforms), and that layout
-//  choice carries over here for the same reason.
+//  Options dialog - 5 tabs (Audio / Video / Input / Gamepads / Disk Drives)
+//  as an ImGui overlay. Tab list is a manual left-side selectable list
+//  rather than ImGui's own top tab bar, so the tab captions read the same
+//  way as in the classic dialog.
 //
-//  Same buffered-until-OK model as wx: LoadCurrentSettings()-equivalent
-//  (OpenOptionsDialog()) snapshots every option into local state when the
-//  dialog opens; every widget below reads/writes that local snapshot, not
-//  xOptions directly; OK commits it all via Set()+Apply(); Cancel discards
-//  it. The per-tab "Restore Defaults" buttons only touch the local snapshot
-//  too, exactly like OnResetAudio/Video/Input/Drive/Gamepad in wx.
+//  Buffered-until-OK model: OpenOptionsDialog() snapshots every option into
+//  local state when the dialog opens; every widget below reads/writes that
+//  local snapshot, not xOptions directly; OK commits it all via Set()+Apply();
+//  Cancel discards it. The per-tab "Restore Defaults" buttons only touch the
+//  local snapshot too.
 //
 //  Gamepad capture/device-list state is a distinct concern from the rest of
 //  the dialog's buffered settings - it has its own GamepadMappingPanel class
 //  further down, which OptionsDialog owns as a member rather than folding
 //  into itself.
 //
-//  Gamepads tab: same GUID-identified device combo + live capture-by-input
-//  model as wx's CreateGamepadsPage()/StartCaptureMode()/OnTimer(), reusing
-//  sdl2_desktop_gamepad.h (ported wx_gamepad.h/joystick_mapper.h) - see that
-//  header for why it's a port rather than a shared #include. No separate
-//  wxTimer is needed for either the 50ms capture poll or the device-hotplug
-//  poll: this whole dialog already redraws every real frame (see
-//  sdl2_desktop.cpp's single-threaded loop), so both are just checked once
-//  per GamepadMappingPanel::Draw() call instead.
+//  Gamepads tab: GUID-identified device combo + live capture-by-input, using
+//  sdl2_desktop_gamepad.h. No separate timer is needed for either the
+//  capture poll or the device-hotplug poll: this whole dialog already
+//  redraws every real frame (see sdl2_desktop.cpp's single-threaded loop),
+//  so both are just checked once per GamepadMappingPanel::Draw() call.
 // =============================================================================
 
 #include "../platform.h"
@@ -105,8 +98,7 @@ class GamepadMappingPanel
 {
 public:
 	// Snapshots both players' profiles from xOptions and refreshes the
-	// device list - called when the dialog opens (mirrors
-	// OptionsDialog::LoadCurrentSettings() for the rest of the dialog).
+	// device list - called when the dialog opens.
 	void Load()
 	{
 		for(int i = 0; i < 2; ++i)
@@ -200,9 +192,8 @@ private:
 		m_capturing_input = input;
 	}
 
-	// Checked once per frame while a capture is pending - equivalent of
-	// OptionsDialog::OnTimer(), just driven by the main loop's own frame
-	// rate instead of a dedicated 50ms wxTimer.
+	// Checked once per frame while a capture is pending, at the main
+	// loop's own frame rate.
 	void PollCapture()
 	{
 		if(m_capturing_player < 0)
@@ -268,9 +259,9 @@ private:
 
 	// Live hot-plug detection: called every frame while the Gamepads tab is
 	// visible (see Draw() - this is only ever reached while that's true, so
-	// unlike the old free-function version there's no separate g_open/
-	// active-tab guard to re-check here), but only does real work roughly
-	// once a second. Notifies when a controller was plugged in or unplugged
+	// no separate open/active-tab guard is needed here), but only does real
+	// work roughly once a second. Notifies when a controller was plugged in
+	// or unplugged
 	// since the last check, and refreshes the device list if so - without
 	// the user having to close and reopen the dialog to see the new device.
 	// Keeps running during an active capture too: if the capturing player
@@ -424,10 +415,8 @@ private:
 #endif//SDL_USE_JOYSTICK
 
 // ---------------------------------------------------------------------------
-// Small layout helper: label + slider + live value on one row, matching the
-// "slider row" layout wx_optionsdialog.cpp uses for CRT Mask Scale/PAL
-// Strength/Beam Spread. Stateless, so it stays a free function rather than
-// an OptionsDialog method.
+// Small layout helper: label + slider + live value on one row. Stateless, so
+// it stays a free function rather than an OptionsDialog method.
 // ---------------------------------------------------------------------------
 
 void SliderRow(const char* label, int* value, int lo, int hi, const char* value_fmt_is_percent)
@@ -647,9 +636,8 @@ void OptionsDialog::Open()
 #endif//SDL_USE_JOYSTICK
 }
 
-// Mirrors the cleanup Draw() itself runs when the user closes the window
-// normally (its own 'if(!open)' branch below), so a forced close from
-// outside behaves identically.
+// Same cleanup as the user-driven close in Draw() (its own 'if(!open)'
+// branch below), so a forced close from outside behaves identically.
 void OptionsDialog::Close()
 {
 	if(!m_open)
@@ -708,8 +696,7 @@ void OptionsDialog::Draw()
 	};
 	int tab_count = (int)(sizeof(tab_names) / sizeof(tab_names[0]));
 
-	// Left-side vertical tab list, mirroring wx_optionsdialog.cpp's
-	// wxListbook layout (see the file comment for why).
+	// Left-side vertical tab list (see the file comment for why).
 	ImGui::BeginChild("##tabs", ImVec2(140, -ImGui::GetFrameHeightWithSpacing()), true);
 	for(int i = 0; i < tab_count; ++i)
 	{

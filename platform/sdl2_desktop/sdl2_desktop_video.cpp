@@ -19,11 +19,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // =============================================================================
 //  platform/sdl2_desktop/sdl2_desktop_video.cpp
 //
-//  Window + desktop OpenGL context for the new "sdl2_desktop" platform.
-//
-//  Desktop GL context for the "sdl2_desktop" platform. Draws the emulator
-//  screen through platform/gl/draw.cpp (DrawGL(), the same shader-based
-//  renderer platform/wxwidgets uses - gigascreen / scanlines / PAL effects /
+//  Window + desktop OpenGL context for the "sdl2_desktop" platform. Draws
+//  the emulator screen through platform/gl/draw.cpp (DrawGL(), the shared
+//  shader-based renderer - gigascreen / scanlines / PAL effects /
 //  mipmapping), and renders the Dear ImGui overlay (menu, About window, ...)
 //  on top, after the emulator frame, still inside the single call to
 //  UpdateScreen() - one thread, one SDL_GL_SwapWindow() per frame.
@@ -56,8 +54,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 namespace xPlatform
 {
 
-// Implemented in platform/gl/draw.cpp (USE_GL) - the same desktop GL
-// renderer platform/wxwidgets/wx_canvas.cpp calls into.
+// Implemented in platform/gl/draw.cpp (USE_GL) - the shared desktop GL
+// renderer.
 void initGlew();
 void initGraphics(int scr_width, int scr_height);
 void cleanupGraphics();
@@ -70,21 +68,19 @@ void Done();
 void EndFrame();
 }
 
-// Backwards-compatible alias for sdl2_mouse.cpp (reused from platform/sdl2/),
-// which declares `extern SDL_Window* window;` and uses it directly. Rather than
-// modifying that shared file, we provide a global pointer that always mirrors
-// the current GLWindow's window handle — kept in sync by GLWindow::Create() and
-// GLWindow::Destroy(). When no window exists (before InitVideo or after DoneVideo),
-// this is nullptr, matching sdl2_mouse.cpp's null-check expectations.
+// sdl2_mouse.cpp declares `extern SDL_Window* window;` and uses it
+// directly, so this global pointer always mirrors the current GLWindow's
+// window handle — kept in sync by GLWindow::Create() and GLWindow::Destroy().
+// When no window exists (before InitVideo or after DoneVideo), this is
+// nullptr, matching sdl2_mouse.cpp's null-check expectations.
 SDL_Window* window = nullptr;
 
 // RAII wrapper for the SDL_Window + OpenGL context pair. The destructor
 // destroys them in the correct order (context before window — see DoneVideo()'s
-// comment about capture still being active when SDL_DestroyWindow() runs), so
-// the invariant that was previously held only by a code comment is now enforced
-// by the compiler: if InitVideo() returns false partway through, the GLWindow's
-// destructor simply never runs (the object was never fully constructed), and no
-// cleanup of partially-initialized state can happen.
+// comment about capture still being active when SDL_DestroyWindow() runs):
+// if InitVideo() returns false partway through, the GLWindow's destructor
+// simply never runs (the object was never fully constructed), and no cleanup
+// of partially-initialized state can happen.
 class GLWindow {
 public:
     SDL_Window* window = nullptr;
@@ -262,8 +258,6 @@ static std::string GetDisplayIdentity(int display_index)
 	return name ? name : std::string();
 }
 
-// Same option name/format as platform/sdl2/sdl2_video.cpp's eOptionWindowState,
-// on purpose - both platforms can share the same config file entry.
 class eOptionWindowState : public xOptions::eOptionString
 {
 public:
@@ -273,7 +267,7 @@ public:
 	bool Get(ePoint* position, ePoint* size, bool* maximized) const
 	{
 		ePoint p(SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED);
-		ePoint s(640, 480); // org_size (320x240) * 2 - same default wx_frame.cpp uses
+		ePoint s(640, 480); // org_size (320x240) * 2
 		int m = 0;
 		bool ok = sscanf(Value(), FormatStr(), &p.x, &p.y, &s.x, &s.y, &m) == 5;
 		if(position)
@@ -337,9 +331,8 @@ private:
 // ResolveDeviceIndexForGuid() in sdl2_desktop_gamepad.h already applies to
 // gamepad profiles, just for monitors instead of controllers.
 //
-// Empty (never saved - fresh config, or a config from before this option
-// existed) is deliberately treated as "nothing to validate against" by
-// InitVideo(), not "display gone" - see the comment there.
+// Empty (never saved - fresh config) is deliberately treated as "nothing to
+// validate against" by InitVideo(), not "display gone" - see the comment there.
 static struct eOptionWindowDisplay : public xOptions::eOptionString
 {
 	eOptionWindowDisplay() { customizable = false; }
@@ -347,12 +340,9 @@ static struct eOptionWindowDisplay : public xOptions::eOptionString
 
 	void Update()
 	{
-		// Same guard as eOptionWindowState::Update() (independently, not
+		// Same guard as eOptionWindowState::Update(), independently, not
 		// shared - this only ever means anything paired with a position
-		// that update captures too, but it's its own small option/class,
-		// consistent with eOptionWindowState/eOptionFullScreen already
-		// being separate classes each reading SDL_GetWindowFlags() on
-		// their own).
+		// that update captures too.
 		Uint32 flags = SDL_GetWindowFlags(g_gl_window.window);
 		if(flags & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP))
 			return;
@@ -415,9 +405,8 @@ bool FieldRateSyncActive()
 
 // The Z80 clock this codebase assumes everywhere (see the comment above) -
 // not read from anywhere more "canonical" because nothing more canonical
-// exists here: it's a plain duplicated magic number in three .cpp files
-// already, this is a fourth, equally well-commented copy rather than a new
-// shared header invented just for this.
+// exists here: it's a plain duplicated magic number in the .cpp files that
+// need it.
 static const double Z80_CLOCK_HZ = 3500000.0;
 
 // The exact field rate (in Hz) the running emulation core's /INT cadence
@@ -502,8 +491,8 @@ static double FieldRateRank(double rate, double target)
 //    at or above the target, and only a below-target rate if nothing at or
 //    above it qualifies - with rate having priority over resolution; the
 //    larger resolution only breaks an exact rate tie.
-// 2. Fallback: the pre-existing behaviour - the desktop's own resolution
-//    at whatever rate FieldRateRank() ranks best.
+// 2. Fallback: the desktop's own resolution at whatever rate
+//    FieldRateRank() ranks best.
 //
 // A mode only wins if it's a strict improvement over the desktop's own
 // current rate: with nothing better available than what's already running,
@@ -564,7 +553,7 @@ static bool FindBestFieldRateDisplayMode(int display_index, SDL_DisplayMode* out
 	if(found)
 		return true;
 
-	// --- Stage 2: the pre-existing fallback - the desktop's own resolution
+	// --- Stage 2: fallback - the desktop's own resolution
 	// at whatever rate ranks best. ---
 	for(int i = 0; i < num_modes; ++i)
 	{
@@ -631,11 +620,9 @@ static void ApplyFullScreen(bool enable);
 
 static struct eOptionPreferPalRefresh : public xOptions::eOptionBool
 {
-	// Off by default - unlike the field-rate-sync behaviour itself (which
-	// predates this option and so used to just default-on to preserve
-	// pre-existing behaviour), a fresh config now starts with plain
-	// borderless fullscreen at the desktop's own rate, and only switches
-	// display modes once the person explicitly opts in.
+	// Off by default - a fresh config starts with plain borderless
+	// fullscreen at the desktop's own rate, and only switches display modes
+	// once the person explicitly opts in.
 	eOptionPreferPalRefresh() { Set(false); }
 	const char* Name() const override { return "Prefer PAL refresh"; }
 	int Order() const override { return 33; }
@@ -706,10 +693,9 @@ static void ApplyFullScreen(bool enable)
 
 	// No display mode here beats the desktop's own current rate, or the
 	// platform doesn't support exclusive fullscreen mode-setting at all
-	// (e.g. Wayland) - fall back to the plain borderless-fullscreen-at-
-	// desktop-refresh behaviour this already had; frame/interrupt cadence
-	// then simply follows whatever rate the desktop itself runs at, same as
-	// before this feature existed.
+	// (e.g. Wayland) - fall back to plain borderless fullscreen at the
+	// desktop's own refresh rate; frame/interrupt cadence then simply
+	// follows whatever rate the desktop itself runs at.
 	SDL_SetWindowFullscreen(g_gl_window.window, SDL_WINDOW_FULLSCREEN_DESKTOP);
 	g_field_rate_synced = false;
 	xImGui::SetStatusText("Fullscreen: no better refresh rate available, using desktop rate");
@@ -740,23 +726,20 @@ static struct eOptionFullScreen : public xOptions::eOptionBool
 // grab-state status bar message. The window is owned and destroyed by g_gl_window.
 SDL_Window* GetVideoWindow() { return g_gl_window.window; }
 
-// sdl2_mouse.cpp (reused as-is from platform/sdl2/) needs this to map window
-// coordinates to the emulator's 320x240 screen space for Kempston mouse.
-// platform/gles2/gles2.cpp has its own fill/border-aware version; this one
-// matches what platform/wxwidgets/wx_mouse.cpp already does - plain 4:3
-// aspect-ratio scaling via the shared xPlatform::GetScaleWithAspectRatio43().
+// Maps window coordinates to the emulator's 320x240 screen space for
+// sdl2_mouse.cpp's Kempston mouse - plain 4:3 aspect-ratio scaling via the
+// shared xPlatform::GetScaleWithAspectRatio43().
 void OpZoomGet(float* sx, float* sy, const ePoint& org_size, const ePoint& size)
 {
 	(void)org_size;
 	GetScaleWithAspectRatio43(sx, sy, size.x, size.y);
 }
 
-// Same idea as platform/wxwidgets/wx_canvas.cpp's GLCanvas::getMaxDisplayResolution():
-// the full-quality FBO in platform/gl/draw.cpp is sized once, at startup, from
+// The full-quality FBO in platform/gl/draw.cpp is sized once, at startup, from
 // the largest connected display rather than from the current (typically small,
 // windowed) drawable size. That way switching to fullscreen never renders the
 // full-quality path through an undersized FBO and stretches it back up with
-// GL_LINEAR - which is what produced the visible aliasing/blur on this platform.
+// GL_LINEAR, which would look aliased/blurry.
 //
 // Deliberately uses SDL_GetCurrentDisplayMode(), NOT SDL_GetDisplayBounds().
 // SDL_GetDisplayBounds() reports size in "screen coordinates", which on
@@ -792,8 +775,7 @@ static ePoint GetMaxDisplayResolution()
 	return result;
 }
 
-// Mirrors ResolveDeviceIndexForGuid() in sdl2_desktop_gamepad.h. Two
-// identical monitor models can still legitimately produce the same
+// Two identical monitor models can still legitimately produce the same
 // identity (GetDisplayIdentity() narrows this a lot on Windows compared to
 // SDL_GetDisplayName() alone, but doesn't eliminate it - two identical
 // monitors do have the same EDID manufacturer/product too) - this returns
@@ -895,7 +877,7 @@ bool InitVideo()
 	// landing on the desktop's own refresh rate.
 	if(!g_gl_window.Create(Handler()->WindowCaption(), pos.x, pos.y, size.x, size.y, flags))
 		return false;
-	SDL_SetWindowMinimumSize(g_gl_window.window, 320, 240); // org_size - matches wx_frame.cpp's SetMinSize(GetSize()) after SetClientSize(org_size)
+	SDL_SetWindowMinimumSize(g_gl_window.window, 320, 240); // org_size
 	SDL_GL_MakeCurrent(g_gl_window.window, g_gl_window.context());
 	SDL_GL_SetSwapInterval(1); // vsync - single thread, no render-thread hand-off needed
 	if(op_full_screen)
@@ -919,19 +901,15 @@ bool InitVideo()
 #endif//_LINUX
 #ifdef _WINAPI
 	// Unlike _LINUX above, this doesn't go through SDL_SetWindowIcon() with a
-	// decoded pixel buffer - it pulls the icon that CMakeLists.txt now
-	// embeds into the .exe as a Win32 resource (SRCRES = the same
-	// unreal_speccy_portable.rc/.ico platform/wxwidgets' Windows build
-	// already uses, so this is the exact same icon, not just a similar one)
-	// and applies it directly via the native HWND, which is what actually
-	// drives the title bar / system-menu / taskbar / Alt+Tab icon on
-	// Windows. ExtractIconExA() reads whichever icon resource comes first
-	// in the exe's resource table (index 0) - the same thing Explorer does
-	// to show a .exe's own icon - so this doesn't need to know the specific
-	// numeric resource ID the .rc happens to declare it under, and as a
-	// side effect the .exe itself now also shows the right icon in
-	// Explorer/the taskbar before it's even running, instead of a generic
-	// default one.
+	// decoded pixel buffer - it pulls the icon CMakeLists.txt embeds into the
+	// .exe as a Win32 resource and applies it directly via the native HWND,
+	// which is what actually drives the title bar / system-menu / taskbar /
+	// Alt+Tab icon on Windows. ExtractIconExA() reads whichever icon resource
+	// comes first in the exe's resource table (index 0) - the same thing
+	// Explorer does to show a .exe's own icon - so this doesn't need to know
+	// the specific numeric resource ID the .rc happens to declare it under,
+	// and the .exe itself also shows the right icon in Explorer/the taskbar
+	// before it's even running.
 	char exe_path[MAX_PATH] = {};
 	GetModuleFileNameA(nullptr, exe_path, MAX_PATH);
 	HICON icon_big = nullptr, icon_small = nullptr;
@@ -970,10 +948,10 @@ bool InitVideo()
 	return true;
 }
 
-// Window menu's "Size 100%/200%/300%" + Ctrl+1/2/3 - equivalent of
-// Frame::OnResize() in wx_frame.cpp: leaves fullscreen/maximized state first
-// (a resize request while either is active would otherwise be a no-op, or
-// worse, silently ignored), then sets the client area to org_size * mult.
+// Window menu's "Size 100%/200%/300%" + Ctrl+1/2/3: leaves
+// fullscreen/maximized state first (a resize request while either is active
+// would otherwise be a no-op, or worse, silently ignored), then sets the
+// client area to org_size * mult.
 void ResizeToOrgSizeMultiple(int mult)
 {
 	if(op_full_screen)
@@ -1052,8 +1030,7 @@ void UpdateScreen()
 	// layout-change tracking.
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	// Same idiom as wx_canvas.cpp's non-threaded snapshot build - here there
-	// is only one thread to begin with, so no mutex/atomics are needed at all.
+	// Single-threaded, so the snapshot needs no mutex/atomics.
 	VideoSnapshot snap;
 	snap.frame = Handler()->VideoFrame();
 	memcpy(snap.video, Handler()->VideoData(), sizeof(snap.video));

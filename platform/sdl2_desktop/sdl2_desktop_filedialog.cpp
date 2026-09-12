@@ -92,9 +92,8 @@ fs::path Utf8ToPath(const std::string& s) {
 // FileDialog - owns every piece of the browser's state and every function
 // that reads or writes it. Only one instance of this ever exists (g_dialog
 // below); the point of the class isn't multiple browsers, it's that
-// RefreshEntries()/NavigateTo()/Confirm()/MatchesFilter() can no longer
-// accidentally read or write this state from outside the handful of methods
-// that are supposed to touch it.
+// RefreshEntries()/NavigateTo()/Confirm()/MatchesFilter() stay the only
+// places that touch this state.
 // ---------------------------------------------------------------------------
 
 class FileDialog {
@@ -205,10 +204,8 @@ void FileDialog::RefreshEntries() {
     // range-for below does implicitly) has no such non-throwing overload -
     // it can still throw filesystem_error mid-listing (a file removed/
     // permissions changed while iterating, a broken symlink, ...). Both
-    // this and PathToUtf8() failing were plausible causes of "crashes when
-    // entering a folder" that a narrower fix wouldn't have caught, so the
-    // whole listing is wrapped rather than trying to guard every call site
-    // individually.
+    // this and PathToUtf8() can fail, so the whole listing is wrapped
+    // rather than trying to guard every call site individually.
     try {
         for (const auto& de : fs::directory_iterator(m_current_dir, fs::directory_options::skip_permission_denied, ec)) {
             std::error_code ec2;
@@ -420,10 +417,9 @@ void FileDialog::Draw() {
     // RefreshEntries()) - calling either one *while* this loop is still
     // iterating over m_entries and holding `e` as a reference into it is
     // undefined behaviour (the vector's old storage can be freed from under
-    // us mid-loop) and was the actual cause of the crash: entering a
-    // directory reliably hit exactly this path. Instead, just record what
-    // the user asked for here, and act on it once after the loop (and after
-    // EndChild()) has finished touching m_entries for this frame.
+    // us mid-loop). Instead, just record what the user asked for here, and
+    // act on it once after the loop (and after EndChild()) has finished
+    // touching m_entries for this frame.
     fs::path pending_navigate;
     bool has_pending_navigate = false;
     std::string pending_confirm;

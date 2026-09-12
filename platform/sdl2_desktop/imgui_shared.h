@@ -31,12 +31,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //  Declarations shared between this platform's own ImGui-drawing files:
 //    sdl2_desktop_imgui.cpp    - core Init/BeginFrame/EndFrame, style, the
 //                                generic xOptions<->widget helpers, status bar
-//    sdl2_desktop_menu.cpp     - the wx_frame.cpp-equivalent menu bar, About
-//                                window, window-size/quick-save state
-//    sdl2_desktop_options.cpp  - the wx_optionsdialog.cpp-equivalent 5-tab
-//                                Options dialog
+//    sdl2_desktop_menu.cpp     - the menu bar, About window,
+//                                window-size/quick-save state
+//    sdl2_desktop_options.cpp  - the 5-tab Options dialog
 //    sdl2_desktop_filedialog.* - generic in-engine file browser (own header)
-//    sdl2_desktop_gamepad.*    - ported wx_gamepad/joystick_mapper (own header)
+//    sdl2_desktop_gamepad.*    - gamepad backend (own header)
 // =============================================================================
 
 namespace xPlatform {
@@ -51,10 +50,9 @@ void OptionCombo(const char* option_name, const char* label);
 void OptionSliderInt(const char* option_name, const char* label, int lo, int hi);
 
 // --- persistent status bar (sdl2_desktop_imgui.cpp) ---
-// Equivalent of wx's wxFrame::SetStatusText() - one line of text, always
-// visible at the bottom, replaced (not queued/stacked) by the next call.
-// Also where platform/gl/draw.cpp's LightweightShadersMessage() posts to,
-// same as it posts to the *same* native status bar in the wx build.
+// One line of text, always visible at the bottom, replaced (not
+// queued/stacked) by the next call. Also where platform/gl/draw.cpp's
+// LightweightShadersMessage() posts to.
 void SetStatusText(const char* text);
 
 // --- menu bar + About window + window-size/quick-save state (sdl2_desktop_menu.cpp) ---
@@ -76,9 +74,9 @@ bool AnyMenuDialogActive();
 // sdl2_mouse.cpp's Kempston-mouse grab, which would otherwise hide/capture
 // the cursor while leaving the dialog visible but unreachable until Escape.
 void CloseMenuDialogs();
-// wx_frame.cpp's SHORTCUT_* accelerator table, checked ahead of ZX keyboard
-// translation - called from sdl2_desktop_keys.cpp. Returns true if the event
-// was consumed as a shortcut.
+// Menu accelerator table, checked ahead of ZX keyboard translation - called
+// from sdl2_desktop_keys.cpp. Returns true if the event was consumed as a
+// shortcut.
 
 // --- Options dialog (sdl2_desktop_options.cpp) ---
 void OpenOptionsDialog();
