@@ -429,28 +429,84 @@ static double EmulatedFieldRateHz()
 	return frame_tacts ? Z80_CLOCK_HZ / frame_tacts : 50.0;
 }
 
-// Max distance (Hz) from the emulated field rate at which a display mode is
-// still considered a usable "sync" target - beyond that, vsync'ing the swap
-// to it would only make the emulated /INT cadence drift against the real
-// one slower, not match it.
-static const double FIELD_RATE_TOLERANCE_HZ = 5.0;
+// The largest rate deviation still treated as "close enough" to count as a
+// usable sync target, expressed as a fraction of the target rather than a
+// flat Hz number - flat Hz doesn't scale (5Hz is a huge fraction of a slow
+// target, a tiny one of a fast one), and this codebase's whole engine,
+// audio included, runs at whatever rate the display's vsync actually
+// provides (see FieldRateRank()'s comment below) - a mismatch here isn't an
+// abstract number, it's a literal, audible pitch/tempo shift. A semitone
+// (the smallest conventional musical interval, frequency ratio 2^(1/12)) is
+// the standard reference for "the smallest change most people would call a
+// different note": stay under it and the drift reads as maybe-slightly-off;
+// cross it and the audio starts to sound like a different recording. Ratio,
+// not a hardcoded Hz spread, so this keeps making sense if EmulatedFieldRateHz()
+// ever returns something other than Pentagon's ~48.83Hz.
+static double FieldRateToleranceHz(double target)
+{
+	static const double SEMITONE_RATIO = 1.0594630943592953; // 2 ^ (1/12)
+	return target * (SEMITONE_RATIO - 1.0);
+}
+
+// Ranks a candidate rate's fitness as a stand-in for `target`, for picking
+// among modes that are already within FieldRateToleranceHz(target) of it: a
+// rate at or above target always ranks ahead of every rate below it, and
+// within each of those two bands, closer to target is better. A plain
+// fabs(rate - target) would instead just pick whichever side is a hair
+// closer in raw Hz, treating "1Hz low" and "1Hz high" as equally good -
+// they aren't, for what this sync exists for:
+//
+// This codebase runs exactly one emulated frame (Loop() in sdl2_desktop.cpp)
+// per real SDL_GL_SwapWindow() call, vsync'd - there's no software frame-
+// skip/duplicate logic to go wrong, so a *stable* mismatch in either
+// direction just makes the whole emulation (audio included - see
+// FieldRateToleranceHz() above) run uniformly slow or fast in wall-clock
+// time, by however far off-target the chosen rate is - which is why that
+// function bounds how far off "usable" is allowed to mean in the first
+// place. Within that bound, though, the actual reason to prefer high over
+// low is the multicolor/gigascreen effect itself: it's a persistence-of-
+// vision trick (rapidly alternating two colours until the eye blends them),
+// and unlike the CRTs this technique was designed for, modern LCD panels
+// have no phosphor afterglow of their own to lean on - the blend is carried
+// entirely by how fast the panel itself is actually flickering. A faster
+// alternation only ever helps that illusion; a slower one only ever risks
+// the two colours reading as separate flicker instead of a blend, and - per
+// user reports - real monitors can also just handle an oddball low rate
+// like 48Hz worse in their own internal processing (overdrive/response-time
+// compensation, backlight PWM, ...) than a closer-to-standard 50Hz,
+// independently of anything on our end. Either way, there's no upside to
+// preferring "below" just for being marginally closer, so this ranking
+// removes that preference entirely rather than only nudging it.
+static double FieldRateRank(double rate, double target)
+{
+	double diff = rate - target;
+	if(diff >= 0.0)
+		return diff;
+	// Pushed behind every possible at-or-above candidate (those are capped
+	// at FieldRateToleranceHz(target) by the caller's own filter) while
+	// still ordering below-target candidates by closeness among themselves,
+	// for the fallback case where nothing at or above target is available.
+	return (target - rate) + FieldRateToleranceHz(target) + 1.0;
+}
 
 // Looks for the exclusive-fullscreen video mode on 'display_index' to run
 // the emulator at, in two stages:
 //
 // 1. Primary: any of the display's modes whose refresh rate is within
-//    FIELD_RATE_TOLERANCE_HZ of EmulatedFieldRateHz() (integer-Hz display
+//    FieldRateToleranceHz() of EmulatedFieldRateHz() (integer-Hz display
 //    modes can't hit a fractional target like 48.828125 exactly, so this is
 //    a window, not an exact match), with the desktop's own aspect ratio (so
 //    the picture's shape/letterbox is unchanged) and not larger than the
 //    desktop's current resolution in either dimension. Among those, the
-//    rate closest to the target wins - rate has priority over resolution;
-//    the larger resolution only breaks an exact rate tie.
+//    rate FieldRateRank() ranks best wins - i.e. the closest rate that is
+//    at or above the target, and only a below-target rate if nothing at or
+//    above it qualifies - with rate having priority over resolution; the
+//    larger resolution only breaks an exact rate tie.
 // 2. Fallback: the pre-existing behaviour - the desktop's own resolution
-//    at whatever rate is closest to the target.
+//    at whatever rate FieldRateRank() ranks best.
 //
 // A mode only wins if it's a strict improvement over the desktop's own
-// current rate: with nothing closer available than what's already running,
+// current rate: with nothing better available than what's already running,
 // switching mode would just add the disruption of a modeset for no
 // accuracy gain. (The desktop mode itself satisfies the stage-1 filters
 // trivially, so the strict comparison is what keeps it from winning when
@@ -464,12 +520,15 @@ static bool FindBestFieldRateDisplayMode(int display_index, SDL_DisplayMode* out
 		return false;
 
 	double target = EmulatedFieldRateHz();
+	double tolerance = FieldRateToleranceHz(target);
 	// Strict-improvement guard shared by both stages: a candidate must beat
-	// the desktop's own distance-from-target, not merely match it.
-	double limit = (desktop_mode.refresh_rate > 0) ? fabs(desktop_mode.refresh_rate - target) : 1e9;
+	// the desktop's own rank, not merely match it. Ranked (not fabs()) so a
+	// desktop already running below target is just as beatable by an
+	// at-or-above candidate as the ranking below would pick in general.
+	double limit = (desktop_mode.refresh_rate > 0) ? FieldRateRank(desktop_mode.refresh_rate, target) : 1e9;
 
 	bool found = false;
-	double best_diff = 1e9;
+	double best_rank = 1e9;
 	int best_area = 0;
 
 	int num_modes = SDL_GetNumDisplayModes(display_index);
@@ -482,10 +541,10 @@ static bool FindBestFieldRateDisplayMode(int display_index, SDL_DisplayMode* out
 			continue;
 		if(mode.refresh_rate <= 0) // unknown/variable rate - nothing to compare against
 			continue;
-		double diff = fabs(mode.refresh_rate - target);
-		if(diff > FIELD_RATE_TOLERANCE_HZ)
+		if(fabs(mode.refresh_rate - target) > tolerance) // hard usefulness bound, either direction
 			continue;
-		if(diff >= limit) // not a strict improvement over the desktop's own rate
+		double rank = FieldRateRank(mode.refresh_rate, target);
+		if(rank >= limit) // not a strict improvement over the desktop's own rate
 			continue;
 		// Same aspect ratio as the desktop's current mode - cross-multiply
 		// rather than divide, so the comparison stays exact for integer
@@ -494,9 +553,9 @@ static bool FindBestFieldRateDisplayMode(int display_index, SDL_DisplayMode* out
 			continue;
 		if(mode.w > desktop_mode.w || mode.h > desktop_mode.h)
 			continue;
-		if(diff < best_diff || (diff == best_diff && mode.w * mode.h > best_area))
+		if(rank < best_rank || (rank == best_rank && mode.w * mode.h > best_area))
 		{
-			best_diff = diff;
+			best_rank = rank;
 			best_area = mode.w * mode.h;
 			*out = mode;
 			found = true;
@@ -506,7 +565,7 @@ static bool FindBestFieldRateDisplayMode(int display_index, SDL_DisplayMode* out
 		return true;
 
 	// --- Stage 2: the pre-existing fallback - the desktop's own resolution
-	// at whatever rate is closest to the target. ---
+	// at whatever rate ranks best. ---
 	for(int i = 0; i < num_modes; ++i)
 	{
 		SDL_DisplayMode mode;
@@ -516,12 +575,14 @@ static bool FindBestFieldRateDisplayMode(int display_index, SDL_DisplayMode* out
 			continue;
 		if(mode.refresh_rate <= 0)
 			continue;
-		double diff = fabs(mode.refresh_rate - target);
-		if(diff >= limit)
+		if(fabs(mode.refresh_rate - target) > tolerance)
 			continue;
-		if(diff < best_diff)
+		double rank = FieldRateRank(mode.refresh_rate, target);
+		if(rank >= limit)
+			continue;
+		if(rank < best_rank)
 		{
-			best_diff = diff;
+			best_rank = rank;
 			*out = mode;
 			found = true;
 		}
