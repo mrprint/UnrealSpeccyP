@@ -29,21 +29,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <wx/stdpaths.h>
 #include <wx/filename.h>
 
-// XInitThreads() must be called before any X11/GLX calls, including before
-// GTK and wxWidgets initialize.  On Linux/X11, all threads share a single
-// Display* connection; without this call, concurrent access from the render
-// thread (GLX) and the main thread (GTK/Cairo) causes GLXBadContextTag.
-// The earliest safe point is a global constructor, which runs before main()
-// and therefore before IMPLEMENT_APP bootstraps wxWidgets.
-#ifdef _LINUX
-#include <X11/Xlib.h>
-namespace {
-	struct XThreadInit {
-		XThreadInit() { XInitThreads(); }
-	} g_x_thread_init;
-} // namespace
-#endif//_LINUX
-
 #ifdef USE_SDL2_GAMEPAD
 namespace {
     struct SdlGamepadInit {
@@ -89,12 +74,6 @@ namespace xPlatform
 				xIo::SetResourcePath(buf);
 			}
 #endif//_WINDOWS
-#ifdef _LINUX
-			// Disable NVIDIA Threaded Optimization before any GL context is created.
-			// The driver reads this variable at context creation time; setting it
-			// afterwards has no effect.  0 = do not overwrite if user already set it.
-			setenv("__GL_THREADED_OPTIMIZATIONS", "0", 0);
-#endif
 			if (!wxApp::OnInit())
 				return false;
 			wxString cfg_dir = wxStandardPaths::Get().GetUserDataDir() + L"/";

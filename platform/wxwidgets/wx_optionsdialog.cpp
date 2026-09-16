@@ -41,6 +41,7 @@ namespace xPlatform {
 #endif
 		EVT_COMBOBOX(wxID_ANY, OptionsDialog::OnStereoChanged)
 
+		EVT_BUTTON(wxID_APPLY, OptionsDialog::OnApply)
 		EVT_BUTTON(wxID_OK, OptionsDialog::OnOK)
 		// Reset buttons, one per tab
 		EVT_BUTTON(ID_RESET_AUDIO, OptionsDialog::OnResetAudio)
@@ -182,6 +183,7 @@ namespace xPlatform {
 		// ======================================================
 		wxStdDialogButtonSizer* btnSizer = new wxStdDialogButtonSizer();
 
+		btnSizer->Add(new wxButton(this, wxID_APPLY, _("Apply")));
 		btnSizer->Add(new wxButton(this, wxID_OK, _("OK")));
 		btnSizer->Add(new wxButton(this, wxID_CANCEL, _("Cancel")));
 		btnSizer->Realize();
@@ -504,21 +506,8 @@ namespace xPlatform {
 		}
 	}
 
-	void OptionsDialog::OnOK(wxCommandEvent& event)
+	void OptionsDialog::OnApply(wxCommandEvent& event)
 	{
-		// ScopedRenderPause is intentionally absent here.
-		// Frame::OnOptions() holds a ScopedRenderPause for the entire lifetime
-		// of this dialog.  MaybePause() blocks the render thread completely —
-		// including OnLoop() — so the emulator is effectively paused while the
-		// dialog is open.  Taking a second ScopedRenderPause would deadlock:
-		// Pause() waits for m_idle, but MaybePause() is already blocked in
-		// m_cv_thread.wait() and will never set m_idle again.
-		//
-		// ScopedEmuLock is kept for defensive correctness: it costs nothing
-		// (m_emu_mutex is uncontested while the render thread is in MaybePause),
-		// but makes OnOK() safe if the threading model changes in the future.
-		ScopedEmuLock emu_guard;
-
 #ifdef USE_SDL2_GAMEPAD
 		if (m_capturing_player >= 0) {
 			StopCaptureMode();
@@ -577,7 +566,11 @@ namespace xPlatform {
 		// restarted, even though xOptions itself was already up to date.
 		ReloadGamepadProfiles();
 #endif
+	}
 
+	void OptionsDialog::OnOK(wxCommandEvent& event)
+	{
+		OnApply(event);
 		EndModal(wxID_OK);
 	}
 

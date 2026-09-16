@@ -77,50 +77,12 @@ namespace xPlatform {
 #endif
 	};
 
-	// Declared in wx_canvas.cpp.
-	void PauseGLCanvas();
-	void ResumeGLCanvas();
-	void LockEmulator();
-	void UnlockEmulator();
 #ifdef USE_SDL2_GAMEPAD
 	// Re-reads gamepad device/mapping settings from xOptions into the live
 	// GLCanvas, so changes made on the Gamepads tab take effect immediately
 	// on OK instead of only after the emulator is restarted.
 	void ReloadGamepadProfiles();
 #endif
-
-	// ---------------------------------------------------------------------------
-	// ScopedRenderPause
-	//
-	// RAII guard: pauses the GL render thread for the duration of a scope.
-	// Use before mutating any render option (zoom, gigascreen, scanlines, PAL
-	// effects, etc.) so the render thread is guaranteed idle while the option
-	// value changes.  Prevents mid-frame option reads that can stall the GPU
-	// driver and make the whole system feel unresponsive.
-	// ---------------------------------------------------------------------------
-	struct ScopedRenderPause
-	{
-		ScopedRenderPause() { PauseGLCanvas(); }
-		~ScopedRenderPause() { ResumeGLCanvas(); }
-		// Non-copyable, non-movable.
-		ScopedRenderPause(const ScopedRenderPause&) = delete;
-		ScopedRenderPause& operator=(const ScopedRenderPause&) = delete;
-	};
-
-	// Serializes main-thread access to emulator state with the render thread.
-	// Use for every Handler() call and every option Apply() that touches
-	// emulator internals (sound chip, stereo, drive, joystick, tape, etc.).
-	//
-	// IMPORTANT: m_emu_mutex is std::mutex (non-recursive).  Never nest two
-	// ScopedEmuLock guards on the same thread — it will deadlock.  If you need
-	// to call two Handler() operations in sequence, use a single guard for both.
-	struct ScopedEmuLock
-	{
-		ScopedEmuLock() { LockEmulator(); }
-		~ScopedEmuLock() { UnlockEmulator(); }
-		ScopedEmuLock(const ScopedEmuLock&) = delete;
-		ScopedEmuLock& operator=(const ScopedEmuLock&) = delete;
-	};
 
 	//=============================================================================
 	//	OptionsDialog
@@ -151,6 +113,7 @@ namespace xPlatform {
 		void OnJoyTypeChanged(wxCommandEvent& event);
 		void OnCheckboxChanged(wxCommandEvent& event);
 		void OnSliderChanged(wxCommandEvent& event);
+		void OnApply(wxCommandEvent& event);
 		void OnOK(wxCommandEvent& event);
 
 
