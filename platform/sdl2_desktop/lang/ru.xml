@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Russian strings for the sdl2_desktop platform's ImGui UI. Overlaid on top
+  of en.xml (see that file's comment, and sdl2_desktop_i18n.h/.cpp) - any
+  id missing here still falls back to English rather than going blank, so
+  this file doesn't strictly need every id from en.xml, but is kept in
+  sync with it as a matter of not leaving gaps.
+-->
+<language code="ru" name="Русский">
+
+	<!-- Menu bar -->
+	<string id="menu.file">Файл</string>
+	<string id="menu.file.open">Открыть...</string>
+	<string id="menu.file.save">Сохранить...</string>
+	<string id="menu.file.quick_load">Быстрая загрузка</string>
+	<string id="menu.file.quick_save">Быстрое сохранение</string>
+	<string id="menu.file.auto_launch">Автозапуск программ</string>
+	<string id="menu.file.exit">Выход</string>
+
+	<string id="menu.view">Вид</string>
+	<string id="menu.view.fill_screen">На весь экран</string>
+	<string id="menu.view.small_border">Узкая рамка</string>
+	<string id="menu.view.no_border">Без рамки</string>
+	<string id="menu.view.gigascreen">Гигаскрин</string>
+	<string id="menu.view.crt_scanlines">Строки ЭЛТ</string>
+	<string id="menu.view.pal_effects">PAL-эффекты</string>
+	<string id="menu.view.full_screen">Полноэкранный режим</string>
+	<string id="menu.view.prefer_pal_refresh">Частота обновления PAL</string>
+
+	<string id="menu.device">Устройство</string>
+	<string id="menu.device.start_stop_tape">Старт/стоп ленты</string>
+	<string id="menu.device.tape_fast">Быстрая лента</string>
+	<string id="menu.device.pause">Пауза</string>
+	<string id="menu.device.true_speed">Реальная скорость</string>
+	<string id="menu.device.mode_48k">Режим 48k</string>
+	<string id="menu.device.reset_to_service_rom">Сброс в сервисное ПЗУ</string>
+	<string id="menu.device.reset">Сброс</string>
+	<string id="menu.device.options">Настройки...</string>
+
+	<string id="menu.window">Окно</string>
+	<string id="menu.window.size_100">Размер 100%</string>
+	<string id="menu.window.size_200">Размер 200%</string>
+	<string id="menu.window.size_300">Размер 300%</string>
+
+	<string id="menu.help">Справка</string>
+	<string id="menu.help.about">О программе</string>
+
+	<!-- Language switcher icon at the right edge of the menu bar -->
+	<string id="menu.language">Язык</string>
+
+	<!-- About window -->
+	<string id="about.title">О программе</string>
+	<string id="about.version">Версия 0.0.90</string>
+	<string id="about.tagline">Портативный эмулятор ZX Spectrum.</string>
+
+	<!-- Status bar -->
+	<string id="status.reset.ok">Сброс выполнен</string>
+	<string id="status.reset.failed">Ошибка сброса</string>
+	<string id="status.file_open.ok">Файл открыт</string>
+	<string id="status.file_open.failed">Не удалось открыть файл</string>
+	<string id="status.file_save.ok">Файл сохранён</string>
+	<string id="status.file_save.failed">Не удалось сохранить файл</string>
+	<string id="status.tape.started">Лента запущена</string>
+	<string id="status.tape.stopped">Лента остановлена</string>
+	<string id="status.tape.not_inserted">Лента не вставлена</string>
+	<string id="status.true_speed.on">Реальная скорость (50Hz) включена</string>
+	<string id="status.true_speed.off">Реальная скорость выключена</string>
+	<string id="status.mode_48k.on">Режим 48k включён</string>
+	<string id="status.mode_48k.off">Режим 48k выключен</string>
+	<string id="status.pause.paused">Пауза...</string>
+	<string id="status.pause.ready">Готово...</string>
+	<string id="status.quickload.ok">Быстрая загрузка выполнена</string>
+	<string id="status.quickload.failed">Ошибка быстрой загрузки</string>
+	<string id="status.quicksave.ok">Быстрое сохранение выполнено</string>
+	<string id="status.quicksave.failed">Ошибка быстрого сохранения</string>
+	<string id="status.gigascreen.on">Гигаскрин включён</string>
+	<string id="status.gigascreen.off">Гигаскрин выключен</string>
+	<string id="status.scanlines.on">Имитация строк ЭЛТ включена</string>
+	<string id="status.scanlines.off">Имитация строк ЭЛТ выключена</string>
+	<string id="status.pal_effects.on">PAL-эффекты включены</string>
+	<string id="status.pal_effects.off">PAL-эффекты выключены</string>
+	<string id="status.pal_refresh.on">Частота обновления PAL включена</string>
+	<string id="status.pal_refresh.off">Частота обновления PAL выключена</string>
+	<string id="status.mouse_captured">Мышь захвачена, ESC для отмены</string>
+	<string id="status.mouse_released">Мышь освобождена</string>
+	<string id="status.shader.lightweight">Включён облегчённый шейдер</string>
+	<string id="status.shader.full_quality">Включён полнокачественный шейдер</string>
+	<string id="status.fullscreen.sync_enabled">Полный экран: %dHz (эмулятор %.2fHz)</string>
+	<string id="status.fullscreen.frame_sync_enabled">Полный экран: синхронизация включена</string>
+	<string id="status.fullscreen.pal_refresh_off">Полный экран: частота стола (PAL откл.)</string>
+	<string id="status.fullscreen.no_better_rate">Полный экран: частота стола (нет подходящей)</string>
+
+	<!-- Options dialog -->
+	<string id="options.title">Настройки</string>
+	<string id="options.ok">ОК</string>
+	<string id="options.cancel">Отмена</string>
+	<string id="options.language.auto">Авто</string>
+	<string id="options.tab.audio">Звук</string>
+	<string id="options.tab.video">Видео</string>
+	<string id="options.tab.input">Управление</string>
+	<string id="options.tab.gamepads">Геймпады</string>
+	<string id="options.tab.drives">Дисководы</string>
+
+	<string id="options.audio.sound_chip">Звуковой чип</string>
+	<string id="options.audio.stereo_mode">Стерео-режим</string>
+	<string id="options.audio.restore_defaults">Сбросить настройки звука</string>
+
+	<string id="options.video.mipmapping">Включить мипмаппинг</string>
+	<string id="options.video.gigascreen">Включить гигаскрин</string>
+	<string id="options.video.scanlines">Включить строки ЭЛТ</string>
+	<string id="options.video.prefer_pal_refresh">Частота обновления PAL</string>
+	<string id="options.video.crt_mask_scale">Масштаб маски ЭЛТ</string>
+	<string id="options.video.pal_effects_header">PAL-эффекты</string>
+	<string id="options.video.pal_effects">Включить PAL-эффекты</string>
+	<string id="options.video.pal_strength">Сила PAL-эффекта</string>
+	<string id="options.video.beam_spread">Разброс луча</string>
+	<string id="options.video.restore_defaults">Сбросить настройки видео</string>
+
+	<string id="options.input.joystick_type">Тип джойстика</string>
+	<string id="options.input.restore_defaults">Сбросить настройки управления</string>
+
+	<string id="options.drives.restore_defaults">Сбросить настройки дисководов</string>
+
+	<!-- Gamepads tab -->
+	<string id="gamepad.restore_defaults">Сбросить настройки геймпада</string>
+	<string id="gamepad.no_device">Нет устройства</string>
+	<string id="gamepad.not_set">Не задано</string>
+	<string id="gamepad.device_none">Нет</string>
+	<string id="gamepad.player_n">Игрок %d</string>
+	<string id="gamepad.capturing">Ожидание...</string>
+	<string id="gamepad.capture">Назначить</string>
+	<string id="gamepad.unknown_controller">Неизвестный контроллер</string>
+	<string id="gamepad.input.up">ВВЕРХ</string>
+	<string id="gamepad.input.down">ВНИЗ</string>
+	<string id="gamepad.input.left">ВЛЕВО</string>
+	<string id="gamepad.input.right">ВПРАВО</string>
+	<string id="gamepad.input.fire1">ОГОНЬ1</string>
+	<string id="gamepad.input.fire2">ОГОНЬ2</string>
+	<string id="gamepad.source.back">Back</string>
+	<string id="gamepad.source.start">Старт</string>
+	<string id="gamepad.source.l_stick">Левый стик</string>
+	<string id="gamepad.source.r_stick">Правый стик</string>
+	<string id="gamepad.source.l_bumper">Левый бампер</string>
+	<string id="gamepad.source.r_bumper">Правый бампер</string>
+	<string id="gamepad.source.dpad_up">Крестовина вверх</string>
+	<string id="gamepad.source.dpad_down">Крестовина вниз</string>
+	<string id="gamepad.source.dpad_left">Крестовина влево</string>
+	<string id="gamepad.source.dpad_right">Крестовина вправо</string>
+	<string id="gamepad.source.l_stick_right">Левый стик вправо</string>
+	<string id="gamepad.source.l_stick_left">Левый стик влево</string>
+	<string id="gamepad.source.l_stick_down">Левый стик вниз</string>
+	<string id="gamepad.source.l_stick_up">Левый стик вверх</string>
+	<string id="gamepad.source.r_stick_right">Правый стик вправо</string>
+	<string id="gamepad.source.r_stick_left">Правый стик влево</string>
+	<string id="gamepad.source.r_stick_down">Правый стик вниз</string>
+	<string id="gamepad.source.r_stick_up">Правый стик вверх</string>
+	<string id="gamepad.source.l_trigger">Левый триггер</string>
+	<string id="gamepad.source.r_trigger">Правый триггер</string>
+	<string id="gamepad.source.none">Нет</string>
+
+	<!-- File browser -->
+	<string id="filedialog.title.open">Открыть</string>
+	<string id="filedialog.title.save">Сохранить</string>
+	<string id="filedialog.this_pc">Этот компьютер</string>
+	<string id="filedialog.up">Вверх</string>
+	<string id="filedialog.root">Корень</string>
+	<string id="filedialog.open">Открыть</string>
+	<string id="filedialog.save">Сохранить</string>
+	<string id="filedialog.cancel">Отмена</string>
+	<string id="filedialog.error.cannot_open">Не удалось открыть эту папку.</string>
+	<string id="filedialog.error.read_failed">Ошибка чтения содержимого папки.</string>
+	<string id="filedialog.overwrite_title">Перезаписать файл?</string>
+	<string id="filedialog.overwrite_body">Файл с таким именем уже существует. Перезаписать его?</string>
+	<string id="filedialog.overwrite">Перезаписать</string>
+	<string id="filedialog.filter.all">Все файлы</string>
+	<string id="filedialog.filter.supported">Поддерживаемые (*.sna;*.z80;*.szx;*.rzx;*.trd;*.scl;*.fdi;*.tap;*.csw;*.tzx;*.zip)</string>
+	<string id="filedialog.filter.snapshot">Файлы снимков (*.sna;*.z80;*.szx)</string>
+	<string id="filedialog.filter.replay">Файлы повторов (*.rzx)</string>
+	<string id="filedialog.filter.disk">Образы дисков (*.trd;*.scl;*.fdi;*.td0;*.udi)</string>
+	<string id="filedialog.filter.tape">Файлы ленты (*.tap;*.csw;*.tzx)</string>
+	<string id="filedialog.filter.zip">ZIP-архивы (*.zip)</string>
+	<string id="filedialog.filter.snapshot_save">Файлы снимков (*.sna)</string>
+	<string id="filedialog.filter.screenshot">Файлы скриншотов (*.png)</string>
+
+</language>

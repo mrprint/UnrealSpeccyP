@@ -194,6 +194,17 @@ static const char* USP_HomePath()
 
 bool Init()
 {
+	// Before anything else, in particular before Handler()->OnInit() below
+	// (which runs xOptions::Load(), restoring a previously-saved "language"
+	// choice via eOptionLanguage::Apply() in sdl2_desktop_i18n.cpp) - that
+	// Apply() call needs res/lang/ already scanned and English already
+	// loaded as the fallback layer, or it has nothing to resolve "auto" or
+	// a saved language code against. Init() itself needs to locate
+	// res/lang/ (via SDL_GetBasePath()) and, for "auto", the system locale
+	// (via SDL_GetPreferredLocales()) - neither needs any SDL subsystem
+	// initialized first.
+	xI18n::Init();
+
 #ifndef SDL_DEFAULT_FOLDER
 	const char* usp_home_path = USP_HomePath();
 	if(usp_home_path)
@@ -437,7 +448,7 @@ void Loop1()
 				ProcessMouse(ge);
 				bool grabbed_after = SDL_GetWindowGrab(win) != SDL_FALSE;
 				if(grabbed_after != grabbed_before)
-					xImGui::SetStatusText(grabbed_after ? "Mouse captured, press ESC to cancel" : "Mouse released");
+					xImGui::SetStatusText(grabbed_after ? xImGui::Tr("status.mouse_captured") : xImGui::Tr("status.mouse_released"));
 			}
 			break;
 		case SDL_MOUSEMOTION:

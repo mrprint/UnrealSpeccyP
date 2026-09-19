@@ -49,6 +49,10 @@ override_dh_auto_install:
 
 	# --- res/ (ROMs, fonts) next to the binary ---
 	cp -a res debian/tmp/$(LIBDIR)/
+	# --- res/lang (this platform's UI translations - not part of the
+	#     shared res/ above, see the sdl2_desktop_lang custom target in
+	#     build/cmake/CMakeLists.txt for why) ---
+	cp -a platform/sdl2_desktop/lang debian/tmp/$(LIBDIR)/res/lang
 
 	# --- launcher script in /usr/bin ---
 	install -D -m 755 debian/unreal-speccy-portable-sdl2-desktop.launcher \

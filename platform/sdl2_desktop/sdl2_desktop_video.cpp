@@ -673,7 +673,7 @@ static void ApplyFullScreen(bool enable)
 	{
 		SDL_SetWindowFullscreen(g_gl_window.window, SDL_WINDOW_FULLSCREEN_DESKTOP);
 		g_field_rate_synced = false;
-		xImGui::SetStatusText("Fullscreen: Prefer PAL refresh off, using desktop rate");
+		xImGui::SetStatusText(xImGui::Tr("status.fullscreen.pal_refresh_off"));
 		return;
 	}
 
@@ -684,9 +684,9 @@ static void ApplyFullScreen(bool enable)
 		int display_index = SDL_GetWindowDisplayIndex(g_gl_window.window);
 		char msg[128];
 		if(display_index >= 0 && SDL_GetCurrentDisplayMode(display_index, &applied) == 0)
-			snprintf(msg, sizeof(msg), "Fullscreen: %dHz sync enabled (emulator runs at %.2fHz)", applied.refresh_rate, EmulatedFieldRateHz());
+			snprintf(msg, sizeof(msg), xImGui::Tr("status.fullscreen.sync_enabled"), applied.refresh_rate, EmulatedFieldRateHz());
 		else
-			snprintf(msg, sizeof(msg), "Fullscreen: frame sync enabled");
+			snprintf(msg, sizeof(msg), "%s", xImGui::Tr("status.fullscreen.frame_sync_enabled"));
 		xImGui::SetStatusText(msg);
 		return;
 	}
@@ -698,7 +698,7 @@ static void ApplyFullScreen(bool enable)
 	// follows whatever rate the desktop itself runs at.
 	SDL_SetWindowFullscreen(g_gl_window.window, SDL_WINDOW_FULLSCREEN_DESKTOP);
 	g_field_rate_synced = false;
-	xImGui::SetStatusText("Fullscreen: no better refresh rate available, using desktop rate");
+	xImGui::SetStatusText(xImGui::Tr("status.fullscreen.no_better_rate"));
 }
 
 static struct eOptionFullScreen : public xOptions::eOptionBool

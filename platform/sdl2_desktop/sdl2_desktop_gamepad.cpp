@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifdef SDL_USE_JOYSTICK
 
 #include "sdl2_desktop_gamepad.h"
+#include "sdl2_desktop_i18n.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -190,7 +191,7 @@ std::vector<WxGamepadBackend::DeviceInfo> WxGamepadBackend::EnumerateDevices() {
         info.index = i;
 
         const char* name = SDL_JoystickNameForIndex(i);
-        info.name = name ? std::string(name) : "Unknown Controller";
+        info.name = name ? std::string(name) : xI18n::Tr("gamepad.unknown_controller");
 
         SDL_JoystickGUID guid = SDL_JoystickGetDeviceGUID(i);
         char guid_str[33];
@@ -450,32 +451,38 @@ std::string SourceTypeToString(EHostSourceType type) {
 }
 
 const char* SourceTypeDisplayString(EHostSourceType type) {
+    // A/B/X/Y are left untranslated: they're the letters physically printed
+    // on the controller's face buttons, in Latin script, regardless of the
+    // UI's language - translating the *label* here would make it disagree
+    // with what's stamped on the actual hardware in front of the player.
+    // Everything else is an ordinary descriptive word/phrase, not a glyph
+    // printed on anything, so it does get translated.
     switch (type) {
         case EHostSourceType::BUTTON_A:            return "A";
         case EHostSourceType::BUTTON_B:            return "B";
         case EHostSourceType::BUTTON_X:            return "X";
         case EHostSourceType::BUTTON_Y:            return "Y";
-        case EHostSourceType::BUTTON_BACK:         return "Back";
-        case EHostSourceType::BUTTON_START:        return "Start";
-        case EHostSourceType::BUTTON_LEFTSTICK:    return "L Stick";
-        case EHostSourceType::BUTTON_RIGHTSTICK:   return "R Stick";
-        case EHostSourceType::BUTTON_LEFTSHOULDER: return "L Bumper";
-        case EHostSourceType::BUTTON_RIGHTSHOULDER: return "R Bumper";
-        case EHostSourceType::HAT_UP:    return "DPad Up";
-        case EHostSourceType::HAT_DOWN:  return "DPad Down";
-        case EHostSourceType::HAT_LEFT:  return "DPad Left";
-        case EHostSourceType::HAT_RIGHT: return "DPad Right";
-        case EHostSourceType::AXIS_LEFT_X_POS:   return "L Stick Right";
-        case EHostSourceType::AXIS_LEFT_X_NEG:   return "L Stick Left";
-        case EHostSourceType::AXIS_LEFT_Y_POS:   return "L Stick Down";
-        case EHostSourceType::AXIS_LEFT_Y_NEG:   return "L Stick Up";
-        case EHostSourceType::AXIS_RIGHT_X_POS:  return "R Stick Right";
-        case EHostSourceType::AXIS_RIGHT_X_NEG:  return "R Stick Left";
-        case EHostSourceType::AXIS_RIGHT_Y_POS:  return "R Stick Down";
-        case EHostSourceType::AXIS_RIGHT_Y_NEG:  return "R Stick Up";
-        case EHostSourceType::TRIGGER_LEFT:   return "L Trigger";
-        case EHostSourceType::TRIGGER_RIGHT:  return "R Trigger";
-        default: return "None";
+        case EHostSourceType::BUTTON_BACK:         return xI18n::Tr("gamepad.source.back");
+        case EHostSourceType::BUTTON_START:        return xI18n::Tr("gamepad.source.start");
+        case EHostSourceType::BUTTON_LEFTSTICK:    return xI18n::Tr("gamepad.source.l_stick");
+        case EHostSourceType::BUTTON_RIGHTSTICK:   return xI18n::Tr("gamepad.source.r_stick");
+        case EHostSourceType::BUTTON_LEFTSHOULDER: return xI18n::Tr("gamepad.source.l_bumper");
+        case EHostSourceType::BUTTON_RIGHTSHOULDER: return xI18n::Tr("gamepad.source.r_bumper");
+        case EHostSourceType::HAT_UP:    return xI18n::Tr("gamepad.source.dpad_up");
+        case EHostSourceType::HAT_DOWN:  return xI18n::Tr("gamepad.source.dpad_down");
+        case EHostSourceType::HAT_LEFT:  return xI18n::Tr("gamepad.source.dpad_left");
+        case EHostSourceType::HAT_RIGHT: return xI18n::Tr("gamepad.source.dpad_right");
+        case EHostSourceType::AXIS_LEFT_X_POS:   return xI18n::Tr("gamepad.source.l_stick_right");
+        case EHostSourceType::AXIS_LEFT_X_NEG:   return xI18n::Tr("gamepad.source.l_stick_left");
+        case EHostSourceType::AXIS_LEFT_Y_POS:   return xI18n::Tr("gamepad.source.l_stick_down");
+        case EHostSourceType::AXIS_LEFT_Y_NEG:   return xI18n::Tr("gamepad.source.l_stick_up");
+        case EHostSourceType::AXIS_RIGHT_X_POS:  return xI18n::Tr("gamepad.source.r_stick_right");
+        case EHostSourceType::AXIS_RIGHT_X_NEG:  return xI18n::Tr("gamepad.source.r_stick_left");
+        case EHostSourceType::AXIS_RIGHT_Y_POS:  return xI18n::Tr("gamepad.source.r_stick_down");
+        case EHostSourceType::AXIS_RIGHT_Y_NEG:  return xI18n::Tr("gamepad.source.r_stick_up");
+        case EHostSourceType::TRIGGER_LEFT:   return xI18n::Tr("gamepad.source.l_trigger");
+        case EHostSourceType::TRIGGER_RIGHT:  return xI18n::Tr("gamepad.source.r_trigger");
+        default: return xI18n::Tr("gamepad.source.none");
     }
 }
 

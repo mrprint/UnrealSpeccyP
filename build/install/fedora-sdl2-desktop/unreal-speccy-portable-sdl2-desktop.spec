@@ -84,6 +84,10 @@ fi
 
 # res/ (ROMs, fonts) next to the binary
 cp -a res ${LIBDIR}/
+# res/lang (this platform's UI translations - not part of the shared
+# res/ above, see the sdl2_desktop_lang custom target in
+# build/cmake/CMakeLists.txt for why)
+cp -a platform/sdl2_desktop/lang ${LIBDIR}/res/lang
 
 # Launcher script
 install -D -m 755 build/install/fedora-sdl2-desktop/unreal-speccy-portable-sdl2-desktop.launcher \

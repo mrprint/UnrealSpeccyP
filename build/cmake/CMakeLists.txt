@@ -878,6 +878,81 @@ add_platform_io_stuff()
 
 add_executable(${PROJECT} WIN32 ${SRCCXX} ${SRCC} ${SRCH} ${SRCRES})
 set_target_properties(${PROJECT} PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+
+#Localization data (res/lang/*.xml - see sdl2_desktop_i18n.h) is specific
+#to this platform's ImGui UI, so unlike res/rom and res/font it does NOT
+#live in the shared top-level res/ tree (other platforms - iOS, Android,
+#UWP, the wx GUI - don't read it at runtime and shouldn't ship it). Its
+#tracked source location is platform/sdl2_desktop/lang/.
+#
+#This copies it into res/lang/ next to the *built binary* -
+#$<TARGET_FILE_DIR:...>, this target's own output directory - rather than
+#anywhere under the shared source tree. That's a deliberate difference
+#from res/font and res/rom, which do sit in the shared top-level res/ and
+#are found via a plain cwd-relative "res/font" (see LoadFont() in
+#sdl2_desktop_imgui.cpp): an earlier version of this put res/lang there
+#too, and that broke in practice, twice - once as a packaged wx/plain-SDL2
+#build silently bundling a leftover res/lang from an earlier sdl2_desktop
+#package built from the same checkout, and once as a plain (non-package)
+#build/cmake/dobuild.bat wx still finding res/lang sitting in the repo
+#root afterwards, left over from a plain dobuild.bat run before it -
+#because nothing about a wx build ever has a reason to clean up a
+#directory that conceptually belongs to a completely different platform.
+#Keeping res/lang entirely inside *this* target's own build output
+#directory makes both failure modes structurally impossible rather than
+#something to keep patching at whichever new spot it turns up: there is
+#no shared location left for it to leak through, under any build
+#invocation, packaged or not. sdl2_desktop_i18n.cpp resolves the matching
+#runtime path itself, via SDL_GetBasePath() (the directory the running
+#binary actually lives in) rather than assuming cwd - see its own comment.
+add_custom_target(sdl2_desktop_lang ALL
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+		"${CMAKE_CURRENT_SOURCE_DIR}/../../platform/sdl2_desktop/lang"
+		"$<TARGET_FILE_DIR:${PROJECT}>/res/lang"
+	COMMENT "Copying sdl2_desktop localization files into res/lang")
+#No add_dependencies(${PROJECT} sdl2_desktop_lang) here, deliberately: the
+#$<TARGET_FILE_DIR:${PROJECT}> generator expression above already makes
+#sdl2_desktop_lang implicitly depend on ${PROJECT} (CMake needs to know
+#where ${PROJECT} will end up before it can evaluate that path), so
+#adding the reverse edge as well would be a cycle - confirmed the hard
+#way: CMake's Generate step fails outright ("strongly connected
+#component") rather than quietly picking one order. The implicit edge
+#alone is sufficient and actually gives the ordering this needs for free:
+#since sdl2_desktop_lang is ALL, a plain `cmake --build .` builds it
+#regardless, and because it depends on ${PROJECT}, it always runs after
+#${PROJECT} is fully linked - there's no real ordering requirement in the
+#other direction to lose (these are static XML files, nothing ${PROJECT}
+#itself needs present to compile or link).
+
+#Packaged (CPack/MSI, and the Linux/Fedora sdl2_desktop packages) go
+#through install() instead of the build output directory above - sourced
+#the same way, straight from platform/sdl2_desktop/lang/, so none of them
+#depend on (or touch) the shared res/ install() a few hundred lines down
+#at all, which is what makes that one safe to leave as a plain,
+#unmodified install(DIRECTORY "../../res" ...): there is nothing
+#res/lang-shaped for it, or any of the *other* platforms' own packaging
+#scripts (Linux .deb/.rpm for wx and plain SDL2, Flatpak, the Emscripten
+#--preload-file) to ever pick up by accident, packaged or not, any
+#platform - none of them see res/lang because it never exists anywhere
+#under the shared source tree in the first place, not because each of
+#them was individually taught to skip it. Windows-only here, matching
+#that shared install() block's own WIN32 gating; the Linux/Fedora
+#sdl2_desktop packages have their own equivalent install line in their
+#own debian/rules and .spec files (build/install/linux-sdl2-desktop,
+#build/install/fedora-sdl2-desktop) since dh/rpmbuild don't go through
+#this CMakeLists.txt's own install() at all. Nintendo Switch's ROMFS
+#needs its own separate link for the same reason too (see ROMFS_DIR
+#below). The Flatpak manifest does NOT need one: it builds -DUSE_SDL2=ON
+#(the plain GLES2/touch-UI platform), not -DUSE_SDL2_DESKTOP - a
+#different codebase that never reads res/lang at all, so there is
+#nothing for it to package here regardless of what ends up in res/. That
+#looks like it might itself be an oversight - worth checking with
+#whoever owns that manifest whether it's meant to package this platform
+#instead - but is not something to guess about and change unprompted.
+if(WIN32)
+install(DIRECTORY "../../platform/sdl2_desktop/lang" DESTINATION "res")
+endif(WIN32)
+
 #GCC < 9 ships std::filesystem in a separate library instead of libstdc++ proper.
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
 target_link_libraries(${PROJECT} stdc++fs)
@@ -894,8 +969,70 @@ endif()
 
 if(NINTENDO_SWITCH)
 set(ROMFS_DIR ${CMAKE_BINARY_DIR}/romfs)
-file(MAKE_DIRECTORY ${ROMFS_DIR})
-file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/../../res ${ROMFS_DIR}/res SYMBOLIC)
+file(MAKE_DIRECTORY ${ROMFS_DIR}/res)
+
+if(CMAKE_VERSION VERSION_LESS 3.14)
+	message(FATAL_ERROR "Nintendo Switch build requires CMake >= 3.14 (file(CREATE_LINK) is used for the ROMFS res/ links); found ${CMAKE_VERSION}.")
+endif()
+
+#SYMBOLIC alone isn't portable enough to rely on unguarded - see
+#COPY_ON_ERROR/RESULT on both loops below:
+# - Creating an actual OS symlink needs a filesystem that supports them
+#   and (on Windows specifically) either Developer Mode (10 1703+/11) or
+#   an elevated/Administrator process - devkitPro's Switch toolchain is
+#   commonly run on Windows via MSYS2 without either, so this is a live
+#   risk here, not a theoretical one. This is a different thing from
+#   git's own core.symlinks setting: nothing here is a symlink *tracked
+#   in the repository* (res/ is real files, not a checked-in symlink), so
+#   core.symlinks itself doesn't control this call - but a machine
+#   configured with core.symlinks=false usually has that setting *because*
+#   it can't create OS symlinks at all, which is precisely the same
+#   underlying limitation that would make file(CREATE_LINK) fail here.
+# - Network shares and some removable/exotic filesystems (FAT32, exFAT,
+#   certain SMB configurations) don't support symlinks regardless of OS
+#   or privilege.
+#COPY_ON_ERROR is CMake's own sanctioned answer to both: fall back to a
+#real recursive copy - functionally equivalent for ROMFS packaging's
+#purposes (nx_create_nro just needs the files to exist under
+#ROMFS_DIR/res, symlink or not) - if a plain symlink can't be made.
+#RESULT is captured only so a fallback is visible in the configure log
+#instead of silently changing behaviour with no trace.
+
+#res/font, res/rom, and anything else that ever joins the shared
+#top-level res/ tree - linked individually, one per subdirectory, rather
+#than the whole res/ folder in one link. That's deliberate, not just
+#more verbose for no reason: res/lang (below) is a *different* origin
+#(platform/sdl2_desktop/lang/, not the shared res/ tree at all - see the
+#sdl2_desktop_lang custom target above for why), and creating a nested
+#ROMFS_DIR/res/lang path underneath a single link of the *whole* res/
+#folder would silently write through that link into the real, shared
+#res/ directory instead of ROMFS_DIR - exactly the kind of accidental
+#leak into the shared source tree the rest of this file now goes out of
+#its way to rule out everywhere else.
+file(GLOB _res_subdirs "${CMAKE_CURRENT_SOURCE_DIR}/../../res/*")
+foreach(_res_subdir ${_res_subdirs})
+	if(IS_DIRECTORY "${_res_subdir}")
+		get_filename_component(_res_subdir_name "${_res_subdir}" NAME)
+		file(CREATE_LINK "${_res_subdir}" "${ROMFS_DIR}/res/${_res_subdir_name}" SYMBOLIC COPY_ON_ERROR RESULT _res_link_result)
+		if(NOT _res_link_result EQUAL 0)
+			message(STATUS "romfs/res/${_res_subdir_name}: couldn't create a symlink (${_res_link_result}), copied instead")
+		endif()
+	endif()
+endforeach()
+
+#res/lang: sourced straight from platform/sdl2_desktop/lang/, same as the
+#Windows install() and the Flatpak manifest - never through the shared
+#res/ tree above, for the same reason. Unlike a POST_BUILD/custom-target
+#copy, file(CREATE_LINK)/its COPY_ON_ERROR fallback both run once, at
+#configure time - a live symlink still reflects later edits to
+#platform/sdl2_desktop/lang/ with no rebuild needed, but the fallback
+#copy doesn't; re-run cmake configure (not just --build) after editing
+#translations if RESULT below reported a fallback.
+file(CREATE_LINK "${CMAKE_CURRENT_SOURCE_DIR}/../../platform/sdl2_desktop/lang" "${ROMFS_DIR}/res/lang" SYMBOLIC COPY_ON_ERROR RESULT _lang_link_result)
+if(NOT _lang_link_result EQUAL 0)
+	message(STATUS "romfs/res/lang: couldn't create a symlink (${_lang_link_result}), copied instead")
+endif()
+
 nx_generate_nacp(usp.nacp
     NAME "Unreal Speccy Portable"
     AUTHOR "djdron"
@@ -968,6 +1105,11 @@ foreach(_lib ${THIRDPARTY_LIBRARIES})
 	list(APPEND THIRDPARTY_LIBRARIES_INSTALL ${_dll_exist})
 endforeach(_lib)
 install(FILES ${THIRDPARTY_LIBRARIES_INSTALL} DESTINATION ".")
+#Shared by three platforms (see the if() this whole block is under).
+#Nothing res/lang-shaped can ever end up under the shared top-level res/
+#any more (see the sdl2_desktop_lang custom target above for why, and
+#what changed), so this needs no special-casing for it - a plain,
+#unmodified directory install, same as res/font and res/rom always were.
 install(DIRECTORY "../../res" DESTINATION ".")
 set(CPACK_PACKAGE_NAME "Unreal Speccy Portable")
 set(CPACK_PACKAGE_VENDOR djdron)

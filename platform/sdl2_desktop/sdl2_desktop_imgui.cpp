@@ -315,10 +315,51 @@ void ImGuiBackend::LoadFont(float dpi_scale)
 	cfg.OversampleV = 1; // vertical oversampling matters much less for typical UI text sizes, not worth the extra atlas memory
 	cfg.PixelSnapH = true; // snap glyph advances to whole pixels - keeps small text crisp instead of blurring across pixel boundaries
 
+	// Glyph ranges baked into the atlas - must cover every res/lang/*.xml
+	// this build ships, in every language a translator might add later.
+	// GetGlyphRangesCyrillic() already bundles Basic Latin + Latin-1
+	// Supplement + the Cyrillic block (see Dear ImGui's own
+	// imgui_draw.cpp), which alone covers English plus every Latin-1-
+	// diacritic language (German, French, Spanish, Italian, Portuguese,
+	// Dutch, the Scandinavian languages) and every Cyrillic-script
+	// language relevant to the ZX Spectrum's history (Russian, Ukrainian,
+	// Bulgarian, Serbian/Macedonian).
+	//
+	// Added by hand on top of that:
+	//  - Latin Extended-A (U+0100-017F): Czech, Slovak, Polish, Hungarian,
+	//    Croatian, Slovenian - all had real ZX Spectrum/clone history
+	//    (Didaktik in Czechoslovakia especially).
+	//  - Modern Greek (U+0391-03CE).
+	//  - Four Romanian letters with a comma below, ș/ț/Ș/Ț (U+0218-021B) -
+	//    outside Latin Extended-A, technically in Extended-B, but this
+	//    specific font happens to include exactly these four even though
+	//    it doesn't cover the rest of that block (checked below).
+	//
+	// Verified against the actual shipped res/font/Roboto-Regular.ttf with
+	// fontTools (TTFont(...).getBestCmap()) rather than assumed from
+	// Roboto's general reputation: Latin Extended-A is 128/128 present,
+	// the four Romanian codepoints above are present, and modern Greek is
+	// complete apart from U+03A2, which isn't a real letter - Unicode
+	// itself leaves that one codepoint unassigned.
+	static ImVector<ImWchar> s_glyph_ranges;
+	if(s_glyph_ranges.empty())
+	{
+		ImFontGlyphRangesBuilder builder;
+		builder.AddRanges(io.Fonts->GetGlyphRangesCyrillic());
+		static const ImWchar extra_ranges[] = {
+			0x0100, 0x017F, // Latin Extended-A
+			0x0391, 0x03CE, // Greek
+			0x0218, 0x021B, // Romanian ș ț Ș Ț
+			0,
+		};
+		builder.AddRanges(extra_ranges);
+		builder.BuildRanges(&s_glyph_ranges);
+	}
+
 	const char* font_path = "res/font/Roboto-Regular.ttf";
 	ImFont* font = nullptr;
 	if(FileExists(font_path))
-		font = io.Fonts->AddFontFromFileTTF(font_path, 18.0f * dpi_scale, &cfg, io.Fonts->GetGlyphRangesCyrillic());
+		font = io.Fonts->AddFontFromFileTTF(font_path, 18.0f * dpi_scale, &cfg, s_glyph_ranges.Data);
 	if(!font)
 		io.Fonts->AddFontDefault(); // built-in font ignores cfg (fixed-size bitmap), but it's only a fallback for a missing TTF
 
@@ -536,7 +577,7 @@ void LightweightShadersMessage(bool prev_use_lightweight, bool use_lightweight)
 {
 	if(prev_use_lightweight == use_lightweight)
 		return;
-	xImGui::SetStatusText(use_lightweight ? "Lightweight shader enabled" : "Full-quality shader enabled");
+	xImGui::SetStatusText(use_lightweight ? xImGui::Tr("status.shader.lightweight") : xImGui::Tr("status.shader.full_quality"));
 }
 
 }

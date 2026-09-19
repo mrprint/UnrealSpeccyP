@@ -140,7 +140,7 @@ public:
 		ImGui::EndChild();
 
 		ImGui::Spacing();
-		if(ImGui::Button("Restore Gamepad Defaults"))
+		if(ImGui::Button(Tr("gamepad.restore_defaults")))
 		{
 			StopCapture();
 			for(int i = 0; i < 2; ++i)
@@ -178,11 +178,11 @@ private:
 	const char* MappingLabelText(int player_idx, EEmulatedJoystickInput input) const
 	{
 		if(m_profiles[player_idx].host_device_index < 0)
-			return "No device";
+			return Tr("gamepad.no_device");
 
 		auto it = m_profiles[player_idx].input_map.find(input);
 		if(it == m_profiles[player_idx].input_map.end())
-			return "Not set";
+			return Tr("gamepad.not_set");
 		return SourceTypeDisplayString(it->second.source_type);
 	}
 
@@ -333,8 +333,8 @@ private:
 	void DrawPlayerSection(int player_idx)
 	{
 		ImGui::PushID(player_idx);
-		char header[16];
-		snprintf(header, sizeof(header), "Player %d", player_idx + 1);
+		char header[64];
+		snprintf(header, sizeof(header), Tr("gamepad.player_n"), player_idx + 1);
 		ImGui::SeparatorText(header);
 
 		// Device combo: "None" + every currently connected SDL_GameController.
@@ -342,12 +342,12 @@ private:
 		for(size_t i = 0; i < m_devices.size(); ++i)
 			if(m_devices[i].index == m_profiles[player_idx].host_device_index)
 				{ selection = (int)i + 1; break; }
-		const char* preview = selection == 0 ? "None" : m_devices[selection - 1].name.c_str();
+		const char* preview = selection == 0 ? Tr("gamepad.device_none") : m_devices[selection - 1].name.c_str();
 		ImGui::SetNextItemWidth(-1.0f);
 		if(ImGui::BeginCombo("##device", preview))
 		{
 			bool sel_none = (selection == 0);
-			if(ImGui::Selectable("None", sel_none))
+			if(ImGui::Selectable(Tr("gamepad.device_none"), sel_none))
 			{
 				m_profiles[player_idx].host_device_index = -1;
 				m_profiles[player_idx].device_guid.clear();
@@ -372,7 +372,10 @@ private:
 			EEmulatedJoystickInput::LEFT, EEmulatedJoystickInput::RIGHT,
 			EEmulatedJoystickInput::FIRE1, EEmulatedJoystickInput::FIRE2
 		};
-		static const char* input_names[6] = { "UP", "DOWN", "LEFT", "RIGHT", "FIRE1", "FIRE2" };
+		static const char* input_names[6] = {
+			"gamepad.input.up", "gamepad.input.down", "gamepad.input.left",
+			"gamepad.input.right", "gamepad.input.fire1", "gamepad.input.fire2"
+		};
 
 		if(ImGui::BeginTable("##mapping", 3, ImGuiTableFlags_SizingFixedFit))
 		{
@@ -380,7 +383,7 @@ private:
 			{
 				ImGui::TableNextRow();
 				ImGui::TableSetColumnIndex(0);
-				ImGui::TextUnformatted(input_names[i]);
+				ImGui::TextUnformatted(Tr(input_names[i]));
 				ImGui::TableSetColumnIndex(1);
 				ImGui::TextUnformatted(MappingLabelText(player_idx, inputs[i]));
 				ImGui::TableSetColumnIndex(2);
@@ -391,16 +394,16 @@ private:
 				if(capturing)
 				{
 					ImGui::BeginDisabled();
-					ImGui::Button("Capturing...");
+					ImGui::Button(Tr("gamepad.capturing"));
 					ImGui::EndDisabled();
 				}
 				else if(no_device)
 				{
 					ImGui::BeginDisabled();
-					ImGui::Button("Capture");
+					ImGui::Button(Tr("gamepad.capture"));
 					ImGui::EndDisabled();
 				}
-				else if(ImGui::Button("Capture"))
+				else if(ImGui::Button(Tr("gamepad.capture")))
 				{
 					StartCapture(player_idx, inputs[i]);
 				}
@@ -417,13 +420,22 @@ private:
 // ---------------------------------------------------------------------------
 // Small layout helper: label + slider + live value on one row. Stateless, so
 // it stays a free function rather than an OptionsDialog method.
+//
+// Takes a translation *key*, not already-translated text: the slider's own
+// ImGui id is built from that same string (see the "##" below - unlike
+// "###" elsewhere in this file, a plain "##" still folds the text before it
+// into the id hash, it just isn't displayed), so if the visible label were
+// passed straight through, the slider's id would change every time the
+// active language changed. Untranslated keys like "options.video.beam_spread"
+// never change, so the id stays stable across a live language switch the
+// same way TrTitle()'s stable_id does for window titles (see imgui_shared.h).
 // ---------------------------------------------------------------------------
 
-void SliderRow(const char* label, int* value, int lo, int hi, const char* value_fmt_is_percent)
+void SliderRow(const char* label_key, int* value, int lo, int hi, const char* value_fmt_is_percent)
 {
-	ImGui::TextUnformatted(label);
+	ImGui::TextUnformatted(Tr(label_key));
 	ImGui::SetNextItemWidth(220.0f);
-	ImGui::SliderInt((std::string("##") + label).c_str(), value, lo, hi, value_fmt_is_percent);
+	ImGui::SliderInt((std::string("##") + label_key).c_str(), value, lo, hi, value_fmt_is_percent);
 }
 
 // ---------------------------------------------------------------------------
@@ -529,12 +541,15 @@ void OptionsDialog::CommitToOptions()
 
 void OptionsDialog::DrawAudioTab()
 {
-	ImGui::SeparatorText("Sound Chip");
+	ImGui::SeparatorText(Tr("options.audio.sound_chip"));
 	ImGui::RadioButton("AY-3-8910", &m_sound_chip, SC_AY);
 	ImGui::RadioButton("YM2149F", &m_sound_chip, SC_YM);
 
 	ImGui::Spacing();
-	ImGui::SeparatorText("Stereo Mode");
+	ImGui::SeparatorText(Tr("options.audio.stereo_mode"));
+	// ABC/ACB/.../Mono are the established, universal names for these AY
+	// channel-routing modes across the ZX Spectrum scene (same reasoning as
+	// leaving "AY-3-8910"/"Kempston" untranslated below) - left as-is.
 	static const char* stereo_names[] = { "ABC", "ACB", "BAC", "BCA", "CAB", "CBA", "Mono" };
 	ImGui::SetNextItemWidth(160.0f);
 	if(ImGui::BeginCombo("##stereo", stereo_names[m_ay_stereo >= 0 && m_ay_stereo < 7 ? m_ay_stereo : 0]))
@@ -550,7 +565,7 @@ void OptionsDialog::DrawAudioTab()
 
 	ImGui::Spacing();
 	ImGui::Spacing();
-	if(ImGui::Button("Restore Audio Defaults"))
+	if(ImGui::Button(Tr("options.audio.restore_defaults")))
 	{
 		m_sound_chip = DEFAULT_SOUND_CHIP;
 		m_ay_stereo = DEFAULT_STEREO;
@@ -559,23 +574,23 @@ void OptionsDialog::DrawAudioTab()
 
 void OptionsDialog::DrawVideoTab()
 {
-	ImGui::Checkbox("Enable Mipmapping", &m_mipmapping);
-	ImGui::Checkbox("Enable Gigascreen", &m_gigascreen);
-	ImGui::Checkbox("Enable CRT Scanlines", &m_scanlines);
-	ImGui::Checkbox("Prefer PAL refresh", &m_prefer_pal_refresh);
+	ImGui::Checkbox(Tr("options.video.mipmapping"), &m_mipmapping);
+	ImGui::Checkbox(Tr("options.video.gigascreen"), &m_gigascreen);
+	ImGui::Checkbox(Tr("options.video.scanlines"), &m_scanlines);
+	ImGui::Checkbox(Tr("options.video.prefer_pal_refresh"), &m_prefer_pal_refresh);
 
 	ImGui::Spacing();
-	SliderRow("CRT Mask Scale", &m_mask_scale, 0, 4, "%d");
+	SliderRow("options.video.crt_mask_scale", &m_mask_scale, 0, 4, "%d");
 
 	ImGui::Spacing();
-	ImGui::SeparatorText("PAL Effects");
-	ImGui::Checkbox("Enable PAL effects", &m_pal_effects);
-	SliderRow("PAL Strength", &m_pal_strength, 0, 100, "%d%%");
-	SliderRow("Beam Spread", &m_beam_spread, 0, 200, "%d");
+	ImGui::SeparatorText(Tr("options.video.pal_effects_header"));
+	ImGui::Checkbox(Tr("options.video.pal_effects"), &m_pal_effects);
+	SliderRow("options.video.pal_strength", &m_pal_strength, 0, 100, "%d%%");
+	SliderRow("options.video.beam_spread", &m_beam_spread, 0, 200, "%d");
 
 	ImGui::Spacing();
 	ImGui::Spacing();
-	if(ImGui::Button("Restore Video Defaults"))
+	if(ImGui::Button(Tr("options.video.restore_defaults")))
 	{
 		m_gigascreen = DEFAULT_GIGASCREEN;
 		m_scanlines = DEFAULT_SCANLINES;
@@ -590,7 +605,7 @@ void OptionsDialog::DrawVideoTab()
 
 void OptionsDialog::DrawInputTab()
 {
-	ImGui::SeparatorText("Joystick Type");
+	ImGui::SeparatorText(Tr("options.input.joystick_type"));
 	ImGui::RadioButton("Kempston", &m_joystick, J_KEMPSTON);
 	ImGui::RadioButton("Cursor", &m_joystick, J_CURSOR);
 	ImGui::RadioButton("QAOPSpace", &m_joystick, J_QAOPSPACE);
@@ -598,7 +613,7 @@ void OptionsDialog::DrawInputTab()
 
 	ImGui::Spacing();
 	ImGui::Spacing();
-	if(ImGui::Button("Restore Input Defaults"))
+	if(ImGui::Button(Tr("options.input.restore_defaults")))
 		m_joystick = DEFAULT_JOYSTICK;
 }
 
@@ -611,7 +626,7 @@ void OptionsDialog::DrawDriveTab()
 
 	ImGui::Spacing();
 	ImGui::Spacing();
-	if(ImGui::Button("Restore Disk Drive Defaults"))
+	if(ImGui::Button(Tr("options.drives.restore_defaults")))
 		m_drive = DEFAULT_DRIVE;
 }
 
@@ -655,7 +670,7 @@ void OptionsDialog::Draw()
 
 	ImGui::SetNextWindowSize(ImVec2(620, 460), ImGuiCond_FirstUseEver);
 	bool open = m_open;
-	if(!ImGui::Begin("Options", &open, ImGuiWindowFlags_NoCollapse))
+	if(!ImGui::Begin(TrTitle("options.title", "Options").c_str(), &open, ImGuiWindowFlags_NoCollapse))
 	{
 		ImGui::End();
 		m_open = open;
@@ -687,40 +702,50 @@ void OptionsDialog::Draw()
 		return;
 	}
 
-	static const char* tab_names[] = {
-		"Audio", "Video", "Input",
+	struct TabEntry { EOptionsTab id; const char* label_key; };
+	static const TabEntry tabs[] = {
+		{ EOptionsTab::Audio, "options.tab.audio" },
+		{ EOptionsTab::Video, "options.tab.video" },
+		{ EOptionsTab::Input, "options.tab.input" },
 #ifdef SDL_USE_JOYSTICK
-		"Gamepads",
+		{ EOptionsTab::Gamepads, "options.tab.gamepads" },
 #endif
-		"Disk Drives"
+		{ EOptionsTab::Drives, "options.tab.drives" },
 	};
-	int tab_count = (int)(sizeof(tab_names) / sizeof(tab_names[0]));
+	int tab_count = (int)(sizeof(tabs) / sizeof(tabs[0]));
 
 	// Left-side vertical tab list (see the file comment for why).
 	ImGui::BeginChild("##tabs", ImVec2(140, -ImGui::GetFrameHeightWithSpacing()), true);
 	for(int i = 0; i < tab_count; ++i)
 	{
-		bool selected = (m_active_tab == i);
-		if(ImGui::Selectable(tab_names[i], selected))
-			m_active_tab = i;
+		bool selected = (m_active_tab == (int)tabs[i].id);
+		if(ImGui::Selectable(Tr(tabs[i].label_key), selected))
+			m_active_tab = (int)tabs[i].id;
 	}
 	ImGui::EndChild();
 
 	ImGui::SameLine();
 
 	ImGui::BeginChild("##tabcontent", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()));
-	const char* selected_name = (m_active_tab >= 0 && m_active_tab < tab_count) ? tab_names[m_active_tab] : "";
-	if(strcmp(selected_name, "Audio") == 0) DrawAudioTab();
-	else if(strcmp(selected_name, "Video") == 0) DrawVideoTab();
-	else if(strcmp(selected_name, "Input") == 0) DrawInputTab();
+	// Dispatches on the enum value m_active_tab already holds directly -
+	// deliberately *not* by matching against a (translated) tab label text,
+	// which is what this used to do via strcmp() before localization: that
+	// broke the instant a tab's label stopped being the literal English
+	// string it was compared against.
+	switch((EOptionsTab)m_active_tab)
+	{
+	case EOptionsTab::Audio: DrawAudioTab(); break;
+	case EOptionsTab::Video: DrawVideoTab(); break;
+	case EOptionsTab::Input: DrawInputTab(); break;
 #ifdef SDL_USE_JOYSTICK
-	else if(strcmp(selected_name, "Gamepads") == 0) DrawGamepadsTab();
+	case EOptionsTab::Gamepads: DrawGamepadsTab(); break;
 #endif
-	else if(strcmp(selected_name, "Disk Drives") == 0) DrawDriveTab();
+	case EOptionsTab::Drives: DrawDriveTab(); break;
+	}
 	ImGui::EndChild();
 
 	ImGui::Separator();
-	if(ImGui::Button("OK", ImVec2(90, 0)))
+	if(ImGui::Button(Tr("options.ok"), ImVec2(90, 0)))
 	{
 		CommitToOptions();
 #ifdef SDL_USE_JOYSTICK
@@ -729,7 +754,7 @@ void OptionsDialog::Draw()
 		m_open = false;
 	}
 	ImGui::SameLine();
-	if(ImGui::Button("Cancel", ImVec2(90, 0)))
+	if(ImGui::Button(Tr("options.cancel"), ImVec2(90, 0)))
 	{
 #ifdef SDL_USE_JOYSTICK
 		m_gamepad.StopCapture();

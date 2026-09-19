@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  English strings for the sdl2_desktop platform's ImGui UI.
+
+  This file is the permanent fallback layer (see sdl2_desktop_i18n.h/.cpp):
+  every other res/lang/<code>.xml is only ever an *overlay* on top of this
+  one, so a string missing from a translation still shows in English
+  instead of going blank. Keep every id here even if a translation covers
+  it too - id/text pairs, one <string> per line so no stray
+  whitespace/indentation ends up inside the translated text itself.
+-->
+<language code="en" name="English">
+
+	<!-- Menu bar -->
+	<string id="menu.file">File</string>
+	<string id="menu.file.open">Open...</string>
+	<string id="menu.file.save">Save...</string>
+	<string id="menu.file.quick_load">Quick Load</string>
+	<string id="menu.file.quick_save">Quick Save</string>
+	<string id="menu.file.auto_launch">Auto launch programs</string>
+	<string id="menu.file.exit">Exit</string>
+
+	<string id="menu.view">View</string>
+	<string id="menu.view.fill_screen">Fill screen</string>
+	<string id="menu.view.small_border">Small border</string>
+	<string id="menu.view.no_border">No border</string>
+	<string id="menu.view.gigascreen">Gigascreen</string>
+	<string id="menu.view.crt_scanlines">CRT scanlines</string>
+	<string id="menu.view.pal_effects">PAL effects</string>
+	<string id="menu.view.full_screen">Full screen</string>
+	<string id="menu.view.prefer_pal_refresh">Prefer PAL refresh</string>
+
+	<string id="menu.device">Device</string>
+	<string id="menu.device.start_stop_tape">Start/Stop tape</string>
+	<string id="menu.device.tape_fast">Tape fast</string>
+	<string id="menu.device.pause">Pause</string>
+	<string id="menu.device.true_speed">True speed</string>
+	<string id="menu.device.mode_48k">Mode 48k</string>
+	<string id="menu.device.reset_to_service_rom">Reset to service ROM</string>
+	<string id="menu.device.reset">Reset</string>
+	<string id="menu.device.options">Options...</string>
+
+	<string id="menu.window">Window</string>
+	<string id="menu.window.size_100">Size 100%</string>
+	<string id="menu.window.size_200">Size 200%</string>
+	<string id="menu.window.size_300">Size 300%</string>
+
+	<string id="menu.help">Help</string>
+	<string id="menu.help.about">About</string>
+
+	<!-- Language switcher icon at the right edge of the menu bar -->
+	<string id="menu.language">Language</string>
+
+	<!-- About window -->
+	<string id="about.title">About</string>
+	<string id="about.version">Version 0.0.90</string>
+	<string id="about.tagline">Portable ZX Spectrum emulator.</string>
+
+	<!-- Status bar -->
+	<string id="status.reset.ok">Reset OK</string>
+	<string id="status.reset.failed">Reset FAILED</string>
+	<string id="status.file_open.ok">File open OK</string>
+	<string id="status.file_open.failed">File open FAILED</string>
+	<string id="status.file_save.ok">File save OK</string>
+	<string id="status.file_save.failed">File save FAILED</string>
+	<string id="status.tape.started">Tape started</string>
+	<string id="status.tape.stopped">Tape stopped</string>
+	<string id="status.tape.not_inserted">Tape not inserted</string>
+	<string id="status.true_speed.on">True speed (50Hz mode) on</string>
+	<string id="status.true_speed.off">True speed off</string>
+	<string id="status.mode_48k.on">Mode 48k on</string>
+	<string id="status.mode_48k.off">Mode 48k off</string>
+	<string id="status.pause.paused">Paused...</string>
+	<string id="status.pause.ready">Ready...</string>
+	<string id="status.quickload.ok">Quick load OK</string>
+	<string id="status.quickload.failed">Quick load FAILED</string>
+	<string id="status.quicksave.ok">Quick save OK</string>
+	<string id="status.quicksave.failed">Quick save FAILED</string>
+	<string id="status.gigascreen.on">Gigascreen on</string>
+	<string id="status.gigascreen.off">Gigascreen off</string>
+	<string id="status.scanlines.on">CRT scanlines simulation on</string>
+	<string id="status.scanlines.off">CRT scanlines simulation off</string>
+	<string id="status.pal_effects.on">PAL effects on</string>
+	<string id="status.pal_effects.off">PAL effects off</string>
+	<string id="status.pal_refresh.on">Prefer PAL refresh on</string>
+	<string id="status.pal_refresh.off">Prefer PAL refresh off</string>
+	<string id="status.mouse_captured">Mouse captured, press ESC to cancel</string>
+	<string id="status.mouse_released">Mouse released</string>
+	<string id="status.shader.lightweight">Lightweight shader enabled</string>
+	<string id="status.shader.full_quality">Full-quality shader enabled</string>
+	<!-- %d/%.2f are the actual refresh rate and the emulator's own field rate - kept as printf placeholders, see sdl2_desktop_video.cpp -->
+	<string id="status.fullscreen.sync_enabled">Fullscreen: synced %dHz (emulator %.2fHz)</string>
+	<string id="status.fullscreen.frame_sync_enabled">Fullscreen: sync enabled</string>
+	<string id="status.fullscreen.pal_refresh_off">Fullscreen: desktop rate (PAL sync off)</string>
+	<string id="status.fullscreen.no_better_rate">Fullscreen: desktop rate (no match)</string>
+
+	<!-- Options dialog -->
+	<string id="options.title">Options</string>
+	<string id="options.ok">OK</string>
+	<string id="options.cancel">Cancel</string>
+	<string id="options.language.auto">Auto</string>
+	<string id="options.tab.audio">Audio</string>
+	<string id="options.tab.video">Video</string>
+	<string id="options.tab.input">Input</string>
+	<string id="options.tab.gamepads">Gamepads</string>
+	<string id="options.tab.drives">Disk Drives</string>
+
+	<string id="options.audio.sound_chip">Sound Chip</string>
+	<string id="options.audio.stereo_mode">Stereo Mode</string>
+	<string id="options.audio.restore_defaults">Restore Audio Defaults</string>
+
+	<string id="options.video.mipmapping">Enable Mipmapping</string>
+	<string id="options.video.gigascreen">Enable Gigascreen</string>
+	<string id="options.video.scanlines">Enable CRT Scanlines</string>
+	<string id="options.video.prefer_pal_refresh">Prefer PAL refresh</string>
+	<string id="options.video.crt_mask_scale">CRT Mask Scale</string>
+	<string id="options.video.pal_effects_header">PAL Effects</string>
+	<string id="options.video.pal_effects">Enable PAL effects</string>
+	<string id="options.video.pal_strength">PAL Strength</string>
+	<string id="options.video.beam_spread">Beam Spread</string>
+	<string id="options.video.restore_defaults">Restore Video Defaults</string>
+
+	<string id="options.input.joystick_type">Joystick Type</string>
+	<string id="options.input.restore_defaults">Restore Input Defaults</string>
+
+	<string id="options.drives.restore_defaults">Restore Disk Drive Defaults</string>
+
+	<!-- Gamepads tab -->
+	<string id="gamepad.restore_defaults">Restore Gamepad Defaults</string>
+	<string id="gamepad.no_device">No device</string>
+	<string id="gamepad.not_set">Not set</string>
+	<string id="gamepad.device_none">None</string>
+	<!-- %d is the player number (1 or 2) -->
+	<string id="gamepad.player_n">Player %d</string>
+	<string id="gamepad.capturing">Capturing...</string>
+	<string id="gamepad.capture">Capture</string>
+	<string id="gamepad.unknown_controller">Unknown Controller</string>
+	<string id="gamepad.input.up">UP</string>
+	<string id="gamepad.input.down">DOWN</string>
+	<string id="gamepad.input.left">LEFT</string>
+	<string id="gamepad.input.right">RIGHT</string>
+	<string id="gamepad.input.fire1">FIRE1</string>
+	<string id="gamepad.input.fire2">FIRE2</string>
+	<!-- What a mapped host button/axis is currently bound to (SourceTypeDisplayString() in sdl2_desktop_gamepad.cpp) -->
+	<string id="gamepad.source.back">Back</string>
+	<string id="gamepad.source.start">Start</string>
+	<string id="gamepad.source.l_stick">L Stick</string>
+	<string id="gamepad.source.r_stick">R Stick</string>
+	<string id="gamepad.source.l_bumper">L Bumper</string>
+	<string id="gamepad.source.r_bumper">R Bumper</string>
+	<string id="gamepad.source.dpad_up">DPad Up</string>
+	<string id="gamepad.source.dpad_down">DPad Down</string>
+	<string id="gamepad.source.dpad_left">DPad Left</string>
+	<string id="gamepad.source.dpad_right">DPad Right</string>
+	<string id="gamepad.source.l_stick_right">L Stick Right</string>
+	<string id="gamepad.source.l_stick_left">L Stick Left</string>
+	<string id="gamepad.source.l_stick_down">L Stick Down</string>
+	<string id="gamepad.source.l_stick_up">L Stick Up</string>
+	<string id="gamepad.source.r_stick_right">R Stick Right</string>
+	<string id="gamepad.source.r_stick_left">R Stick Left</string>
+	<string id="gamepad.source.r_stick_down">R Stick Down</string>
+	<string id="gamepad.source.r_stick_up">R Stick Up</string>
+	<string id="gamepad.source.l_trigger">L Trigger</string>
+	<string id="gamepad.source.r_trigger">R Trigger</string>
+	<string id="gamepad.source.none">None</string>
+
+	<!-- File browser -->
+	<string id="filedialog.title.open">Open</string>
+	<string id="filedialog.title.save">Save</string>
+	<string id="filedialog.this_pc">This PC</string>
+	<string id="filedialog.up">Up</string>
+	<string id="filedialog.root">Root</string>
+	<string id="filedialog.open">Open</string>
+	<string id="filedialog.save">Save</string>
+	<string id="filedialog.cancel">Cancel</string>
+	<string id="filedialog.error.cannot_open">Cannot open this folder.</string>
+	<string id="filedialog.error.read_failed">Error reading this folder's contents.</string>
+	<string id="filedialog.overwrite_title">Overwrite file?</string>
+	<string id="filedialog.overwrite_body">A file with this name already exists. Overwrite it?</string>
+	<string id="filedialog.overwrite">Overwrite</string>
+	<string id="filedialog.filter.all">All files</string>
+	<string id="filedialog.filter.supported">Supported (*.sna;*.z80;*.szx;*.rzx;*.trd;*.scl;*.fdi;*.tap;*.csw;*.tzx;*.zip)</string>
+	<string id="filedialog.filter.snapshot">Snapshot files (*.sna;*.z80;*.szx)</string>
+	<string id="filedialog.filter.replay">Replay files (*.rzx)</string>
+	<string id="filedialog.filter.disk">Disk images (*.trd;*.scl;*.fdi;*.td0;*.udi)</string>
+	<string id="filedialog.filter.tape">Tape files (*.tap;*.csw;*.tzx)</string>
+	<string id="filedialog.filter.zip">ZIP archives (*.zip)</string>
+	<string id="filedialog.filter.snapshot_save">Snapshot files (*.sna)</string>
+	<string id="filedialog.filter.screenshot">Screenshot files (*.png)</string>
+
+</language>

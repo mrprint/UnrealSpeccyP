@@ -190,7 +190,7 @@ void FileDialog::RefreshEntries() {
 
     std::error_code ec;
     if (!fs::exists(m_current_dir, ec) || !fs::is_directory(m_current_dir, ec)) {
-        m_error_text = "Cannot open this folder.";
+        m_error_text = Tr("filedialog.error.cannot_open");
         return;
     }
 
@@ -218,7 +218,7 @@ void FileDialog::RefreshEntries() {
             m_entries.push_back({ name, is_dir });
         }
     } catch (const std::exception&) {
-        m_error_text = "Error reading this folder's contents.";
+        m_error_text = Tr("filedialog.error.read_failed");
     }
 
     std::sort(m_entries.begin(), m_entries.end(), [](const Entry& a, const Entry& b) {
@@ -301,7 +301,11 @@ void FileDialog::ShowDriveList() {
     }
     // Already in A -> Z order from the bit scan above - no sort needed.
 
-    CopyToBuffer(m_path_buf, sizeof(m_path_buf), "This PC");
+    // Cosmetic only - m_showing_drives (not this text) is what the rest of
+    // the class actually checks; typing Enter over it unchanged already
+    // fails today exactly like typing any other non-existent path would,
+    // same as before translation.
+    CopyToBuffer(m_path_buf, sizeof(m_path_buf), Tr("filedialog.this_pc"));
 }
 #endif//_WINAPI
 
@@ -366,10 +370,10 @@ void FileDialog::Draw() {
 
     // --- path bar ---
     if (!m_showing_drives) {
-        if (ImGui::Button("Up"))
+        if (ImGui::Button(Tr("filedialog.up")))
             GoUp();
         ImGui::SameLine();
-        if (ImGui::Button("Root"))
+        if (ImGui::Button(Tr("filedialog.root")))
             GoRoot();
         ImGui::SameLine();
     }
@@ -387,7 +391,7 @@ void FileDialog::Draw() {
     // --- filter combo ---
     if (!m_filters.empty()) {
         std::string preview = m_filter_index >= 0 && m_filter_index < (int)m_filters.size()
-            ? m_filters[m_filter_index].label : "All files";
+            ? m_filters[m_filter_index].label : Tr("filedialog.filter.all");
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::BeginCombo("##filter", preview.c_str())) {
             for (int i = 0; i < (int)m_filters.size(); ++i) {
@@ -467,11 +471,11 @@ void FileDialog::Draw() {
 
     // --- buttons ---
     bool do_confirm = false;
-    if (ImGui::Button(m_save_mode ? "Save" : "Open")) {
+    if (ImGui::Button(m_save_mode ? Tr("filedialog.save") : Tr("filedialog.open"))) {
         do_confirm = true;
     }
     ImGui::SameLine();
-    if (ImGui::Button("Cancel")) {
+    if (ImGui::Button(Tr("filedialog.cancel"))) {
         m_open = false;
     }
 
@@ -518,23 +522,23 @@ void FileDialog::Draw() {
     // reopens it immediately - the popup could only ever be dismissed via
     // its own Cancel button.
     if (m_overwrite_popup_pending_open) {
-        ImGui::OpenPopup("Overwrite file?");
+        ImGui::OpenPopup(TrTitle("filedialog.overwrite_title", "OverwriteFile").c_str());
         m_overwrite_popup_pending_open = false;
     }
     if (m_show_overwrite_confirm) {
         // Modal-in-the-same-frame overlay - still non-native, still no OS
         // event loop, still safe alongside the single-threaded main loop.
         bool popup_still_open = true;
-        if (ImGui::BeginPopupModal("Overwrite file?", &popup_still_open, ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::Text("A file with this name already exists. Overwrite it?");
+        if (ImGui::BeginPopupModal(TrTitle("filedialog.overwrite_title", "OverwriteFile").c_str(), &popup_still_open, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("%s", Tr("filedialog.overwrite_body"));
             ImGui::Spacing();
-            if (ImGui::Button("Overwrite")) {
+            if (ImGui::Button(Tr("filedialog.overwrite"))) {
                 ImGui::CloseCurrentPopup();
                 m_show_overwrite_confirm = false;
                 Confirm(m_overwrite_path);
             }
             ImGui::SameLine();
-            if (ImGui::Button("Cancel")) {
+            if (ImGui::Button(Tr("filedialog.cancel"))) {
                 ImGui::CloseCurrentPopup();
                 m_show_overwrite_confirm = false;
             }

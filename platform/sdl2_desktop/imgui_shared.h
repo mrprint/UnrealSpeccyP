@@ -25,6 +25,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cstring>
 #include <string>
 
+#include "sdl2_desktop_i18n.h"
+
 // =============================================================================
 //  platform/sdl2_desktop/imgui_shared.h
 //
@@ -36,10 +38,34 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //    sdl2_desktop_options.cpp  - the 5-tab Options dialog
 //    sdl2_desktop_filedialog.* - generic in-engine file browser (own header)
 //    sdl2_desktop_gamepad.*    - gamepad backend (own header)
+//    sdl2_desktop_i18n.*       - text localization (res/lang/*.xml)
 // =============================================================================
 
 namespace xPlatform {
 namespace xImGui {
+
+// Brings xI18n::Tr() in as a short, unqualified Tr() for every file that
+// includes this header (which is all of the ones drawing UI text) - see
+// sdl2_desktop_i18n.h for what it does and its fallback behaviour.
+using xI18n::Tr;
+
+// Dear ImGui derives a window/popup's persistent ID (position, open state,
+// which popup is on top of which) from its *entire* title string - see the
+// "###" mechanism in Dear ImGui's own docs. A title built from Tr() would
+// therefore get a new identity the instant the active language changes,
+// silently resetting/duplicating any such window that happens to be open
+// at that moment (the Options dialog itself is the concrete case: its own
+// language combo lives inside it, so a language switch happening while it
+// is open is the common case, not an edge case). TrTitle() keeps the
+// visible part translated but pins the identity to `stable_id`:
+//   ImGui::Begin(TrTitle("about.title", "About").c_str(), &open, ...)
+// Only needed for windows/popups whose open/closed state persists across
+// frames (About, Options, the overwrite-confirm popup) - a menu bar entry
+// or a Selectable in a list needs no such pinning, see their call sites.
+inline std::string TrTitle(const char* id, const char* stable_id)
+{
+	return std::string(Tr(id)) + "###" + stable_id;
+}
 
 // --- generic xOptions <-> ImGui widget helpers (sdl2_desktop_imgui.cpp) ---
 // Read the option's current value, draw the widget, write back on change -
