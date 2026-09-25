@@ -26,6 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string>
 
 #include "sdl2_desktop_i18n.h"
+#include "imgui.h"
 
 // =============================================================================
 //  platform/sdl2_desktop/imgui_shared.h
@@ -65,6 +66,63 @@ using xI18n::Tr;
 inline std::string TrTitle(const char* id, const char* stable_id)
 {
 	return std::string(Tr(id)) + "###" + stable_id;
+}
+
+// --- tooltips ---
+// How long the cursor must rest on an item before its tooltip appears, in
+// seconds. Dear ImGui shows tooltips the instant an item is hovered; a short
+// delay (standard desktop convention) keeps them from flashing by as the
+// cursor sweeps across the UI.
+constexpr double kTooltipDelaySeconds = 1.0;
+
+// The delay itself. `hovered` is whether the item in question is hovered
+// right now (the caller decides how to ask, see below). Returns true once
+// the cursor has stayed on it long enough for the tooltip to appear.
+//
+// Timed per hovered item: ItemTooltip() is an inline called once per
+// widget, so a single shared "cursor is on *some* item" timer would be
+// reset by every non-hovered call site that runs after the hovered one in
+// draw order, and the tooltip would never fire. The timer is therefore
+// keyed on the hovered item's own id (ImGui::GetItemID() - the "last
+// item", i.e. the widget each call site just drew): non-hovered call
+// sites return early without touching it, and it (re)starts only when the
+// hovered id changes. At most one item is hovered at a time, so the timer
+// is stable across frames regardless of which call site runs when. The
+// hovered id and its start time are function-local statics; this is
+// single-threaded immediate-mode UI, so no locking is needed. (The id of
+// the item the cursor left is not reset while the cursor is off every
+// item, so re-hovering the same item right away can still complete its
+// delay - a deliberate, harmless simplification.)
+inline bool TooltipDue(bool hovered)
+{
+	static ImGuiID timer_id = 0;
+	static double timer_since = 0.0;
+	if(!hovered)
+		return false;
+	const ImGuiID id = ImGui::GetItemID();
+	if(id != timer_id)
+	{
+		timer_id = id;
+		timer_since = ImGui::GetTime();
+	}
+	return (ImGui::GetTime() - timer_since) >= kTooltipDelaySeconds;
+}
+
+// Shows a translated tooltip while the last drawn item is hovered. Call it
+// immediately after the widget (ImGui's "last item" is the one just drawn) -
+// for a BeginCombo()/EndCombo() pair that means right after EndCombo(). Takes
+// the untranslated key (e.g. "tip.menu.view.gigascreen") rather than
+// pre-translated text, the same way every other label in this codebase does,
+// so a live language switch keeps working. AllowWhenDisabled because a
+// couple of call sites (the Gamepads tab's Capture/Capturing buttons) sit
+// behind BeginDisabled(), and a plain IsItemHovered() would report false
+// for those - the tip is still useful on a disabled button (it explains
+// what the button would do / why it's waiting). The tip only appears after
+// the cursor has rested on the item for kTooltipDelaySeconds (TooltipDue()).
+inline void ItemTooltip(const char* key)
+{
+	if(TooltipDue(ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)))
+		ImGui::SetTooltip("%s", Tr(key));
 }
 
 // --- generic xOptions <-> ImGui widget helpers (sdl2_desktop_imgui.cpp) ---

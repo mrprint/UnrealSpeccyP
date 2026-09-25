@@ -372,9 +372,11 @@ void FileDialog::Draw() {
     if (!m_showing_drives) {
         if (ImGui::Button(Tr("filedialog.up")))
             GoUp();
+        ItemTooltip("tip.filedialog.up");
         ImGui::SameLine();
         if (ImGui::Button(Tr("filedialog.root")))
             GoRoot();
+        ItemTooltip("tip.filedialog.root");
         ImGui::SameLine();
     }
     ImGui::SetNextItemWidth(-1.0f);
@@ -474,10 +476,12 @@ void FileDialog::Draw() {
     if (ImGui::Button(m_save_mode ? Tr("filedialog.save") : Tr("filedialog.open"))) {
         do_confirm = true;
     }
+    ItemTooltip(m_save_mode ? "tip.filedialog.save" : "tip.filedialog.open");
     ImGui::SameLine();
     if (ImGui::Button(Tr("filedialog.cancel"))) {
         m_open = false;
     }
+    ItemTooltip("tip.filedialog.cancel");
 
     if (do_confirm) {
         if (m_save_mode) {
@@ -537,11 +541,13 @@ void FileDialog::Draw() {
                 m_show_overwrite_confirm = false;
                 Confirm(m_overwrite_path);
             }
+            ItemTooltip("tip.filedialog.overwrite");
             ImGui::SameLine();
             if (ImGui::Button(Tr("filedialog.cancel"))) {
                 ImGui::CloseCurrentPopup();
                 m_show_overwrite_confirm = false;
             }
+            ItemTooltip("tip.filedialog.cancel");
             ImGui::EndPopup();
         }
         // popup_still_open goes false when ImGui closed it on its own -

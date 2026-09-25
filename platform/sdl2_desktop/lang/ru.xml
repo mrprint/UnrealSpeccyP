@@ -11,42 +11,69 @@
 	<!-- Menu bar -->
 	<string id="menu.file">Файл</string>
 	<string id="menu.file.open">Открыть...</string>
+	<string id="tip.menu.file.open">Открыть снимок, повтор, диск, ленту, ZIP или другой поддерживаемый файл</string>
 	<string id="menu.file.save">Сохранить...</string>
+	<string id="tip.menu.file.save">Сохранить снимок или скриншот</string>
 	<string id="menu.file.quick_load">Быстрая загрузка</string>
+	<string id="tip.menu.file.quick_load">Загрузить последнее быстро сохранённое состояние</string>
 	<string id="menu.file.quick_save">Быстрое сохранение</string>
-	<string id="menu.file.auto_launch">Автозапуск программ</string>
+	<string id="tip.menu.file.quick_save">Сохранить текущее состояние для быстрой загрузки; доступно после открытия или быстрой загрузки файла</string>
+	<string id="menu.file.auto_launch">Автозапуск</string>
+	<string id="tip.menu.file.auto_launch">Автоматически запускать программы с открытых образов дисков и лент</string>
 	<string id="menu.file.exit">Выход</string>
+	<string id="tip.menu.file.exit">Выйти из эмулятора</string>
 
 	<string id="menu.view">Вид</string>
 	<string id="menu.view.fill_screen">На весь экран</string>
+	<string id="tip.menu.view.fill_screen">Показать всю область 320x240, включая чёрную рамку</string>
 	<string id="menu.view.small_border">Узкая рамка</string>
+	<string id="tip.menu.view.small_border">Немного увеличить масштаб, обрезав большую часть чёрной рамки экрана</string>
 	<string id="menu.view.no_border">Без рамки</string>
+	<string id="tip.menu.view.no_border">Увеличить масштаб так, чтобы область 256x192 заполняла окно, без чёрной рамки</string>
 	<string id="menu.view.gigascreen">Гигаскрин</string>
+	<string id="tip.menu.view.gigascreen">Гигаскрин: смешивание двух цветовых кадров AY для получения 256 цветов вместо 15</string>
 	<string id="menu.view.crt_scanlines">Строки ЭЛТ</string>
+	<string id="tip.menu.view.crt_scanlines">Имитировать строки ЭЛТ</string>
 	<string id="menu.view.pal_effects">PAL-эффекты</string>
+	<string id="tip.menu.view.pal_effects">Имитировать цветовые эффекты PAL (размытие цвета, оттенок, перекрёстные помехи)</string>
 	<string id="menu.view.full_screen">Полноэкранный режим</string>
+	<string id="tip.menu.view.full_screen">Переключить полноэкранный режим</string>
 	<string id="menu.view.prefer_pal_refresh">Частота обновления PAL</string>
+	<string id="tip.menu.view.prefer_pal_refresh">В полноэкранном режиме переключить дисплей на частоту, близкую к частоте эмулируемого кадра</string>
 
 	<string id="menu.device">Устройство</string>
-	<string id="menu.device.start_stop_tape">Старт/стоп ленты</string>
+	<string id="menu.device.start_stop_tape">Лента</string>
+	<string id="tip.menu.device.start_stop_tape">Запустить или остановить ленту</string>
 	<string id="menu.device.tape_fast">Быстрая лента</string>
+	<string id="tip.menu.device.tape_fast">Воспроизводить ленту на высокой скорости</string>
 	<string id="menu.device.pause">Пауза</string>
+	<string id="tip.menu.device.pause">Приостановить или возобновить эмуляцию</string>
 	<string id="menu.device.true_speed">Реальная скорость</string>
+	<string id="tip.menu.device.true_speed">Запускать Z80 на его реальной тактовой частоте вместо частоты обновления экрана</string>
 	<string id="menu.device.mode_48k">Режим 48k</string>
-	<string id="menu.device.reset_to_service_rom">Сброс в сервисное ПЗУ</string>
+	<string id="tip.menu.device.mode_48k">Принудительно включить режим 48k (48 КБ ОЗУ)</string>
+	<string id="menu.device.reset_to_service_rom">Сервисное ПЗУ</string>
+	<string id="tip.menu.device.reset_to_service_rom">При сбросе загружаться в сервисное ПЗУ (ПЗУ разработчика) вместо стандартного ПЗУ</string>
 	<string id="menu.device.reset">Сброс</string>
+	<string id="tip.menu.device.reset">Сбросить эмулятор</string>
 	<string id="menu.device.options">Настройки...</string>
+	<string id="tip.menu.device.options">Открыть диалог настроек</string>
 
 	<string id="menu.window">Окно</string>
 	<string id="menu.window.size_100">Размер 100%</string>
+	<string id="tip.menu.window.size_100">Изменить размер окна до 100% от экрана 320x240</string>
 	<string id="menu.window.size_200">Размер 200%</string>
+	<string id="tip.menu.window.size_200">Изменить размер окна до 200% от экрана 320x240</string>
 	<string id="menu.window.size_300">Размер 300%</string>
+	<string id="tip.menu.window.size_300">Изменить размер окна до 300% от экрана 320x240</string>
 
 	<string id="menu.help">Справка</string>
 	<string id="menu.help.about">О программе</string>
+	<string id="tip.menu.help.about">Об этом эмуляторе</string>
 
 	<!-- Language switcher icon at the right edge of the menu bar -->
 	<string id="menu.language">Язык</string>
+	<string id="tip.menu.language">Выбрать язык интерфейса</string>
 
 	<!-- About window -->
 	<string id="about.title">О программе</string>
@@ -85,10 +112,10 @@
 	<string id="status.mouse_released">Мышь освобождена</string>
 	<string id="status.shader.lightweight">Включён облегчённый шейдер</string>
 	<string id="status.shader.full_quality">Включён полнокачественный шейдер</string>
-	<string id="status.fullscreen.sync_enabled">Полный экран: %dHz (эмулятор %.2fHz)</string>
+	<string id="status.fullscreen.sync_enabled">Полный экран: синхр. %dHz (эмулятор %.2fHz)</string>
 	<string id="status.fullscreen.frame_sync_enabled">Полный экран: синхронизация включена</string>
-	<string id="status.fullscreen.pal_refresh_off">Полный экран: частота стола (PAL откл.)</string>
-	<string id="status.fullscreen.no_better_rate">Полный экран: частота стола (нет подходящей)</string>
+	<string id="status.fullscreen.pal_refresh_off">Полный экран: частота рабочего стола (PAL откл.)</string>
+	<string id="status.fullscreen.no_better_rate">Полный экран: частота рабочего стола (нет подходящей)</string>
 
 	<!-- Options dialog -->
 	<string id="options.title">Настройки</string>
@@ -102,33 +129,60 @@
 	<string id="options.tab.drives">Дисководы</string>
 
 	<string id="options.audio.sound_chip">Звуковой чип</string>
+	<string id="tip.options.audio.ay">AY-3-8910: звуковой чип 128K Spectrum</string>
+	<string id="tip.options.audio.ym">YM2149F: оригинальный чип AY 48K Spectrum</string>
 	<string id="options.audio.stereo_mode">Стерео-режим</string>
-	<string id="options.audio.restore_defaults">Сбросить настройки звука</string>
+	<string id="tip.options.audio.stereo_mode">Распределение стереоканалов AY</string>
+	<string id="options.audio.restore_defaults">Сбросить настройки</string>
+	<string id="tip.options.audio.restore_defaults">Сбросить настройки звука к значениям по умолчанию</string>
 
-	<string id="options.video.mipmapping">Включить мипмаппинг</string>
-	<string id="options.video.gigascreen">Включить гигаскрин</string>
-	<string id="options.video.scanlines">Включить строки ЭЛТ</string>
+	<string id="options.video.mipmapping">Mipmapping</string>
+	<string id="tip.options.video.mipmapping">Плавно уменьшать масштаб изображения для снижения мерцания</string>
+	<string id="options.video.gigascreen">Гигаскрин</string>
+	<string id="tip.options.video.gigascreen">Гигаскрин: смешивание двух цветовых кадров AY для получения 256 цветов вместо 15</string>
+	<string id="options.video.scanlines">Строки ЭЛТ</string>
+	<string id="tip.options.video.scanlines">Имитировать строки ЭЛТ</string>
 	<string id="options.video.prefer_pal_refresh">Частота обновления PAL</string>
+	<string id="tip.options.video.prefer_pal_refresh">В полноэкранном режиме переключить дисплей на частоту, близкую к частоте эмулируемого кадра</string>
 	<string id="options.video.crt_mask_scale">Масштаб маски ЭЛТ</string>
+	<string id="tip.options.video.crt_mask_scale">Ширина столбцов имитируемой маски люминофора ЭЛТ; 0 отключает маску</string>
 	<string id="options.video.pal_effects_header">PAL-эффекты</string>
-	<string id="options.video.pal_effects">Включить PAL-эффекты</string>
+	<string id="options.video.pal_effects">PAL-эффекты</string>
+	<string id="tip.options.video.pal_effects">Имитировать цветовые эффекты PAL (размытие цвета, оттенок, перекрёстные помехи)</string>
 	<string id="options.video.pal_strength">Сила PAL-эффекта</string>
+	<string id="tip.options.video.pal_strength">Интенсивность цветовых эффектов PAL, 0-100%</string>
 	<string id="options.video.beam_spread">Разброс луча</string>
-	<string id="options.video.restore_defaults">Сбросить настройки видео</string>
+	<string id="tip.options.video.beam_spread">Горизонтальное рассеивание луча ЭЛТ (размытие), 0-200%</string>
+	<string id="options.video.restore_defaults">Сбросить настройки</string>
+	<string id="tip.options.video.restore_defaults">Сбросить настройки видео к значениям по умолчанию</string>
 
 	<string id="options.input.joystick_type">Тип джойстика</string>
-	<string id="options.input.restore_defaults">Сбросить настройки управления</string>
+	<string id="tip.options.input.kempston">Джойстик Kempston — самый распространённый джойстик для Spectrum</string>
+	<string id="tip.options.input.cursor">Джойстик Cursor: четыре клавиши со стрелками двигают курсор, 0 — огонь</string>
+	<string id="tip.options.input.qaop">QAOP+пробел: клавиши Q, A, O, P двигают, пробел — огонь</string>
+	<string id="tip.options.input.sinclair">Джойстик Sinclair 2</string>
+	<string id="options.input.restore_defaults">Сбросить настройки</string>
+	<string id="tip.options.input.restore_defaults">Сбросить настройки управления к значениям по умолчанию</string>
 
-	<string id="options.drives.restore_defaults">Сбросить настройки дисководов</string>
+	<string id="tip.options.drives.a">Использовать дисковод A</string>
+	<string id="tip.options.drives.b">Использовать дисковод B</string>
+	<string id="tip.options.drives.c">Использовать дисковод C</string>
+	<string id="tip.options.drives.d">Использовать дисковод D</string>
+	<string id="options.drives.restore_defaults">Сбросить настройки</string>
+	<string id="tip.options.drives.restore_defaults">Сбросить настройки дисководов к значению по умолчанию</string>
 
 	<!-- Gamepads tab -->
-	<string id="gamepad.restore_defaults">Сбросить настройки геймпада</string>
+	<string id="gamepad.restore_defaults">Сбросить настройки</string>
+	<string id="tip.gamepad.restore_defaults">Сбросить настройки геймпада к значениям по умолчанию</string>
 	<string id="gamepad.no_device">Нет устройства</string>
 	<string id="gamepad.not_set">Не задано</string>
 	<string id="gamepad.device_none">Нет</string>
+	<string id="tip.gamepad.device">Выбрать контроллер для этого игрока</string>
 	<string id="gamepad.player_n">Игрок %d</string>
 	<string id="gamepad.capturing">Ожидание...</string>
+	<string id="tip.gamepad.capturing">Нажмите любую клавишу или кнопку на контроллере, чтобы привязать её к этому вводу</string>
 	<string id="gamepad.capture">Назначить</string>
+	<string id="tip.gamepad.capture">Нажмите любую клавишу или кнопку на контроллере, чтобы привязать её к этому вводу</string>
 	<string id="gamepad.unknown_controller">Неизвестный контроллер</string>
 	<string id="gamepad.input.up">ВВЕРХ</string>
 	<string id="gamepad.input.down">ВНИЗ</string>
@@ -136,7 +190,7 @@
 	<string id="gamepad.input.right">ВПРАВО</string>
 	<string id="gamepad.input.fire1">ОГОНЬ1</string>
 	<string id="gamepad.input.fire2">ОГОНЬ2</string>
-	<string id="gamepad.source.back">Back</string>
+	<string id="gamepad.source.back">Назад</string>
 	<string id="gamepad.source.start">Старт</string>
 	<string id="gamepad.source.l_stick">Левый стик</string>
 	<string id="gamepad.source.r_stick">Правый стик</string>
@@ -163,15 +217,21 @@
 	<string id="filedialog.title.save">Сохранить</string>
 	<string id="filedialog.this_pc">Этот компьютер</string>
 	<string id="filedialog.up">Вверх</string>
+	<string id="tip.filedialog.up">Перейти в родительскую папку</string>
 	<string id="filedialog.root">Корень</string>
+	<string id="tip.filedialog.root">Перейти к началу списка дисков</string>
 	<string id="filedialog.open">Открыть</string>
+	<string id="tip.filedialog.open">Открыть выбранный файл</string>
 	<string id="filedialog.save">Сохранить</string>
+	<string id="tip.filedialog.save">Сохранить файл</string>
 	<string id="filedialog.cancel">Отмена</string>
+	<string id="tip.filedialog.cancel">Закрыть диалог</string>
 	<string id="filedialog.error.cannot_open">Не удалось открыть эту папку.</string>
 	<string id="filedialog.error.read_failed">Ошибка чтения содержимого папки.</string>
 	<string id="filedialog.overwrite_title">Перезаписать файл?</string>
 	<string id="filedialog.overwrite_body">Файл с таким именем уже существует. Перезаписать его?</string>
 	<string id="filedialog.overwrite">Перезаписать</string>
+	<string id="tip.filedialog.overwrite">Заменить существующий файл</string>
 	<string id="filedialog.filter.all">Все файлы</string>
 	<string id="filedialog.filter.supported">Поддерживаемые (*.sna;*.z80;*.szx;*.rzx;*.trd;*.scl;*.fdi;*.tap;*.csw;*.tzx;*.zip)</string>
 	<string id="filedialog.filter.snapshot">Файлы снимков (*.sna;*.z80;*.szx)</string>

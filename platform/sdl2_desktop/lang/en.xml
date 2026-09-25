@@ -14,43 +14,71 @@
 	<!-- Menu bar -->
 	<string id="menu.file">File</string>
 	<string id="menu.file.open">Open...</string>
+	<string id="tip.menu.file.open">Open a snapshot, replay, disk, tape, ZIP or other supported file</string>
 	<string id="menu.file.save">Save...</string>
+	<string id="tip.menu.file.save">Save a snapshot or screenshot</string>
 	<string id="menu.file.quick_load">Quick Load</string>
+	<string id="tip.menu.file.quick_load">Load the last quick-saved state</string>
 	<string id="menu.file.quick_save">Quick Save</string>
-	<string id="menu.file.auto_launch">Auto launch programs</string>
+	<string id="tip.menu.file.quick_save">Save the current state for quick loading; enabled after a file has been opened or quick-loaded</string>
+	<string id="menu.file.auto_launch">Auto launch</string>
+	<string id="tip.menu.file.auto_launch">Automatically launch programs from opened disk and tape images</string>
 	<string id="menu.file.exit">Exit</string>
+	<string id="tip.menu.file.exit">Exit the emulator</string>
 
 	<string id="menu.view">View</string>
 	<string id="menu.view.fill_screen">Fill screen</string>
+	<string id="tip.menu.view.fill_screen">Show the whole 320x240 area, black border included</string>
 	<string id="menu.view.small_border">Small border</string>
+	<string id="tip.menu.view.small_border">Zoom in slightly, cropping most of the black border around the screen</string>
 	<string id="menu.view.no_border">No border</string>
+	<string id="tip.menu.view.no_border">Zoom in so the 256x192 display area fills the window, no black border</string>
 	<string id="menu.view.gigascreen">Gigascreen</string>
+	<string id="tip.menu.view.gigascreen">Gigascreen: blend the two AY colour frames to get 256 colours instead of 15</string>
 	<string id="menu.view.crt_scanlines">CRT scanlines</string>
+	<string id="tip.menu.view.crt_scanlines">Simulate CRT scanlines</string>
 	<string id="menu.view.pal_effects">PAL effects</string>
+	<string id="tip.menu.view.pal_effects">Simulate the PAL colour effects (chroma blur, tint, crosstalk)</string>
 	<string id="menu.view.full_screen">Full screen</string>
-	<string id="menu.view.prefer_pal_refresh">Prefer PAL refresh</string>
+	<string id="tip.menu.view.full_screen">Toggle fullscreen</string>
+	<string id="menu.view.prefer_pal_refresh">PAL refresh</string>
+	<string id="tip.menu.view.prefer_pal_refresh">In fullscreen, switch the display to a mode close to the emulated field rate</string>
 
 	<string id="menu.device">Device</string>
-	<string id="menu.device.start_stop_tape">Start/Stop tape</string>
+	<string id="menu.device.start_stop_tape">Tape</string>
+	<string id="tip.menu.device.start_stop_tape">Start or stop the tape</string>
 	<string id="menu.device.tape_fast">Tape fast</string>
+	<string id="tip.menu.device.tape_fast">Play the tape at high speed</string>
 	<string id="menu.device.pause">Pause</string>
+	<string id="tip.menu.device.pause">Pause or resume the emulation</string>
 	<string id="menu.device.true_speed">True speed</string>
+	<string id="tip.menu.device.true_speed">Run the Z80 at its real clock rate instead of the display refresh rate</string>
 	<string id="menu.device.mode_48k">Mode 48k</string>
-	<string id="menu.device.reset_to_service_rom">Reset to service ROM</string>
+	<string id="tip.menu.device.mode_48k">Force 48k mode (48KB RAM)</string>
+	<string id="menu.device.reset_to_service_rom">Service ROM</string>
+	<string id="tip.menu.device.reset_to_service_rom">On reset, boot into the service ROM (developer ROM) instead of the standard ROM</string>
 	<string id="menu.device.reset">Reset</string>
+	<string id="tip.menu.device.reset">Reset the emulator</string>
 	<string id="menu.device.options">Options...</string>
+	<string id="tip.menu.device.options">Open the options dialog</string>
 
 	<string id="menu.window">Window</string>
 	<string id="menu.window.size_100">Size 100%</string>
+	<string id="tip.menu.window.size_100">Resize the window to 100% of the 320x240 screen size</string>
 	<string id="menu.window.size_200">Size 200%</string>
+	<string id="tip.menu.window.size_200">Resize the window to 200% of the 320x240 screen size</string>
 	<string id="menu.window.size_300">Size 300%</string>
+	<string id="tip.menu.window.size_300">Resize the window to 300% of the 320x240 screen size</string>
 
 	<string id="menu.help">Help</string>
 	<string id="menu.help.about">About</string>
+	<string id="tip.menu.help.about">About this emulator</string>
 
-	<!-- Language switcher icon at the right edge of the menu bar -->
+	<!-- Language switcher icon at the right edge of the menu bar: the icon has
+	     no caption of its own, so the tooltip is its only visible text; the
+	     menu.language label is kept for parity with the translation overlays. -->
 	<string id="menu.language">Language</string>
-
+	<string id="tip.menu.language">Select the interface language</string>
 	<!-- About window -->
 	<string id="about.title">About</string>
 	<string id="about.version">Version 0.0.90</string>
@@ -106,34 +134,61 @@
 	<string id="options.tab.drives">Disk Drives</string>
 
 	<string id="options.audio.sound_chip">Sound Chip</string>
+	<string id="tip.options.audio.ay">AY-3-8910: the sound chip of the 128K Spectrum</string>
+	<string id="tip.options.audio.ym">YM2149F: the original AY chip of the 48K Spectrum</string>
 	<string id="options.audio.stereo_mode">Stereo Mode</string>
-	<string id="options.audio.restore_defaults">Restore Audio Defaults</string>
+	<string id="tip.options.audio.stereo_mode">AY stereo channel routing</string>
+	<string id="options.audio.restore_defaults">Restore defaults</string>
+	<string id="tip.options.audio.restore_defaults">Restore the audio options to their default values</string>
 
-	<string id="options.video.mipmapping">Enable Mipmapping</string>
-	<string id="options.video.gigascreen">Enable Gigascreen</string>
-	<string id="options.video.scanlines">Enable CRT Scanlines</string>
-	<string id="options.video.prefer_pal_refresh">Prefer PAL refresh</string>
+	<string id="options.video.mipmapping">Mipmapping</string>
+	<string id="tip.options.video.mipmapping">Smoothly downscale the image to reduce shimmering</string>
+	<string id="options.video.gigascreen">Gigascreen</string>
+	<string id="tip.options.video.gigascreen">Gigascreen: blend the two AY colour frames to get 256 colours instead of 15</string>
+	<string id="options.video.scanlines">CRT scanlines</string>
+	<string id="tip.options.video.scanlines">Simulate CRT scanlines</string>
+	<string id="options.video.prefer_pal_refresh">PAL refresh</string>
+	<string id="tip.options.video.prefer_pal_refresh">In fullscreen, switch the display to a mode close to the emulated field rate</string>
 	<string id="options.video.crt_mask_scale">CRT Mask Scale</string>
+	<string id="tip.options.video.crt_mask_scale">Width of the simulated CRT phosphor mask columns; 0 disables the mask</string>
 	<string id="options.video.pal_effects_header">PAL Effects</string>
-	<string id="options.video.pal_effects">Enable PAL effects</string>
+	<string id="options.video.pal_effects">PAL effects</string>
+	<string id="tip.options.video.pal_effects">Simulate the PAL colour effects (chroma blur, tint, crosstalk)</string>
 	<string id="options.video.pal_strength">PAL Strength</string>
+	<string id="tip.options.video.pal_strength">Intensity of the PAL colour effects, 0-100%</string>
 	<string id="options.video.beam_spread">Beam Spread</string>
-	<string id="options.video.restore_defaults">Restore Video Defaults</string>
+	<string id="tip.options.video.beam_spread">Horizontal CRT beam spread (blur), 0-200%</string>
+	<string id="options.video.restore_defaults">Restore defaults</string>
+	<string id="tip.options.video.restore_defaults">Restore the video options to their default values</string>
 
 	<string id="options.input.joystick_type">Joystick Type</string>
-	<string id="options.input.restore_defaults">Restore Input Defaults</string>
+	<string id="tip.options.input.kempston">Kempston joystick, the most common Spectrum joystick</string>
+	<string id="tip.options.input.cursor">Cursor joystick: the four arrow keys move the cursor, the 0 key fires</string>
+	<string id="tip.options.input.qaop">QAOP space: the Q, A, O, P keys move, the space bar fires</string>
+	<string id="tip.options.input.sinclair">Sinclair 2 joystick</string>
+	<string id="options.input.restore_defaults">Restore defaults</string>
+	<string id="tip.options.input.restore_defaults">Restore the input options to their default values</string>
 
-	<string id="options.drives.restore_defaults">Restore Disk Drive Defaults</string>
+	<string id="tip.options.drives.a">Use disk drive A</string>
+	<string id="tip.options.drives.b">Use disk drive B</string>
+	<string id="tip.options.drives.c">Use disk drive C</string>
+	<string id="tip.options.drives.d">Use disk drive D</string>
+	<string id="options.drives.restore_defaults">Restore defaults</string>
+	<string id="tip.options.drives.restore_defaults">Restore the disk drive option to its default value</string>
 
 	<!-- Gamepads tab -->
-	<string id="gamepad.restore_defaults">Restore Gamepad Defaults</string>
+	<string id="gamepad.restore_defaults">Restore defaults</string>
+	<string id="tip.gamepad.restore_defaults">Restore the gamepad options to their default values</string>
 	<string id="gamepad.no_device">No device</string>
 	<string id="gamepad.not_set">Not set</string>
 	<string id="gamepad.device_none">None</string>
+	<string id="tip.gamepad.device">Choose the host controller to use for this player</string>
 	<!-- %d is the player number (1 or 2) -->
 	<string id="gamepad.player_n">Player %d</string>
 	<string id="gamepad.capturing">Capturing...</string>
+	<string id="tip.gamepad.capturing">Press any key or button on the controller to bind it to this input</string>
 	<string id="gamepad.capture">Capture</string>
+	<string id="tip.gamepad.capture">Press any key or button on the controller to bind it to this input</string>
 	<string id="gamepad.unknown_controller">Unknown Controller</string>
 	<string id="gamepad.input.up">UP</string>
 	<string id="gamepad.input.down">DOWN</string>
@@ -169,15 +224,21 @@
 	<string id="filedialog.title.save">Save</string>
 	<string id="filedialog.this_pc">This PC</string>
 	<string id="filedialog.up">Up</string>
+	<string id="tip.filedialog.up">Go to the parent folder</string>
 	<string id="filedialog.root">Root</string>
+	<string id="tip.filedialog.root">Go to the top of the drive list</string>
 	<string id="filedialog.open">Open</string>
+	<string id="tip.filedialog.open">Open the selected file</string>
 	<string id="filedialog.save">Save</string>
+	<string id="tip.filedialog.save">Save the file</string>
 	<string id="filedialog.cancel">Cancel</string>
+	<string id="tip.filedialog.cancel">Close the dialog</string>
 	<string id="filedialog.error.cannot_open">Cannot open this folder.</string>
 	<string id="filedialog.error.read_failed">Error reading this folder's contents.</string>
 	<string id="filedialog.overwrite_title">Overwrite file?</string>
 	<string id="filedialog.overwrite_body">A file with this name already exists. Overwrite it?</string>
 	<string id="filedialog.overwrite">Overwrite</string>
+	<string id="tip.filedialog.overwrite">Replace the existing file</string>
 	<string id="filedialog.filter.all">All files</string>
 	<string id="filedialog.filter.supported">Supported (*.sna;*.z80;*.szx;*.rzx;*.trd;*.scl;*.fdi;*.tap;*.csw;*.tzx;*.zip)</string>
 	<string id="filedialog.filter.snapshot">Snapshot files (*.sna;*.z80;*.szx)</string>

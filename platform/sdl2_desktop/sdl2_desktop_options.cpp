@@ -147,6 +147,7 @@ public:
 				m_profiles[i] = JoystickProfile();
 			RefreshDeviceList();
 		}
+		ItemTooltip("tip.gamepad.restore_defaults");
 	}
 
 private:
@@ -365,6 +366,7 @@ private:
 			}
 			ImGui::EndCombo();
 		}
+		ItemTooltip("tip.gamepad.device");
 
 		ImGui::Spacing();
 		static const EEmulatedJoystickInput inputs[6] = {
@@ -396,16 +398,20 @@ private:
 					ImGui::BeginDisabled();
 					ImGui::Button(Tr("gamepad.capturing"));
 					ImGui::EndDisabled();
+					ItemTooltip("tip.gamepad.capturing");
 				}
 				else if(no_device)
 				{
 					ImGui::BeginDisabled();
 					ImGui::Button(Tr("gamepad.capture"));
 					ImGui::EndDisabled();
+					ItemTooltip("tip.gamepad.capture");
 				}
-				else if(ImGui::Button(Tr("gamepad.capture")))
+				else
 				{
-					StartCapture(player_idx, inputs[i]);
+					if(ImGui::Button(Tr("gamepad.capture")))
+						StartCapture(player_idx, inputs[i]);
+					ItemTooltip("tip.gamepad.capture");
 				}
 				ImGui::PopID();
 			}
@@ -431,11 +437,12 @@ private:
 // same way TrTitle()'s stable_id does for window titles (see imgui_shared.h).
 // ---------------------------------------------------------------------------
 
-void SliderRow(const char* label_key, int* value, int lo, int hi, const char* value_fmt_is_percent)
+void SliderRow(const char* label_key, int* value, int lo, int hi, const char* value_fmt_is_percent, const char* tooltip_key)
 {
 	ImGui::TextUnformatted(Tr(label_key));
 	ImGui::SetNextItemWidth(220.0f);
 	ImGui::SliderInt((std::string("##") + label_key).c_str(), value, lo, hi, value_fmt_is_percent);
+	ItemTooltip(tooltip_key);
 }
 
 // ---------------------------------------------------------------------------
@@ -543,7 +550,9 @@ void OptionsDialog::DrawAudioTab()
 {
 	ImGui::SeparatorText(Tr("options.audio.sound_chip"));
 	ImGui::RadioButton("AY-3-8910", &m_sound_chip, SC_AY);
+	ItemTooltip("tip.options.audio.ay");
 	ImGui::RadioButton("YM2149F", &m_sound_chip, SC_YM);
+	ItemTooltip("tip.options.audio.ym");
 
 	ImGui::Spacing();
 	ImGui::SeparatorText(Tr("options.audio.stereo_mode"));
@@ -562,6 +571,7 @@ void OptionsDialog::DrawAudioTab()
 		}
 		ImGui::EndCombo();
 	}
+	ItemTooltip("tip.options.audio.stereo_mode");
 
 	ImGui::Spacing();
 	ImGui::Spacing();
@@ -570,23 +580,29 @@ void OptionsDialog::DrawAudioTab()
 		m_sound_chip = DEFAULT_SOUND_CHIP;
 		m_ay_stereo = DEFAULT_STEREO;
 	}
+	ItemTooltip("tip.options.audio.restore_defaults");
 }
 
 void OptionsDialog::DrawVideoTab()
 {
 	ImGui::Checkbox(Tr("options.video.mipmapping"), &m_mipmapping);
+	ItemTooltip("tip.options.video.mipmapping");
 	ImGui::Checkbox(Tr("options.video.gigascreen"), &m_gigascreen);
+	ItemTooltip("tip.options.video.gigascreen");
 	ImGui::Checkbox(Tr("options.video.scanlines"), &m_scanlines);
+	ItemTooltip("tip.options.video.scanlines");
 	ImGui::Checkbox(Tr("options.video.prefer_pal_refresh"), &m_prefer_pal_refresh);
+	ItemTooltip("tip.options.video.prefer_pal_refresh");
 
 	ImGui::Spacing();
-	SliderRow("options.video.crt_mask_scale", &m_mask_scale, 0, 4, "%d");
+	SliderRow("options.video.crt_mask_scale", &m_mask_scale, 0, 4, "%d", "tip.options.video.crt_mask_scale");
 
 	ImGui::Spacing();
 	ImGui::SeparatorText(Tr("options.video.pal_effects_header"));
 	ImGui::Checkbox(Tr("options.video.pal_effects"), &m_pal_effects);
-	SliderRow("options.video.pal_strength", &m_pal_strength, 0, 100, "%d%%");
-	SliderRow("options.video.beam_spread", &m_beam_spread, 0, 200, "%d");
+	ItemTooltip("tip.options.video.pal_effects");
+	SliderRow("options.video.pal_strength", &m_pal_strength, 0, 100, "%d%%", "tip.options.video.pal_strength");
+	SliderRow("options.video.beam_spread", &m_beam_spread, 0, 200, "%d", "tip.options.video.beam_spread");
 
 	ImGui::Spacing();
 	ImGui::Spacing();
@@ -601,33 +617,44 @@ void OptionsDialog::DrawVideoTab()
 		m_mask_scale = DEFAULT_MASK_SCALE;
 		m_prefer_pal_refresh = DEFAULT_PAL_REFRESH_RATE;
 	}
+	ItemTooltip("tip.options.video.restore_defaults");
 }
 
 void OptionsDialog::DrawInputTab()
 {
 	ImGui::SeparatorText(Tr("options.input.joystick_type"));
 	ImGui::RadioButton("Kempston", &m_joystick, J_KEMPSTON);
+	ItemTooltip("tip.options.input.kempston");
 	ImGui::RadioButton("Cursor", &m_joystick, J_CURSOR);
+	ItemTooltip("tip.options.input.cursor");
 	ImGui::RadioButton("QAOPSpace", &m_joystick, J_QAOPSPACE);
+	ItemTooltip("tip.options.input.qaop");
 	ImGui::RadioButton("Sinclair 2", &m_joystick, J_SINCLAIR2);
+	ItemTooltip("tip.options.input.sinclair");
 
 	ImGui::Spacing();
 	ImGui::Spacing();
 	if(ImGui::Button(Tr("options.input.restore_defaults")))
 		m_joystick = DEFAULT_JOYSTICK;
+	ItemTooltip("tip.options.input.restore_defaults");
 }
 
 void OptionsDialog::DrawDriveTab()
 {
 	ImGui::RadioButton("A", &m_drive, D_A);
+	ItemTooltip("tip.options.drives.a");
 	ImGui::RadioButton("B", &m_drive, D_B);
+	ItemTooltip("tip.options.drives.b");
 	ImGui::RadioButton("C", &m_drive, D_C);
+	ItemTooltip("tip.options.drives.c");
 	ImGui::RadioButton("D", &m_drive, D_D);
+	ItemTooltip("tip.options.drives.d");
 
 	ImGui::Spacing();
 	ImGui::Spacing();
 	if(ImGui::Button(Tr("options.drives.restore_defaults")))
 		m_drive = DEFAULT_DRIVE;
+	ItemTooltip("tip.options.drives.restore_defaults");
 }
 
 #ifdef SDL_USE_JOYSTICK

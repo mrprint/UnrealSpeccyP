@@ -326,8 +326,13 @@ static void DrawLanguageMenu()
 			ImGui::GetColorU32(ImGuiCol_ButtonHovered), ImGui::GetStyle().FrameRounding);
 	DrawGlobeIcon(draw_list, center, size * 0.32f, ImGui::GetColorU32(ImGuiCol_Text), 1.3f);
 
-	if(hovered)
-		ImGui::SetTooltip("%s", Tr("menu.language"));
+	// Same kTooltipDelaySeconds delay as ItemTooltip() in imgui_shared.h -
+	// the icon's tooltip is driven by a hand-computed `hovered` (the button
+	// is drawn manually with an InvisibleButton), so it can't reuse
+	// ItemTooltip() directly, but TooltipDue() takes the hover state as a
+	// plain bool.
+	if(TooltipDue(hovered))
+		ImGui::SetTooltip("%s", Tr("tip.menu.language"));
 	if(clicked)
 		ImGui::OpenPopup("##language_popup");
 
@@ -371,18 +376,24 @@ void DrawMenuBar()
 	{
 		if(ImGui::MenuItem(Tr("menu.file.open"), "F3"))
 			OnOpenFileAction();
+		ItemTooltip("tip.menu.file.open");
 		if(ImGui::MenuItem(Tr("menu.file.save"), "F2"))
 			OnSaveFileAction();
+		ItemTooltip("tip.menu.file.save");
 		ImGui::Separator();
 		if(ImGui::MenuItem(Tr("menu.file.quick_load"), "F4"))
 			OnQuickLoad();
+		ItemTooltip("tip.menu.file.quick_load");
 		if(ImGui::MenuItem(Tr("menu.file.quick_save"), "F6", false, g_quick_save_enabled))
 			OnQuickSave();
+		ItemTooltip("tip.menu.file.quick_save");
 		ImGui::Separator();
 		OptionCheckbox("auto play image", Tr("menu.file.auto_launch"));
+		ItemTooltip("tip.menu.file.auto_launch");
 		ImGui::Separator();
 		if(ImGui::MenuItem(Tr("menu.file.exit")))
 			OpQuit(true);
+		ItemTooltip("tip.menu.file.exit");
 		ImGui::EndMenu();
 	}
 
@@ -393,33 +404,53 @@ void DrawMenuBar()
 		int zoom = op_zoom ? (int)*op_zoom : -1;
 		if(ImGui::MenuItem(Tr("menu.view.fill_screen"), "Ctrl+Shift+1", zoom == 0))
 			SetZoom(0);
+		ItemTooltip("tip.menu.view.fill_screen");
 		if(ImGui::MenuItem(Tr("menu.view.small_border"), "Ctrl+Shift+2", zoom == 1))
 			SetZoom(1);
+		ItemTooltip("tip.menu.view.small_border");
 		if(ImGui::MenuItem(Tr("menu.view.no_border"), "Ctrl+Shift+3", zoom == 2))
 			SetZoom(2);
+		ItemTooltip("tip.menu.view.no_border");
 		ImGui::Separator();
 		{
 			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("gigascreen");
-			if(op && ImGui::MenuItem(Tr("menu.view.gigascreen"), "Ctrl+Shift+G", *op))
-				ToggleBoolOption("gigascreen", Tr("status.gigascreen.on"), Tr("status.gigascreen.off"));
+			if(op)
+			{
+				if(ImGui::MenuItem(Tr("menu.view.gigascreen"), "Ctrl+Shift+G", *op))
+					ToggleBoolOption("gigascreen", Tr("status.gigascreen.on"), Tr("status.gigascreen.off"));
+				ItemTooltip("tip.menu.view.gigascreen");
+			}
 		}
 		{
 			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("scanlines");
-			if(op && ImGui::MenuItem(Tr("menu.view.crt_scanlines"), "Ctrl+Shift+S", *op))
-				ToggleBoolOption("scanlines", Tr("status.scanlines.on"), Tr("status.scanlines.off"));
+			if(op)
+			{
+				if(ImGui::MenuItem(Tr("menu.view.crt_scanlines"), "Ctrl+Shift+S", *op))
+					ToggleBoolOption("scanlines", Tr("status.scanlines.on"), Tr("status.scanlines.off"));
+				ItemTooltip("tip.menu.view.crt_scanlines");
+			}
 		}
 		{
 			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("pal effects");
-			if(op && ImGui::MenuItem(Tr("menu.view.pal_effects"), "Ctrl+Shift+P", *op))
-				ToggleBoolOption("pal effects", Tr("status.pal_effects.on"), Tr("status.pal_effects.off"));
+			if(op)
+			{
+				if(ImGui::MenuItem(Tr("menu.view.pal_effects"), "Ctrl+Shift+P", *op))
+					ToggleBoolOption("pal effects", Tr("status.pal_effects.on"), Tr("status.pal_effects.off"));
+				ItemTooltip("tip.menu.view.pal_effects");
+			}
 		}
 		ImGui::Separator();
 		if(ImGui::MenuItem(Tr("menu.view.full_screen"), "Ctrl+F"))
 			OnFullScreenToggle();
+		ItemTooltip("tip.menu.view.full_screen");
 		{
 			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("Prefer PAL refresh");
-			if(op && ImGui::MenuItem(Tr("menu.view.prefer_pal_refresh"), "Ctrl+Shift+R", *op))
-				ToggleBoolOption("Prefer PAL refresh", Tr("status.pal_refresh.on"), Tr("status.pal_refresh.off"));
+			if(op)
+			{
+				if(ImGui::MenuItem(Tr("menu.view.prefer_pal_refresh"), "Ctrl+Shift+R", *op))
+					ToggleBoolOption("Prefer PAL refresh", Tr("status.pal_refresh.on"), Tr("status.pal_refresh.off"));
+				ItemTooltip("tip.menu.view.prefer_pal_refresh");
+			}
 		}
 		ImGui::EndMenu();
 	}
@@ -429,26 +460,42 @@ void DrawMenuBar()
 	{
 		if(ImGui::MenuItem(Tr("menu.device.start_stop_tape"), "F5"))
 			OnTapeToggle();
+		ItemTooltip("tip.menu.device.start_stop_tape");
 		OptionCheckbox("fast tape", Tr("menu.device.tape_fast"));
+		ItemTooltip("tip.menu.device.tape_fast");
 		ImGui::Separator();
 		{
 			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("pause");
-			if(op && ImGui::MenuItem(Tr("menu.device.pause"), "F7", *op))
-				OnPauseToggle();
+			if(op)
+			{
+				if(ImGui::MenuItem(Tr("menu.device.pause"), "F7", *op))
+					OnPauseToggle();
+				ItemTooltip("tip.menu.device.pause");
+			}
 		}
 		{
 			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("true speed");
-			if(op && ImGui::MenuItem(Tr("menu.device.true_speed"), "F8", *op))
-				ToggleBoolOption("true speed", Tr("status.true_speed.on"), Tr("status.true_speed.off"));
+			if(op)
+			{
+				if(ImGui::MenuItem(Tr("menu.device.true_speed"), "F8", *op))
+					ToggleBoolOption("true speed", Tr("status.true_speed.on"), Tr("status.true_speed.off"));
+				ItemTooltip("tip.menu.device.true_speed");
+			}
 		}
 		{
 			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("mode 48k");
-			if(op && ImGui::MenuItem(Tr("menu.device.mode_48k"), "F9", *op))
-				ToggleBoolOption("mode 48k", Tr("status.mode_48k.on"), Tr("status.mode_48k.off"));
+			if(op)
+			{
+				if(ImGui::MenuItem(Tr("menu.device.mode_48k"), "F9", *op))
+					ToggleBoolOption("mode 48k", Tr("status.mode_48k.on"), Tr("status.mode_48k.off"));
+				ItemTooltip("tip.menu.device.mode_48k");
+			}
 		}
 		OptionCheckbox("reset to service rom", Tr("menu.device.reset_to_service_rom"));
+		ItemTooltip("tip.menu.device.reset_to_service_rom");
 		if(ImGui::MenuItem(Tr("menu.device.reset"), "F12"))
 			OnReset();
+		ItemTooltip("tip.menu.device.reset");
 		ImGui::Separator();
 		if(ImGui::MenuItem(Tr("menu.device.options")))
 		{
@@ -466,6 +513,7 @@ void DrawMenuBar()
 			else
 				OpenOptionsDialog();
 		}
+		ItemTooltip("tip.menu.device.options");
 		ImGui::EndMenu();
 	}
 
@@ -474,10 +522,13 @@ void DrawMenuBar()
 	{
 		if(ImGui::MenuItem(Tr("menu.window.size_100"), "Ctrl+1"))
 			ResizeToOrgSizeMultiple(1);
+		ItemTooltip("tip.menu.window.size_100");
 		if(ImGui::MenuItem(Tr("menu.window.size_200"), "Ctrl+2"))
 			ResizeToOrgSizeMultiple(2);
+		ItemTooltip("tip.menu.window.size_200");
 		if(ImGui::MenuItem(Tr("menu.window.size_300"), "Ctrl+3"))
 			ResizeToOrgSizeMultiple(3);
+		ItemTooltip("tip.menu.window.size_300");
 		ImGui::EndMenu();
 	}
 
@@ -491,6 +542,7 @@ void DrawMenuBar()
 			else
 				g_show_about = true;
 		}
+		ItemTooltip("tip.menu.help.about");
 		ImGui::EndMenu();
 	}
 
