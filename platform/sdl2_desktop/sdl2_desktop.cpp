@@ -133,6 +133,7 @@ void DoneAudio();
 void UpdateAudio();
 void UpdateScreen();
 void ProcessKey(SDL_Event& e);
+void ReleaseAllKeys(); // sdl2_desktop_keys.cpp
 
 namespace xImGui
 {
@@ -392,6 +393,13 @@ void Loop1()
 			GamepadBackend().HandleControllerEvent(e);
 			break;
 #endif//SDL_USE_JOYSTICK
+		case SDL_WINDOWEVENT:
+			// Focus loss (alt-tab, and the exclusive-fullscreen mode switch of
+			// "Prefer PAL refresh") can swallow key-ups; nothing the user was
+			// holding in the emulator may outlive it - see ReleaseAllKeys().
+			if(e.window.event == SDL_WINDOWEVENT_FOCUS_LOST || e.window.event == SDL_WINDOWEVENT_MINIMIZED)
+				ReleaseAllKeys();
+			break;
 		case SDL_DROPFILE:
 			if(e.drop.file)
 			{
@@ -414,9 +422,16 @@ void Loop1()
 		switch(ge.type)
 		{
 		case SDL_KEYDOWN:
-		case SDL_KEYUP:
 			if(!ui_want_keyboard)
 				ProcessKey(ge);
+			break;
+		case SDL_KEYUP:
+			// Always, even while the UI has the keyboard: a key-up can only
+			// release a key ProcessKey() pressed earlier (it keeps track), so
+			// it is harmless otherwise - while dropping it left that key
+			// pressed in the emulator for good if the UI grabbed the keyboard
+			// between the key's down and up.
+			ProcessKey(ge);
 			break;
 #ifdef SDL_USE_MOUSE
 		case SDL_MOUSEBUTTONDOWN:

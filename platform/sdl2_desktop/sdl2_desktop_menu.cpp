@@ -201,7 +201,11 @@ bool HandleMenuShortcut(SDL_Event& e)
 	Uint16 mod = e.key.keysym.mod;
 	bool ctrl = (mod & KMOD_CTRL) != 0;
 	bool shift = (mod & KMOD_SHIFT) != 0;
-	bool down = (e.type == SDL_KEYDOWN);
+	// Auto-repeat of a held shortcut key is swallowed (the switches below
+	// still return true for it) rather than acted on: held Ctrl+F used to
+	// toggle fullscreen again on every repeat - in/out/in..., each one a
+	// modeset with "Prefer PAL refresh" - and the same for F7, F12, etc.
+	bool down = (e.type == SDL_KEYDOWN) && !e.key.repeat;
 
 	if(!ctrl && !shift)
 	{

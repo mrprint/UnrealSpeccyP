@@ -24,6 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifdef USE_SDL2_DESKTOP
 
 #include <SDL.h>
+#include <map>
 #include "../../tools/options.h"
 #include "../../options_common.h"
 
@@ -150,12 +151,67 @@ static byte TranslateKey(SDL_Keycode _key, dword& _flags)
 	return 0;
 }
 
+// What the emulator was actually told when a physical key went down, keyed by
+// the physical key (scancode), not by SDL_Keycode: the matching key-up must
+// undo exactly that, no matter what the modifiers, the layout or the selected
+// joystick type (OpJoyKeyFlags()) look like by the time the key comes up.
+// Re-deriving the ZX key from the key-up event itself (what this file used to
+// do) can release a different ZX key than the one that was pressed, and - the
+// bigger problem - it relies on the key-up being delivered at all.
+// An emulated key that is never released is auto-repeated by the Spectrum ROM
+// with a click on every repeat: an endless row of key clicks.
+struct PressedKey
+{
+	byte key;
+	dword joy_flags;
+};
+static std::map<SDL_Scancode, PressedKey> pressed_keys;
+
+static void ReleaseKey(SDL_Scancode sc)
+{
+	std::map<SDL_Scancode, PressedKey>::iterator it = pressed_keys.find(sc);
+	if(it == pressed_keys.end())
+		return;
+	Handler()->OnKey(it->second.key, it->second.joy_flags);
+	pressed_keys.erase(it);
+}
+
+// Releases every key this file has pressed in the emulator. Called whenever
+// key-ups may never arrive: the window lost focus (an exclusive-fullscreen
+// mode switch - "Prefer PAL refresh" - does exactly that, and the key-ups
+// SDL synthesizes for it are not guaranteed to reach us).
+void ReleaseAllKeys()
+{
+	while(!pressed_keys.empty())
+		ReleaseKey(pressed_keys.begin()->first);
+}
+
 void ProcessKey(SDL_Event& e)
 {
 	switch(e.type)
 	{
 	case SDL_KEYDOWN:
-		if(!PreProcessKey(e))
+		if(PreProcessKey(e))
+		{
+			// A shortcut (Ctrl+F, Ctrl+1.., Ctrl+Shift+R, ...) consumed this
+			// key, but Ctrl itself already went down into the emulator
+			// before the second key of the chord arrived (Ctrl is the
+			// joystick "fire" key: Ctrl -> '0' in Cursor mode). The chord is
+			// ours, not the Spectrum's - take Ctrl back, so that it can't
+			// stay down if its key-up gets lost in the window/mode change
+			// the shortcut itself may cause.
+			if(!e.key.repeat && (e.key.keysym.mod&KMOD_CTRL))
+			{
+				ReleaseKey(SDL_SCANCODE_LCTRL);
+				ReleaseKey(SDL_SCANCODE_RCTRL);
+			}
+			break;
+		}
+		// OS auto-repeat means nothing to the emulated keyboard (the ROM does
+		// its own repeating), and a repeat of a key whose down we have
+		// already released (the Ctrl above) must not press it again.
+		if(e.key.repeat)
+			break;
 		{
 			dword flags = KF_DOWN|OpJoyKeyFlags();
 			if(e.key.keysym.mod&KMOD_ALT)
@@ -163,20 +219,17 @@ void ProcessKey(SDL_Event& e)
 			if(e.key.keysym.mod&KMOD_SHIFT)
 				flags |= KF_SHIFT;
 			byte key = TranslateKey(e.key.keysym.sym, flags);
+			PressedKey pk;
+			pk.key = key;
+			pk.joy_flags = OpJoyKeyFlags();
+			pressed_keys[e.key.keysym.scancode] = pk;
 			Handler()->OnKey(key, flags);
 		}
 		break;
 	case SDL_KEYUP:
-		if(!PreProcessKey(e))
-		{
-			dword flags = 0;
-			if(e.key.keysym.mod&KMOD_ALT)
-				flags |= KF_ALT;
-			if(e.key.keysym.mod&KMOD_SHIFT)
-				flags |= KF_SHIFT;
-			byte key = TranslateKey(e.key.keysym.sym, flags);
-			Handler()->OnKey(key, OpJoyKeyFlags());
-		}
+		// No PreProcessKey() here: shortcuts act on key-down only, and a
+		// key-up must always get through to whatever it is releasing.
+		ReleaseKey(e.key.keysym.scancode);
 		break;
 	default:
 		break;
