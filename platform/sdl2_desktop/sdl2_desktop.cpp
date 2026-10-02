@@ -514,11 +514,29 @@ void Loop1()
 			key_events = joystick_mapper.ReleaseAll(player);
 		}
 
+		// The joystick type may be switched while a button/stick is held. The
+		// release must then still undo the ZX key that the press actually
+		// produced (Cursor '5' vs QAOP 'O'...), so the flags a key went down
+		// with are remembered per player and key, as ProcessKey() does for the
+		// keyboard. (Polling the pad state each frame already means a release is
+		// never lost to focus/window changes - only the mapping could drift.)
+		static struct { bool held; dword flags; } held_keys[2][256];
 		for(const auto& ke : key_events)
 		{
-			dword flags = OpJoyKeyFlags();
+			auto& hk = held_keys[player][(unsigned char)ke.key];
+			dword flags;
 			if(ke.is_down)
+			{
+				flags = OpJoyKeyFlags();
+				hk.held = true;
+				hk.flags = flags;
 				flags |= KF_DOWN;
+			}
+			else
+			{
+				flags = hk.held ? hk.flags : OpJoyKeyFlags();
+				hk.held = false;
+			}
 			Handler()->OnKey(ke.key, flags);
 		}
 	}
