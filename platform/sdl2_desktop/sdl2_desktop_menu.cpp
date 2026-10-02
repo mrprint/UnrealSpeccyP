@@ -202,9 +202,8 @@ bool HandleMenuShortcut(SDL_Event& e)
 	bool ctrl = (mod & KMOD_CTRL) != 0;
 	bool shift = (mod & KMOD_SHIFT) != 0;
 	// Auto-repeat of a held shortcut key is swallowed (the switches below
-	// still return true for it) rather than acted on: held Ctrl+F used to
-	// toggle fullscreen again on every repeat - in/out/in..., each one a
-	// modeset with "Prefer PAL refresh" - and the same for F7, F12, etc.
+	// still return true for it) rather than acted on: a held F11, F7, F12, ...
+	// would otherwise re-run its action on every OS key repeat.
 	bool down = (e.type == SDL_KEYDOWN) && !e.key.repeat;
 
 	if(!ctrl && !shift)
@@ -219,6 +218,13 @@ bool HandleMenuShortcut(SDL_Event& e)
 		case SDLK_F7:  if(down) OnPauseToggle();              return true;
 		case SDLK_F8:  if(down) ToggleBoolOption("true speed", Tr("status.true_speed.on"), Tr("status.true_speed.off")); return true;
 		case SDLK_F9:  if(down) ToggleBoolOption("mode 48k", Tr("status.mode_48k.on"), Tr("status.mode_48k.off")); return true;
+		// F11 is the full screen key that never touches the Spectrum. Ctrl+F
+		// (below) does the same, but Ctrl is also the joystick fire key and goes
+		// down into the emulator before the second key of a chord arrives, so
+		// every Ctrl+<key> shortcut leaks a short Ctrl press into the Spectrum
+		// (a stray '0'/Enter in BASIC). ProcessKey() takes that Ctrl back when
+		// the chord completes, so it can't stay stuck.
+		case SDLK_F11: if(down) OnFullScreenToggle();          return true;
 		case SDLK_F12: if(down) OnReset();                    return true;
 		default: break;
 		}
@@ -444,7 +450,7 @@ void DrawMenuBar()
 			}
 		}
 		ImGui::Separator();
-		if(ImGui::MenuItem(Tr("menu.view.full_screen"), "Ctrl+F"))
+		if(ImGui::MenuItem(Tr("menu.view.full_screen"), "F11 / Ctrl+F"))
 			OnFullScreenToggle();
 		ItemTooltip("tip.menu.view.full_screen");
 		{

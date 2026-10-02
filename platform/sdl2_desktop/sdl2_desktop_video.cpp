@@ -654,7 +654,7 @@ static struct eOptionPreferPalRefresh : public xOptions::eOptionBool
 	}
 } op_prefer_pal_refresh;
 
-// Shared by eOptionFullScreen::Apply() (runtime toggle, via the menu/Ctrl+F/
+// Shared by eOptionFullScreen::Apply() (runtime toggle, via the menu/F11/Ctrl+F/
 // double-click) and InitVideo()'s launch-already-fullscreen path - both need
 // the exact same try-sync/fall-back-to-desktop-rate behaviour, not two
 // copies of it that could drift apart.
