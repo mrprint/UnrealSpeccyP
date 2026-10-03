@@ -134,6 +134,10 @@ public:
 
     std::vector<DeviceInfo> EnumerateDevices();
 
+    // device_index here and below is an SDL *device index* - what
+    // EnumerateDevices() reports in DeviceInfo::index. SDL renumbers those
+    // whenever a device is unplugged, so it is not the same thing as the
+    // backend's internal slot (see below) and must never be used as one.
     const GamepadState& GetState(int device_index) const;
 
     void RefreshDeviceState(int device_index);
@@ -154,8 +158,19 @@ private:
     std::array<bool, kMaxControllers> m_connected{false};
     std::array<SDL_JoystickID, kMaxControllers> m_instance_ids{};
 
-    void UpdateDevice(int device_index);
+    // Slots are the backend's own bookkeeping: a controller keeps the slot it
+    // was opened into for as long as it stays plugged in, and is found again
+    // through its SDL instance id (which never changes and is never reused),
+    // not through its SDL device index (which shifts when another device goes).
+    void UpdateDevice(int slot);
     int SlotForInstanceId(SDL_JoystickID instance_id) const;
+    int SlotForDeviceIndex(int device_index) const;
+    int FreeSlot() const;
+    // Returns the slot of the controller at device_index, opening it into a
+    // free slot first if it isn't open yet (*newly_opened tells which), or -1.
+    int OpenDevice(int device_index, bool* newly_opened);
+    // Opens every attached game controller that isn't open yet.
+    void OpenAllDevices(const std::function<void(int device_index)>& on_device_added);
 };
 
 WxGamepadBackend& GamepadBackend();

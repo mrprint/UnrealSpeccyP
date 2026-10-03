@@ -55,24 +55,7 @@ void WxGamepadBackend::Initialize() {
         return;
     }
 
-    for (int i = 0; i < num_joysticks && i < kMaxControllers; ++i) {
-        if (SDL_IsGameController(i)) {
-            // unique_ptr takes ownership: auto-closes on slot reassignment or
-            // backend destruction, no manual SDL_GameControllerClose needed.
-            m_controllers[i].reset(SDL_GameControllerOpen(i));
-            if (m_controllers[i]) {
-                m_connected[i] = true;
-                m_instance_ids[i] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_controllers[i].get()));
-                UpdateDevice(i);
-            } else {
-                const char* error = SDL_GetError();
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                    "Failed to auto-open game controller %d: %s", i,
-                    error ? error : "Unknown error");
-                SDL_ClearError();
-            }
-        }
-    }
+    OpenAllDevices(nullptr);
 }
 
 void WxGamepadBackend::Shutdown() {
@@ -94,41 +77,86 @@ int WxGamepadBackend::SlotForInstanceId(SDL_JoystickID instance_id) const {
     return -1;
 }
 
+int WxGamepadBackend::SlotForDeviceIndex(int device_index) const {
+    if (device_index < 0 || device_index >= SDL_NumJoysticks())
+        return -1;
+    SDL_JoystickID instance_id = SDL_JoystickGetDeviceInstanceID(device_index);
+    return instance_id < 0 ? -1 : SlotForInstanceId(instance_id);
+}
+
+// A slot is free when nothing is connected in it. That includes one whose
+// controller UpdateDevice() noticed detaching (m_connected cleared, object
+// still held): the REMOVED event can't find such a slot any more, so reusing
+// it here is what finally closes that controller.
+int WxGamepadBackend::FreeSlot() const {
+    for (int i = 0; i < kMaxControllers; ++i) {
+        if (!m_connected[i])
+            return i;
+    }
+    return -1;
+}
+
+int WxGamepadBackend::OpenDevice(int device_index, bool* newly_opened) {
+    if (newly_opened) *newly_opened = false;
+
+    int slot = SlotForDeviceIndex(device_index);
+    if (slot >= 0)
+        return slot; // already open - keep its slot, whatever index SDL gives it now
+
+    if (device_index < 0 || device_index >= SDL_NumJoysticks())
+        return -1;
+
+    slot = FreeSlot();
+    if (slot < 0) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+            "No free slot for game controller %d (max %d)", device_index, kMaxControllers);
+        return -1;
+    }
+
+    ControllerPtr controller(SDL_GameControllerOpen(device_index), ControllerDeleter{});
+    if (!controller) {
+        const char* err = SDL_GetError();
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+            "Failed to open game controller %d: %s", device_index,
+            err ? err : "Unknown error");
+        SDL_ClearError();
+        return -1;
+    }
+
+    // Assigning to the slot closes whatever stale controller it still held.
+    m_controllers[slot] = std::move(controller);
+    m_connected[slot] = true;
+    m_instance_ids[slot] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_controllers[slot].get()));
+    m_states[slot] = GamepadState();
+    if (newly_opened) *newly_opened = true;
+    return slot;
+}
+
+void WxGamepadBackend::OpenAllDevices(const std::function<void(int)>& on_device_added) {
+    int num_joysticks = SDL_NumJoysticks();
+    for (int i = 0; i < num_joysticks; ++i) {
+        if (!SDL_IsGameController(i))
+            continue;
+        bool newly_opened = false;
+        int slot = OpenDevice(i, &newly_opened);
+        if (slot < 0 || !newly_opened)
+            continue;
+        UpdateDevice(slot);
+        if (on_device_added) on_device_added(i);
+    }
+}
+
 void WxGamepadBackend::HandleControllerEvent(const SDL_Event& event,
     std::function<void(int)> on_device_added,
     std::function<void(int)> on_device_removed) {
 
     switch (event.type) {
         case SDL_CONTROLLERDEVICEADDED: {
-            int which = event.cdevice.which; // device index for ADDED
-
-            if (which >= 0 && which < kMaxControllers && m_connected[which])
-                break;
-
-            // unique_ptr takes ownership on success; .reset() auto-closes the
-            // old controller in that slot (if any) before storing the new one.
-            ControllerPtr controller(SDL_GameControllerOpen(which), ControllerDeleter{});
-            if (!controller) {
-                const char* err = SDL_GetError();
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                    "Failed to open game controller %d: %s", which,
-                    err ? err : "Unknown error");
-                SDL_ClearError();
-                break;
-            }
-
-            if (which >= 0 && which < kMaxControllers) {
-                m_controllers[which] = std::move(controller);
-                m_connected[which] = true;
-                m_instance_ids[which] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_controllers[which].get()));
-                UpdateDevice(which);
-                if (on_device_added) on_device_added(which);
-            } else {
-                // Out of range — controller unique_ptr goes out of scope and
-                // auto-closes via its deleter. No manual close needed.
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                    "Game controller index %d out of range", which);
-            }
+            // event.cdevice.which is a device index as of when the event was
+            // queued; by the time it is handled here (once a frame) another
+            // device may have come or gone and shifted every index since, so
+            // it can't be trusted. Open whatever isn't open yet instead.
+            OpenAllDevices(on_device_added);
             break;
         }
 
@@ -208,24 +236,25 @@ std::vector<WxGamepadBackend::DeviceInfo> WxGamepadBackend::EnumerateDevices() {
 const GamepadState& WxGamepadBackend::GetState(int device_index) const {
     static const GamepadState empty_state{};
 
-    if (device_index >= 0 && device_index < kMaxControllers && m_connected[device_index])
-        return m_states[device_index];
+    int slot = SlotForDeviceIndex(device_index);
+    if (slot >= 0)
+        return m_states[slot];
 
     return empty_state;
 }
 
-void WxGamepadBackend::UpdateDevice(int device_index) {
-    if (!m_controllers[device_index] || !m_connected[device_index]) return;
+void WxGamepadBackend::UpdateDevice(int slot) {
+    if (!m_controllers[slot] || !m_connected[slot]) return;
 
-    SDL_GameController* gc = m_controllers[device_index].get();
-    GamepadState& state = m_states[device_index];
+    SDL_GameController* gc = m_controllers[slot].get();
+    GamepadState& state = m_states[slot];
 
     SDL_GameControllerUpdate();
 
     if (!SDL_GameControllerGetAttached(gc)) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-            "Gamepad %d disconnected during update", device_index);
-        m_connected[device_index] = false;
+            "Gamepad in slot %d disconnected during update", slot);
+        m_connected[slot] = false;
         return;
     }
 
@@ -289,29 +318,9 @@ void WxGamepadBackend::UpdateDevice(int device_index) {
 }
 
 void WxGamepadBackend::RefreshDeviceState(int device_index) {
-    if (device_index < 0 || device_index >= kMaxControllers) return;
-
-    if (m_connected[device_index] && m_controllers[device_index]) {
-        UpdateDevice(device_index);
-        return;
-    }
-
-    // unique_ptr takes ownership: auto-closes on slot reassignment or backend
-    // destruction. .reset() replaces any existing controller in this slot.
-    ControllerPtr controller(SDL_GameControllerOpen(device_index), ControllerDeleter{});
-    if (!controller) {
-        const char* error = SDL_GetError();
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-            "Failed to open game controller %d: %s", device_index,
-            error ? error : "Unknown error");
-        SDL_ClearError();
-        return;
-    }
-
-    m_controllers[device_index] = std::move(controller);
-    m_connected[device_index] = true;
-    m_instance_ids[device_index] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_controllers[device_index].get()));
-    UpdateDevice(device_index);
+    int slot = OpenDevice(device_index, nullptr);
+    if (slot >= 0)
+        UpdateDevice(slot);
 }
 
 WxGamepadBackend& GamepadBackend() {
