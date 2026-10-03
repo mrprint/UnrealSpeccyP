@@ -150,11 +150,18 @@ static bool FileExists(const char* path)
 static void ApplyStyle(float dpi_scale, eSystemTheme theme)
 {
 	bool dark = (theme == eSystemTheme::Dark);
+	// Back to ImGui's pristine defaults first: StyleColors*() below only
+	// resets the colours, so every size this function doesn't assign itself
+	// (ScrollbarSize, IndentSpacing, TabRounding, ...) would otherwise keep
+	// the *scaled* value from the previous call, and ScaleAllSizes() at the
+	// end would then scale it again - compounding on every theme change or
+	// DPI change instead of being applied once.
+	ImGuiStyle& style = ImGui::GetStyle();
+	style = ImGuiStyle();
 	if(dark)
 		ImGui::StyleColorsDark();
 	else
 		ImGui::StyleColorsLight();
-	ImGuiStyle& style = ImGui::GetStyle();
 	style.WindowRounding = 4.0f;
 	style.FrameRounding  = 3.0f;
 	style.GrabRounding   = 3.0f;
@@ -213,7 +220,7 @@ static void ApplyStyle(float dpi_scale, eSystemTheme theme)
 		c[ImGuiCol_TabActive]        = ImVec4(0.70f, 0.87f, 0.93f, 1.00f);
 	}
 
-	// Style is reset to the fixed base values above on every call, so
+	// Style was reset to the fixed base values above on every call, so
 	// scaling by the *absolute* current dpi_scale here is safe to repeat
 	// (e.g. when LoadFont() rebakes for a new scale) - unlike calling
 	// ScaleAllSizes() as a one-off post-step, which would compound if ever
