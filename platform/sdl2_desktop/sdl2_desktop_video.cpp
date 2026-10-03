@@ -328,7 +328,7 @@ private:
 // multi-monitor layout where the old coordinates now happen to land on a
 // different, wrong display. Recording which display they were relative to
 // lets InitVideo() tell those cases apart - the same reasoning
-// ResolveDeviceIndexForGuid() in sdl2_desktop_gamepad.h already applies to
+// JoystickProfile::device_key in sdl2_desktop_gamepad.h already applies to
 // gamepad profiles, just for monitors instead of controllers.
 //
 // Empty (never saved - fresh config) is deliberately treated as "nothing to

@@ -32,6 +32,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 namespace xPlatform {
 
+static std::string GuidToStdString(SDL_JoystickGUID guid) {
+    char buf[33];
+    SDL_GUIDToString(guid, buf, sizeof(buf));
+    return std::string(buf);
+}
+
 // ---------------------------------------------------------------------------
 // WxGamepadBackend
 // ---------------------------------------------------------------------------
@@ -66,6 +72,8 @@ void WxGamepadBackend::Shutdown() {
         m_controllers[i].reset();
         m_connected[i] = false;
         m_instance_ids[i] = -1;
+        m_guids[i].clear();
+        m_ordinals[i] = 0;
     }
 }
 
@@ -82,6 +90,64 @@ int WxGamepadBackend::SlotForDeviceIndex(int device_index) const {
         return -1;
     SDL_JoystickID instance_id = SDL_JoystickGetDeviceInstanceID(device_index);
     return instance_id < 0 ? -1 : SlotForInstanceId(instance_id);
+}
+
+std::vector<std::pair<int, int>> WxGamepadBackend::OrdinalsForGuid(const std::string& guid) const {
+    std::vector<std::pair<int, int>> result;
+    if (guid.empty())
+        return result;
+
+    std::vector<int> used;
+    for (int i = 0; i < kMaxControllers; ++i) {
+        if (m_connected[i] && m_guids[i] == guid)
+            used.push_back(m_ordinals[i]);
+    }
+
+    int num_joysticks = SDL_NumJoysticks();
+    for (int i = 0; i < num_joysticks; ++i) {
+        if (!SDL_IsGameController(i) || GuidToStdString(SDL_JoystickGetDeviceGUID(i)) != guid)
+            continue;
+        int ordinal;
+        int slot = SlotForDeviceIndex(i);
+        if (slot >= 0) {
+            ordinal = m_ordinals[slot];
+        } else {
+            ordinal = 1;
+            while (std::find(used.begin(), used.end(), ordinal) != used.end())
+                ++ordinal;
+            used.push_back(ordinal);
+        }
+        result.emplace_back(i, ordinal);
+    }
+    return result;
+}
+
+int WxGamepadBackend::SlotForKey(const std::string& key) const {
+    std::string guid;
+    int ordinal = 0;
+    if (!SplitDeviceKey(key, &guid, &ordinal))
+        return -1;
+    for (int i = 0; i < kMaxControllers; ++i) {
+        if (m_connected[i] && m_guids[i] == guid && m_ordinals[i] == ordinal)
+            return i;
+    }
+    return -1;
+}
+
+int WxGamepadBackend::DeviceIndexForKey(const std::string& key) const {
+    std::string guid;
+    int ordinal = 0;
+    if (!SplitDeviceKey(key, &guid, &ordinal))
+        return -1;
+    for (const auto& entry : OrdinalsForGuid(guid)) {
+        if (entry.second == ordinal)
+            return entry.first;
+    }
+    return -1;
+}
+
+bool WxGamepadBackend::IsPresent(const std::string& key) const {
+    return DeviceIndexForKey(key) >= 0;
 }
 
 // A slot is free when nothing is connected in it. That includes one whose
@@ -127,6 +193,22 @@ int WxGamepadBackend::OpenDevice(int device_index, bool* newly_opened) {
     m_controllers[slot] = std::move(controller);
     m_connected[slot] = true;
     m_instance_ids[slot] = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(m_controllers[slot].get()));
+    m_guids[slot] = GuidToStdString(SDL_JoystickGetDeviceGUID(device_index));
+    // The lowest ordinal no other attached device with this GUID holds. This
+    // slot is skipped: it is already marked connected, but its m_ordinals
+    // entry still belongs to whatever device occupied it before.
+    int ordinal = 1;
+    for (bool taken = true; taken; ) {
+        taken = false;
+        for (int i = 0; i < kMaxControllers; ++i) {
+            if (i != slot && m_connected[i] && m_guids[i] == m_guids[slot] && m_ordinals[i] == ordinal) {
+                taken = true;
+                ++ordinal;
+                break;
+            }
+        }
+    }
+    m_ordinals[slot] = ordinal;
     m_states[slot] = GamepadState();
     if (newly_opened) *newly_opened = true;
     return slot;
@@ -221,10 +303,12 @@ std::vector<WxGamepadBackend::DeviceInfo> WxGamepadBackend::EnumerateDevices() {
         const char* name = SDL_JoystickNameForIndex(i);
         info.name = name ? std::string(name) : xI18n::Tr("gamepad.unknown_controller");
 
-        SDL_JoystickGUID guid = SDL_JoystickGetDeviceGUID(i);
-        char guid_str[33];
-        SDL_GUIDToString(guid, guid_str, sizeof(guid_str));
-        info.guid = std::string(guid_str);
+        info.guid = GuidToStdString(SDL_JoystickGetDeviceGUID(i));
+        info.ordinal = 1;
+        for (const auto& entry : OrdinalsForGuid(info.guid)) {
+            if (entry.first == i) { info.ordinal = entry.second; break; }
+        }
+        info.key = MakeDeviceKey(info.guid, info.ordinal);
 
         info.is_gamepad = true;
         devices.push_back(info);
@@ -233,10 +317,10 @@ std::vector<WxGamepadBackend::DeviceInfo> WxGamepadBackend::EnumerateDevices() {
     return devices;
 }
 
-const GamepadState& WxGamepadBackend::GetState(int device_index) const {
+const GamepadState& WxGamepadBackend::GetState(const std::string& key) const {
     static const GamepadState empty_state{};
 
-    int slot = SlotForDeviceIndex(device_index);
+    int slot = SlotForKey(key);
     if (slot >= 0)
         return m_states[slot];
 
@@ -317,8 +401,15 @@ void WxGamepadBackend::UpdateDevice(int slot) {
     if (std::abs(state.rightY) < state.deadzone) state.rightY = 0.0f;
 }
 
-void WxGamepadBackend::RefreshDeviceState(int device_index) {
-    int slot = OpenDevice(device_index, nullptr);
+void WxGamepadBackend::RefreshDeviceState(const std::string& key) {
+    int slot = SlotForKey(key);
+    if (slot < 0 && DeviceIndexForKey(key) >= 0) {
+        // Attached but not open yet. Open everything, in enumeration order,
+        // rather than just this one: the ordinals handed out then match the
+        // ones DeviceIndexForKey() worked out for devices that aren't open.
+        OpenAllDevices(nullptr);
+        slot = SlotForKey(key);
+    }
     if (slot >= 0)
         UpdateDevice(slot);
 }
@@ -403,15 +494,15 @@ bool DeserializeMapping(const std::string& data,
 
 std::string SerializeProfile(const JoystickProfile& profile) {
     std::ostringstream oss;
-    if (!profile.device_guid.empty())
-        oss << "GUID:" << profile.device_guid << ";";
+    if (!profile.device_key.empty())
+        oss << "GUID:" << profile.device_key << ";";
     oss << SerializeMapping(profile.input_map);
     return oss.str();
 }
 
 bool DeserializeProfile(const std::string& data, JoystickProfile& out_profile) {
     out_profile.input_map.clear();
-    out_profile.device_guid.clear();
+    out_profile.device_key.clear();
 
     if (data.empty()) return true;
 
@@ -419,10 +510,10 @@ bool DeserializeProfile(const std::string& data, JoystickProfile& out_profile) {
     if (remainder.rfind("GUID:", 0) == 0) {
         size_t semi = remainder.find(';');
         if (semi == std::string::npos) {
-            out_profile.device_guid = remainder.substr(5);
+            out_profile.device_key = remainder.substr(5);
             remainder.clear();
         } else {
-            out_profile.device_guid = remainder.substr(5, semi - 5);
+            out_profile.device_key = remainder.substr(5, semi - 5);
             remainder = remainder.substr(semi + 1);
         }
     }
@@ -560,12 +651,11 @@ bool JoystickMapper::IsSourceActive(const JoystickMappingEntry& entry, const Gam
 std::vector<JoystickMapper::EmulatedKeyEvent> JoystickMapper::ProcessEvent(
     const JoystickProfile& profile,
     int player_index,
-    const GamepadState& current_state,
-    int device_index) {
+    const GamepadState& current_state) {
 
     std::vector<EmulatedKeyEvent> result;
 
-    if (!profile.IsEnabled() || profile.host_device_index != device_index)
+    if (!profile.IsEnabled())
         return result;
     if (player_index < 0 || player_index >= 2)
         return result;
@@ -604,31 +694,54 @@ std::vector<JoystickMapper::EmulatedKeyEvent> JoystickMapper::ReleaseAll(int pla
     return result;
 }
 
-int ResolveDeviceIndexForGuid(const std::string& guid, int hinted_index, std::string* out_resolved_guid) {
-    auto devices = GamepadBackend().EnumerateDevices();
+bool JoystickProfile::IsEnabled() const {
+    return GamepadBackend().IsPresent(device_key);
+}
 
-    if (!guid.empty()) {
-        for (const auto& dev : devices) {
-            if (dev.guid == guid) {
-                if (out_resolved_guid) *out_resolved_guid = guid;
-                return dev.index;
-            }
-        }
-        if (out_resolved_guid) *out_resolved_guid = guid;
-        return -1;
+std::string MakeDeviceKey(const std::string& guid, int ordinal) {
+    if (ordinal <= 1)
+        return guid;
+    return guid + "#" + std::to_string(ordinal);
+}
+
+bool SplitDeviceKey(const std::string& key, std::string* guid, int* ordinal) {
+    if (key.empty())
+        return false;
+
+    size_t hash = key.find('#');
+    if (hash == std::string::npos) {
+        *guid = key;
+        *ordinal = 1;
+        return true;
     }
 
-    if (hinted_index >= 0) {
-        for (const auto& dev : devices) {
-            if (dev.index == hinted_index) {
-                if (out_resolved_guid) *out_resolved_guid = dev.guid;
-                return dev.index;
-            }
+    if (hash == 0 || hash + 1 >= key.size())
+        return false;
+    int n = 0;
+    for (size_t i = hash + 1; i < key.size(); ++i) {
+        if (key[i] < '0' || key[i] > '9' || n > 10000)
+            return false;
+        n = n * 10 + (key[i] - '0');
+    }
+    if (n < 2) // the first device is the bare GUID, there is no "#1" spelling
+        return false;
+
+    *guid = key.substr(0, hash);
+    *ordinal = n;
+    return true;
+}
+
+std::string ResolveProfileKey(const std::string& key, int legacy_device_index) {
+    if (!key.empty())
+        return key;
+
+    if (legacy_device_index >= 0) {
+        for (const auto& dev : GamepadBackend().EnumerateDevices()) {
+            if (dev.index == legacy_device_index)
+                return dev.key;
         }
     }
-
-    if (out_resolved_guid) out_resolved_guid->clear();
-    return -1;
+    return std::string();
 }
 
 } // namespace xPlatform

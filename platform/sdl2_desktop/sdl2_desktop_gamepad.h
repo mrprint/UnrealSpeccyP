@@ -101,18 +101,26 @@ struct JoystickMappingEntry {
 };
 
 struct JoystickProfile {
-    int host_device_index = -1;
-    std::string device_guid;
+    // The physical gamepad this player uses, identified by its device *key*
+    // (see MakeDeviceKey()): the SDL device GUID, plus an ordinal when several
+    // attached devices share that GUID. SDL device indexes and instance ids
+    // are per-session handles that shift or change as devices come and go, so
+    // they are never stored here or passed around as an identity.
+    // (Serialized as "GUID:<key>;" - a bare GUID is simply the first device.)
+    std::string device_key;
     std::map<EEmulatedJoystickInput, JoystickMappingEntry> input_map;
-    bool IsEnabled() const { return host_device_index >= 0; }
+    // True when the profile names a device that is currently attached.
+    bool IsEnabled() const;
 };
 
 class WxGamepadBackend {
 public:
     struct DeviceInfo {
-        int index;
+        int index; // SDL enumeration order: for display and change detection only, never an identity
         std::string name;
         std::string guid;
+        int ordinal;     // 1-based position among the attached devices sharing this guid
+        std::string key; // what a profile stores: MakeDeviceKey(guid, ordinal)
         bool is_gamepad;
     };
 
@@ -134,13 +142,17 @@ public:
 
     std::vector<DeviceInfo> EnumerateDevices();
 
-    // device_index here and below is an SDL *device index* - what
-    // EnumerateDevices() reports in DeviceInfo::index. SDL renumbers those
-    // whenever a device is unplugged, so it is not the same thing as the
-    // backend's internal slot (see below) and must never be used as one.
-    const GamepadState& GetState(int device_index) const;
-
-    void RefreshDeviceState(int device_index);
+    // Devices are identified by key (DeviceInfo::key): the GUID SDL reports on
+    // the respective system, plus an ordinal for same-model devices, which
+    // share a GUID and have nothing else in common that SDL exposes on every
+    // system. Ordinals are handed out in the order devices are opened and then
+    // stick for as long as the device stays plugged in - unplugging the first
+    // of two identical pads leaves the second one the second - and the lowest
+    // free one goes to the next device that comes along.
+    bool IsPresent(const std::string& key) const;
+    const GamepadState& GetState(const std::string& key) const;
+    // Opens the device with this key if it isn't open yet, then reads it.
+    void RefreshDeviceState(const std::string& key);
 
 private:
     static constexpr int kMaxControllers = 16;
@@ -157,14 +169,23 @@ private:
     std::array<GamepadState, kMaxControllers> m_states;
     std::array<bool, kMaxControllers> m_connected{false};
     std::array<SDL_JoystickID, kMaxControllers> m_instance_ids{};
+    std::array<std::string, kMaxControllers> m_guids;
+    std::array<int, kMaxControllers> m_ordinals{};
 
     // Slots are the backend's own bookkeeping: a controller keeps the slot it
-    // was opened into for as long as it stays plugged in, and is found again
-    // through its SDL instance id (which never changes and is never reused),
-    // not through its SDL device index (which shifts when another device goes).
+    // was opened into for as long as it stays plugged in. Callers find it by
+    // GUID; SDL events, which only carry an instance id, find it through that
+    // (it never changes and is never reused) - and the SDL device index, which
+    // shifts whenever another device goes, is only ever an input to OpenDevice().
     void UpdateDevice(int slot);
     int SlotForInstanceId(SDL_JoystickID instance_id) const;
     int SlotForDeviceIndex(int device_index) const;
+    int SlotForKey(const std::string& key) const;
+    int DeviceIndexForKey(const std::string& key) const;
+    // (SDL device index, ordinal) of every attached game controller with this
+    // GUID, in SDL enumeration order. Open ones report the ordinal they hold;
+    // for the rest it is what they would get if opened now.
+    std::vector<std::pair<int, int>> OrdinalsForGuid(const std::string& guid) const;
     int FreeSlot() const;
     // Returns the slot of the controller at device_index, opening it into a
     // free slot first if it isn't open yet (*newly_opened tells which), or -1.
@@ -186,8 +207,7 @@ public:
     std::vector<EmulatedKeyEvent> ProcessEvent(
         const JoystickProfile& profile,
         int player_index,
-        const GamepadState& current_state,
-        int device_index);
+        const GamepadState& current_state);
 
     // Force-releases any keys still marked "held" for this player, without
     // needing a live GamepadState. Call this when a profile's device has
@@ -235,7 +255,18 @@ std::string SourceTypeToString(EHostSourceType type);
 EHostSourceType StringToSourceType(const std::string& str);
 const char* SourceTypeDisplayString(EHostSourceType type);
 
-int ResolveDeviceIndexForGuid(const std::string& guid, int hinted_index, std::string* out_resolved_guid = nullptr);
+// A device key is the GUID for the first attached device with that GUID and
+// "<GUID>#<n>" for the n-th (n >= 2), so keys saved before ordinals existed
+// keep meaning what they did. SplitDeviceKey() is the inverse and rejects
+// anything MakeDeviceKey() could not have produced.
+std::string MakeDeviceKey(const std::string& guid, int ordinal);
+bool SplitDeviceKey(const std::string& key, std::string* guid, int* ordinal);
+
+// The key a player's profile should use: the profile's own if it has one.
+// Only a profile with no key yet (a config written when players were bound to
+// a device *index*, see OpHostGamepadDevice()) falls back to the key of
+// whatever device sits at legacy_device_index now.
+std::string ResolveProfileKey(const std::string& key, int legacy_device_index);
 
 } // namespace xPlatform
 

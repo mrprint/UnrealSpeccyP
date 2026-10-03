@@ -495,16 +495,14 @@ void Loop1()
 	{
 		JoystickProfile profile;
 		DeserializeProfile(OpJoystickMappingData(player), profile);
-		int hinted_index = OpHostGamepadDevice(player);
-		std::string resolved_guid;
-		profile.host_device_index = ResolveDeviceIndexForGuid(profile.device_guid, hinted_index, &resolved_guid);
+		profile.device_key = ResolveProfileKey(profile.device_key, OpHostGamepadDevice(player));
 
 		std::vector<JoystickMapper::EmulatedKeyEvent> key_events;
 		if(profile.IsEnabled())
 		{
-			GamepadBackend().RefreshDeviceState(profile.host_device_index);
-			const GamepadState& state = GamepadBackend().GetState(profile.host_device_index);
-			key_events = joystick_mapper.ProcessEvent(profile, player, state, profile.host_device_index);
+			GamepadBackend().RefreshDeviceState(profile.device_key);
+			const GamepadState& state = GamepadBackend().GetState(profile.device_key);
+			key_events = joystick_mapper.ProcessEvent(profile, player, state);
 		}
 		else
 		{

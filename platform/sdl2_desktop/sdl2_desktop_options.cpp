@@ -74,10 +74,7 @@ JoystickProfile LoadProfileFromOptions(int player_idx)
 {
 	JoystickProfile profile;
 	DeserializeProfile(OpJoystickMappingData(player_idx), profile);
-	int hinted_index = OpHostGamepadDevice(player_idx);
-	std::string resolved_guid;
-	profile.host_device_index = ResolveDeviceIndexForGuid(profile.device_guid, hinted_index, &resolved_guid);
-	profile.device_guid = resolved_guid;
+	profile.device_key = ResolveProfileKey(profile.device_key, OpHostGamepadDevice(player_idx));
 	return profile;
 }
 
@@ -113,8 +110,8 @@ public:
 		for(int i = 0; i < 2; ++i)
 		{
 			SaveProfileToOptions(i, m_profiles[i]);
-			if(m_profiles[i].host_device_index >= 0)
-				GamepadBackend().RefreshDeviceState(m_profiles[i].host_device_index);
+			if(!m_profiles[i].device_key.empty())
+				GamepadBackend().RefreshDeviceState(m_profiles[i].device_key);
 		}
 	}
 
@@ -160,25 +157,41 @@ private:
 	{
 		m_devices = GamepadBackend().EnumerateDevices();
 		for(int player = 0; player < 2; ++player)
-		{
-			const std::string& guid = m_profiles[player].device_guid;
-			int found_index = -1;
-			if(!guid.empty())
-			{
-				for(const auto& dev : m_devices)
-					if(dev.guid == guid) { found_index = dev.index; break; }
-			}
-			m_profiles[player].host_device_index = found_index;
-			if(found_index >= 0)
-				GamepadBackend().RefreshDeviceState(found_index);
-		}
+			if(PlayerHasDevice(player))
+				GamepadBackend().RefreshDeviceState(m_profiles[player].device_key);
+	}
+
+	// Whether the player's device (identified by key) is in the current
+	// device list snapshot, i.e. plugged in.
+	bool PlayerHasDevice(int player_idx) const
+	{
+		const std::string& key = m_profiles[player_idx].device_key;
+		if(key.empty())
+			return false;
+		for(const auto& dev : m_devices)
+			if(dev.key == key)
+				return true;
+		return false;
+	}
+
+	// Controllers of the same model report the same name; when more than one
+	// of them is plugged in, number them so the list can tell them apart.
+	std::string DeviceLabel(const WxGamepadBackend::DeviceInfo& dev) const
+	{
+		int same_model = 0;
+		for(const auto& d : m_devices)
+			if(d.guid == dev.guid)
+				++same_model;
+		if(same_model < 2)
+			return dev.name;
+		return dev.name + " (" + std::to_string(dev.ordinal) + ")";
 	}
 
 	// If the assigned device is not connected, show a short placeholder
 	// instead of stale mapping data that belongs to a different controller.
 	const char* MappingLabelText(int player_idx, EEmulatedJoystickInput input) const
 	{
-		if(m_profiles[player_idx].host_device_index < 0)
+		if(!PlayerHasDevice(player_idx))
 			return Tr("gamepad.no_device");
 
 		auto it = m_profiles[player_idx].input_map.find(input);
@@ -200,10 +213,10 @@ private:
 		if(m_capturing_player < 0)
 			return;
 
-		int assigned = m_profiles[m_capturing_player].host_device_index;
-		if(assigned < 0)
+		if(!PlayerHasDevice(m_capturing_player))
 			return; // nothing plugged in for this player - nothing to capture from yet
 
+		const std::string& assigned = m_profiles[m_capturing_player].device_key;
 		GamepadBackend().RefreshDeviceState(assigned);
 		const GamepadState& s = GamepadBackend().GetState(assigned);
 
@@ -251,7 +264,7 @@ private:
 		auto current = GamepadBackend().EnumerateDevices();
 		if(current.size() != m_devices.size()) return true;
 		for(size_t i = 0; i < current.size(); ++i) {
-			if(current[i].index != m_devices[i].index || current[i].name != m_devices[i].name) {
+			if(current[i].key != m_devices[i].key || current[i].name != m_devices[i].name) {
 				return true;
 			}
 		}
@@ -289,7 +302,7 @@ private:
 		if (m_capturing_player < 0) return;
 		JoystickProfile& capturing_profile = m_profiles[m_capturing_player];
 
-		if (capturing_profile.device_guid.empty()) {
+		if (capturing_profile.device_key.empty()) {
 			// No device was assigned to the capturing player at all (combo
 			// still on "None"). If exactly one new controller appeared,
 			// assign it and let the capture carry on waiting for the actual
@@ -305,7 +318,7 @@ private:
 			for (const auto& dev : m_devices) {
 				bool is_new = true;
 				for (const auto& old_dev : old_devices) {
-					if (old_dev.guid == dev.guid) { is_new = false; break; }
+					if (old_dev.key == dev.key) { is_new = false; break; }
 				}
 				if (!is_new) continue;
 				++new_count;
@@ -313,13 +326,12 @@ private:
 			}
 
 			if (new_count == 1) {
-				capturing_profile.device_guid = new_device->guid;
-				capturing_profile.host_device_index = new_device->index;
-				GamepadBackend().RefreshDeviceState(new_device->index);
+				capturing_profile.device_key = new_device->key;
+				GamepadBackend().RefreshDeviceState(new_device->key);
 			} else {
 				StopCapture();
 			}
-		} else if (capturing_profile.host_device_index < 0) {
+		} else if (!PlayerHasDevice(m_capturing_player)) {
 			// A device *was* assigned, but RefreshDeviceList() just
 			// couldn't find it among the currently connected devices - it
 			// was unplugged mid-capture. The capture can never complete
@@ -341,28 +353,29 @@ private:
 		// Device combo: "None" + every currently connected SDL_GameController.
 		int selection = 0;
 		for(size_t i = 0; i < m_devices.size(); ++i)
-			if(m_devices[i].index == m_profiles[player_idx].host_device_index)
+			if(m_devices[i].key == m_profiles[player_idx].device_key)
 				{ selection = (int)i + 1; break; }
-		const char* preview = selection == 0 ? Tr("gamepad.device_none") : m_devices[selection - 1].name.c_str();
+		const std::string preview_label = selection == 0 ? std::string() : DeviceLabel(m_devices[selection - 1]);
+		const char* preview = selection == 0 ? Tr("gamepad.device_none") : preview_label.c_str();
 		ImGui::SetNextItemWidth(-1.0f);
 		if(ImGui::BeginCombo("##device", preview))
 		{
 			bool sel_none = (selection == 0);
 			if(ImGui::Selectable(Tr("gamepad.device_none"), sel_none))
 			{
-				m_profiles[player_idx].host_device_index = -1;
-				m_profiles[player_idx].device_guid.clear();
+				m_profiles[player_idx].device_key.clear();
 			}
 			for(size_t i = 0; i < m_devices.size(); ++i)
 			{
 				bool sel = ((int)i + 1 == selection);
-				if(ImGui::Selectable(m_devices[i].name.c_str(), sel))
+				ImGui::PushID((int)i);
+				if(ImGui::Selectable(DeviceLabel(m_devices[i]).c_str(), sel))
 				{
-					m_profiles[player_idx].host_device_index = m_devices[i].index;
-					m_profiles[player_idx].device_guid = m_devices[i].guid;
-					GamepadBackend().RefreshDeviceState(m_devices[i].index);
+					m_profiles[player_idx].device_key = m_devices[i].key;
+					GamepadBackend().RefreshDeviceState(m_devices[i].key);
 				}
 				if(sel) ImGui::SetItemDefaultFocus();
+				ImGui::PopID();
 			}
 			ImGui::EndCombo();
 		}
@@ -391,7 +404,7 @@ private:
 				ImGui::TableSetColumnIndex(2);
 				ImGui::PushID(i);
 				bool capturing = (m_capturing_player == player_idx && m_capturing_input == inputs[i]);
-				bool no_device = (m_profiles[player_idx].host_device_index < 0);
+				bool no_device = !PlayerHasDevice(player_idx);
 
 				if(capturing)
 				{
