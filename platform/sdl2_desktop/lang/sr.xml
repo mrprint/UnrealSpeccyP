@@ -141,7 +141,9 @@
 	<string id="options.input.joystick_type">Тип џојстика</string>
 	<string id="tip.options.input.kempston">Kempston џојстик, најчешћи џојстик за Spectrum</string>
 	<string id="tip.options.input.cursor">Cursor џојстик: четири стрелице померају курсор, 0 пуца</string>
+	<string id="tip.options.input.cursor_enter">Cursor џојстик: четири стрелице померају курсор, Enter пуца</string>
 	<string id="tip.options.input.qaop">QAOP+размак: тастери Q, A, O, P померају, размак пуца</string>
+	<string id="tip.options.input.qaop_m">QAOP+M: тастери Q, A, O, P померају, M пуца</string>
 	<string id="tip.options.input.sinclair">Sinclair 2 џојстик</string>
 	<string id="options.input.restore_defaults">Врати подразумевано</string>
 	<string id="tip.options.input.restore_defaults">Враћа подешавања управљања на подразумеване вредности</string>

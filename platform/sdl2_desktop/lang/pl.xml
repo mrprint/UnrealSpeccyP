@@ -141,7 +141,9 @@
 	<string id="options.input.joystick_type">Typ joysticka</string>
 	<string id="tip.options.input.kempston">Joystick Kempston, najpopularniejszy joystick do Spectrum</string>
 	<string id="tip.options.input.cursor">Joystick Cursor: cztery klawisze strzałek poruszają kursorem, 0 strzela</string>
+	<string id="tip.options.input.cursor_enter">Joystick Cursor: cztery klawisze strzałek poruszają kursorem, Enter strzela</string>
 	<string id="tip.options.input.qaop">QAOP+spacja: klawisze Q, A, O, P poruszają, spacja strzela</string>
+	<string id="tip.options.input.qaop_m">QAOP+M: klawisze Q, A, O, P poruszają, M strzela</string>
 	<string id="tip.options.input.sinclair">Joystick Sinclair 2</string>
 	<string id="options.input.restore_defaults">Przywróć domyślne ustawienia</string>
 	<string id="tip.options.input.restore_defaults">Przywraca opcje sterowania do wartości domyślnych</string>

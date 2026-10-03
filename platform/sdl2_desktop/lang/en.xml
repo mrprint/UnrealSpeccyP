@@ -164,7 +164,9 @@
 	<string id="options.input.joystick_type">Joystick Type</string>
 	<string id="tip.options.input.kempston">Kempston joystick, the most common Spectrum joystick</string>
 	<string id="tip.options.input.cursor">Cursor joystick: the four arrow keys move the cursor, the 0 key fires</string>
+	<string id="tip.options.input.cursor_enter">Cursor joystick with Enter: the four arrow keys move the cursor, the Enter key fires</string>
 	<string id="tip.options.input.qaop">QAOP space: the Q, A, O, P keys move, the space bar fires</string>
+	<string id="tip.options.input.qaop_m">QAOP M: the Q, A, O, P keys move, the M key fires</string>
 	<string id="tip.options.input.sinclair">Sinclair 2 joystick</string>
 	<string id="options.input.restore_defaults">Restore defaults</string>
 	<string id="tip.options.input.restore_defaults">Restore the input options to their default values</string>

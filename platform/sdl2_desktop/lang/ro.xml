@@ -141,7 +141,9 @@
 	<string id="options.input.joystick_type">Tip joystick</string>
 	<string id="tip.options.input.kempston">Joystick Kempston, cel mai comun joystick pentru Spectrum</string>
 	<string id="tip.options.input.cursor">Joystick Cursor: cele patru taste săgeată mișcă cursorul, 0 trage</string>
+	<string id="tip.options.input.cursor_enter">Joystick Cursor: cele patru taste săgeată mișcă cursorul, Enter trage</string>
 	<string id="tip.options.input.qaop">QAOP+spațiu: tastele Q, A, O, P mișcă, bara de spațiu trage</string>
+	<string id="tip.options.input.qaop_m">QAOP+M: tastele Q, A, O, P mișcă, M trage</string>
 	<string id="tip.options.input.sinclair">Joystick Sinclair 2</string>
 	<string id="options.input.restore_defaults">Restabilește setările implicite</string>
 	<string id="tip.options.input.restore_defaults">Restabilește opțiunile de control la valorile implicite</string>

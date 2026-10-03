@@ -141,7 +141,9 @@
 	<string id="options.input.joystick_type">Vrsta joysticka</string>
 	<string id="tip.options.input.kempston">Kempston joystick, najčešći joystick za Spectrum</string>
 	<string id="tip.options.input.cursor">Cursor joystick: četiri tipke sa strelicama pomiču kursor, 0 puca</string>
+	<string id="tip.options.input.cursor_enter">Cursor joystick: četiri tipke sa strelicama pomiču kursor, Enter puca</string>
 	<string id="tip.options.input.qaop">QAOP+razmaknica: tipke Q, A, O, P pomiču, razmaknica puca</string>
+	<string id="tip.options.input.qaop_m">QAOP+M: tipke Q, A, O, P pomiču, M puca</string>
 	<string id="tip.options.input.sinclair">Sinclair 2 joystick</string>
 	<string id="options.input.restore_defaults">Vrati zadane postavke</string>
 	<string id="tip.options.input.restore_defaults">Vraća postavke upravljanja na zadane vrijednosti</string>

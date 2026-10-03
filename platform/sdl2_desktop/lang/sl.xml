@@ -141,7 +141,9 @@
 	<string id="options.input.joystick_type">Vrsta igralne palice</string>
 	<string id="tip.options.input.kempston">Igralna palica Kempston, najpogostejša igralna palica za Spectrum</string>
 	<string id="tip.options.input.cursor">Igralna palica Cursor: štiri puščične tipke premikajo kazalec, 0 sproži</string>
+	<string id="tip.options.input.cursor_enter">Igralna palica Cursor: štiri puščične tipke premikajo kazalec, Enter sproži</string>
 	<string id="tip.options.input.qaop">QAOP+preslednica: tipke Q, A, O, P premikajo, preslednica sproži</string>
+	<string id="tip.options.input.qaop_m">QAOP+M: tipke Q, A, O, P premikajo, M sproži</string>
 	<string id="tip.options.input.sinclair">Igralna palica Sinclair 2</string>
 	<string id="options.input.restore_defaults">Obnovi privzete nastavitve</string>
 	<string id="tip.options.input.restore_defaults">Obnovi možnosti upravljanja na privzete vrednosti</string>

@@ -141,7 +141,9 @@
 	<string id="options.input.joystick_type">Τύπος joystick</string>
 	<string id="tip.options.input.kempston">Χειριστήριο Kempston, το πιο κοινό χειριστήριο για Spectrum</string>
 	<string id="tip.options.input.cursor">Χειριστήριο Cursor: τα τέσσερα βέλη μετακινούν τον δρομέα, το 0 πυροβολεί</string>
+	<string id="tip.options.input.cursor_enter">Χειριστήριο Cursor: τα τέσσερα βέλη μετακινούν τον δρομέα, το Enter πυροβολεί</string>
 	<string id="tip.options.input.qaop">QAOP+διάστημα: τα πλήκτρα Q, A, O, P μετακινούν, το διάστημα πυροβολεί</string>
+	<string id="tip.options.input.qaop_m">QAOP+M: τα πλήκτρα Q, A, O, P μετακινούν, το M πυροβολεί</string>
 	<string id="tip.options.input.sinclair">Χειριστήριο Sinclair 2</string>
 	<string id="options.input.restore_defaults">Επαναφορά προεπιλογών</string>
 	<string id="tip.options.input.restore_defaults">Επαναφέρει τις επιλογές χειρισμού στις προεπιλεγμένες τιμές τους</string>

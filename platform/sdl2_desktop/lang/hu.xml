@@ -141,7 +141,9 @@
 	<string id="options.input.joystick_type">Botkormány típusa</string>
 	<string id="tip.options.input.kempston">Kempston botkormány, a legelterjedtebb Spectrum botkormány</string>
 	<string id="tip.options.input.cursor">Cursor botkormány: a négy nyílbillentyű mozgatja a kurzort, a 0 tüzel</string>
+	<string id="tip.options.input.cursor_enter">Cursor botkormány: a négy nyílbillentyű mozgatja a kurzort, az Enter tüzel</string>
 	<string id="tip.options.input.qaop">QAOP+szóköz: a Q, A, O, P billentyűk mozgatnak, a szóköz tüzel</string>
+	<string id="tip.options.input.qaop_m">QAOP+M: a Q, A, O, P billentyűk mozgatnak, az M tüzel</string>
 	<string id="tip.options.input.sinclair">Sinclair 2 botkormány</string>
 	<string id="options.input.restore_defaults">Alapértelmezések visszaállítása</string>
 	<string id="tip.options.input.restore_defaults">Visszaállítja a vezérlési beállításokat az alapértelmezett értékekre</string>

@@ -141,7 +141,9 @@
 	<string id="options.input.joystick_type">Joystick-Typ</string>
 	<string id="tip.options.input.kempston">Kempston-Joystick, der gebräuchlichste Spectrum-Joystick</string>
 	<string id="tip.options.input.cursor">Cursor-Joystick: die vier Pfeiltasten bewegen den Cursor, die 0 feuert</string>
+	<string id="tip.options.input.cursor_enter">Cursor-Joystick: die vier Pfeiltasten bewegen den Cursor, die Eingabetaste feuert</string>
 	<string id="tip.options.input.qaop">QAOP+Leertaste: die Tasten Q, A, O, P bewegen, die Leertaste feuert</string>
+	<string id="tip.options.input.qaop_m">QAOP+M: die Tasten Q, A, O, P bewegen, die M-Taste feuert</string>
 	<string id="tip.options.input.sinclair">Sinclair-2-Joystick</string>
 	<string id="options.input.restore_defaults">Standardwerte wiederherstellen</string>
 	<string id="tip.options.input.restore_defaults">Setzt die Eingabeoptionen auf ihre Standardwerte zurück</string>

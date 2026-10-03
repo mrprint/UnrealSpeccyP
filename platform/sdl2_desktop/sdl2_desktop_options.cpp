@@ -627,8 +627,12 @@ void OptionsDialog::DrawInputTab()
 	ItemTooltip("tip.options.input.kempston");
 	ImGui::RadioButton("Cursor", &m_joystick, J_CURSOR);
 	ItemTooltip("tip.options.input.cursor");
+	ImGui::RadioButton("CursorEnter", &m_joystick, J_CURSORENTER);
+	ItemTooltip("tip.options.input.cursor_enter");
 	ImGui::RadioButton("QAOPSpace", &m_joystick, J_QAOPSPACE);
 	ItemTooltip("tip.options.input.qaop");
+	ImGui::RadioButton("QAOPM", &m_joystick, J_QAOPM);
+	ItemTooltip("tip.options.input.qaop_m");
 	ImGui::RadioButton("Sinclair 2", &m_joystick, J_SINCLAIR2);
 	ItemTooltip("tip.options.input.sinclair");
 

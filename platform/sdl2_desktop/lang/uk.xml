@@ -141,7 +141,9 @@
 	<string id="options.input.joystick_type">Тип джойстика</string>
 	<string id="tip.options.input.kempston">Джойстик Kempston — найпоширеніший джойстик для Spectrum</string>
 	<string id="tip.options.input.cursor">Джойстик Cursor: чотири клавіші зі стрілками рухають курсор, 0 — вогонь</string>
+	<string id="tip.options.input.cursor_enter">Джойстик Cursor: чотири клавіші зі стрілками рухають курсор, Enter — вогонь</string>
 	<string id="tip.options.input.qaop">QAOP+пробіл: клавіші Q, A, O, P рухають, пробіл — вогонь</string>
+	<string id="tip.options.input.qaop_m">QAOP+M: клавіші Q, A, O, P рухають, M — вогонь</string>
 	<string id="tip.options.input.sinclair">Джойстик Sinclair 2</string>
 	<string id="options.input.restore_defaults">Скинути налаштування</string>
 	<string id="tip.options.input.restore_defaults">Скидає налаштування керування до значень за замовчуванням</string>

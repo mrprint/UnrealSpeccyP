@@ -141,7 +141,9 @@
 	<string id="options.input.joystick_type">Juhtkangi tüüp</string>
 	<string id="tip.options.input.kempston">Kempstoni juhtkang, kõige levinum Spectrumi juhtkang</string>
 	<string id="tip.options.input.cursor">Cursori juhtkang: neli nooleklahvi liigutavad kursorit, 0 tulistab</string>
+	<string id="tip.options.input.cursor_enter">Cursori juhtkang: neli nooleklahvi liigutavad kursorit, Enter tulistab</string>
 	<string id="tip.options.input.qaop">QAOP+tühik: klahvid Q, A, O, P liigutavad, tühik tulistab</string>
+	<string id="tip.options.input.qaop_m">QAOP+M: klahvid Q, A, O, P liigutavad, M tulistab</string>
 	<string id="tip.options.input.sinclair">Sinclair 2 juhtkang</string>
 	<string id="options.input.restore_defaults">Taasta vaikeväärtused</string>
 	<string id="tip.options.input.restore_defaults">Taastab juhtimissätted vaikeväärtustele</string>

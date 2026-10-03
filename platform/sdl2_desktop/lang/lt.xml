@@ -141,7 +141,9 @@
 	<string id="options.input.joystick_type">Vairasvirtės tipas</string>
 	<string id="tip.options.input.kempston">Kempston vairasvirtė, dažniausiai naudojama Spectrum vairasvirtė</string>
 	<string id="tip.options.input.cursor">Cursor vairasvirtė: keturi rodyklių klavišai valdo žymeklį, 0 šauna</string>
+	<string id="tip.options.input.cursor_enter">Cursor vairasvirtė: keturi rodyklių klavišai valdo žymeklį, Enter šauna</string>
 	<string id="tip.options.input.qaop">QAOP+tarpas: klavišai Q, A, O, P valdo judėjimą, tarpas šauna</string>
+	<string id="tip.options.input.qaop_m">QAOP+M: klavišai Q, A, O, P valdo judėjimą, M šauna</string>
 	<string id="tip.options.input.sinclair">Sinclair 2 vairasvirtė</string>
 	<string id="options.input.restore_defaults">Atkurti numatytuosius</string>
 	<string id="tip.options.input.restore_defaults">Atkuria valdymo parinktis į numatytąsias reikšmes</string>

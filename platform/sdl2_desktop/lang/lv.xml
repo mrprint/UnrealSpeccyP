@@ -141,7 +141,9 @@
 	<string id="options.input.joystick_type">Džojstika veids</string>
 	<string id="tip.options.input.kempston">Kempston džojstiks, visbiežāk lietotais Spectrum džojstiks</string>
 	<string id="tip.options.input.cursor">Cursor džojstiks: četri bultiņu taustiņi kustina kursoru, 0 šauj</string>
+	<string id="tip.options.input.cursor_enter">Cursor džojstiks: četri bultiņu taustiņi kustina kursoru, Enter šauj</string>
 	<string id="tip.options.input.qaop">QAOP+atstarpe: taustiņi Q, A, O, P kustina, atstarpe šauj</string>
+	<string id="tip.options.input.qaop_m">QAOP+M: taustiņi Q, A, O, P kustina, M šauj</string>
 	<string id="tip.options.input.sinclair">Sinclair 2 džojstiks</string>
 	<string id="options.input.restore_defaults">Atjaunot noklusējumus</string>
 	<string id="tip.options.input.restore_defaults">Atjauno vadības iestatījumus uz noklusējuma vērtībām</string>
