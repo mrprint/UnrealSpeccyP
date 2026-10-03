@@ -37,14 +37,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //  lang/, and res/lang/ is a build output that ends up next to the
 //  running binary itself (not the shared source tree, and not found via
 //  a cwd-relative path the way res/font is - see ResolveLangDir() in the
-//  .cpp for why, and TL;DR: putting it anywhere in the shared tree,
-//  even transiently, turned out to leak into other platforms' packages
-//  and build output in practice, not just in theory). See the
-//  sdl2_desktop_lang custom target in build/cmake/CMakeLists.txt for the
-//  build side of this, and .gitignore for why res/lang/ itself isn't
-//  tracked. Nothing below cares about any of that distinction -
-//  Init() just reads res/lang/ like any other resource, exactly as if it
-//  had always lived there.
+//  .cpp for why). See the sdl2_desktop_lang custom target in
+//  build/cmake/CMakeLists.txt for the build side of this, and .gitignore
+//  for why res/lang/ itself isn't tracked.
 //
 //  English (res/lang/en.xml) is always loaded first as the fallback
 //  layer, so a string missing from any other language still shows
@@ -70,14 +65,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //  The active language can change at any moment while the UI is open (see
 //  SetLanguage() below) - the Options dialog's own language combo is the
 //  main reason: switching it must take effect immediately, without
-//  closing/reopening anything. Every DrawXxx() function already re-reads
-//  Tr() fresh each frame (immediate-mode UI), so this "just works" for
-//  ordinary widget labels; the one place that needs care is a window or
-//  popup whose *title* is translated (About/Options/the overwrite-confirm
-//  popup) - Dear ImGui derives that window's persistent ID from its whole
-//  title string, so translating it naively would reset the window's
-//  position/open state the instant the language changes. TrTitle() in
-//  imgui_shared.h is the fix; see its own comment.
+//  closing/reopening anything. The one place that needs care is a window
+//  or popup whose *title* is translated (About/Options/the
+//  overwrite-confirm popup) - Dear ImGui derives that window's persistent
+//  ID from its whole title string, so translating it naively would reset
+//  the window's position/open state the instant the language changes.
+//  TrTitle() in imgui_shared.h is the fix; see its own comment.
 // =============================================================================
 
 namespace xPlatform {
@@ -92,10 +85,7 @@ struct LanguageInfo
 // Scans res/lang/*.xml for available languages, loads English (res/lang/
 // en.xml) as the permanent fallback layer, and resolves the language
 // actually active right now from whatever the "language" xOption currently
-// holds (likely still its just-constructed default, "auto", this early -
-// xOptions::Load() re-applies the saved value shortly after, via the
-// eOptionLanguage::Apply() override in sdl2_desktop_i18n.cpp, same pattern
-// as e.g. sdl2_desktop_video.cpp's eOptionFullScreen).
+// holds.
 //
 // Call once, early in xPlatform::Init() (sdl2_desktop.cpp) - specifically
 // before Handler()->OnInit(), which is what runs xOptions::Load() - so the

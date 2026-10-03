@@ -516,8 +516,7 @@ void Loop1()
 		// release must then still undo the ZX key that the press actually
 		// produced (Cursor '5' vs QAOP 'O'...), so the flags a key went down
 		// with are remembered per player and key, as ProcessKey() does for the
-		// keyboard. (Polling the pad state each frame already means a release is
-		// never lost to focus/window changes - only the mapping could drift.)
+		// keyboard.
 		static struct { bool held; dword flags; } held_keys[2][256];
 		for(const auto& ke : key_events)
 		{
@@ -552,17 +551,15 @@ void Loop()
 	// below blocks on SDL_GL_SwapWindow() (vsync'd - SDL_GL_SetSwapInterval(1)
 	// in sdl2_desktop_video.cpp's InitVideo()) once per iteration too. So the
 	// real-time cadence of the emulated /INT already just follows whatever
-	// rate the display is actually running at; nothing here needs to change
-	// for that cadence to match the emulation core's own field rate (fixed
-	// Pentagon timing in this codebase, ~48.83Hz - see the comment above
-	// EmulatedFieldRateHz() in sdl2_desktop_video.cpp) - it only requires the
-	// display itself to really be running close to that rate, which is what
-	// entering fullscreen now tries to arrange (see ApplyFullScreen() in
-	// sdl2_desktop_video.cpp). The SDL_Delay loop below is an independent
-	// safety net for when vsync alone doesn't pace things (e.g. a driver
-	// that ignores the swap interval): its 15ms floor caps the loop at
-	// ~66fps and stays a no-op under any vsync rate at or below that (a
-	// 48.83Hz field is ~20.5ms), so it doesn't fight that case either way.
+	// rate the display is actually running at, and it only requires the
+	// display itself to really be running close to the emulation core's own
+	// field rate (fixed Pentagon timing in this codebase, ~48.83Hz - see the
+	// comment above EmulatedFieldRateHz() in sdl2_desktop_video.cpp). The
+	// SDL_Delay loop below is an independent safety net for when vsync alone
+	// doesn't pace things (e.g. a driver that ignores the swap interval): its
+	// 15ms floor caps the loop at ~66fps and stays a no-op under any vsync
+	// rate at or below that (a 48.83Hz field is ~20.5ms), so it doesn't fight
+	// that case either way.
 	eTick last_tick;
 	last_tick.SetCurrent();
 	while(!quit)

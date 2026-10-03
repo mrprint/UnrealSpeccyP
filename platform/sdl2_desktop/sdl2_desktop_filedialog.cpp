@@ -302,9 +302,7 @@ void FileDialog::ShowDriveList() {
     // Already in A -> Z order from the bit scan above - no sort needed.
 
     // Cosmetic only - m_showing_drives (not this text) is what the rest of
-    // the class actually checks; typing Enter over it unchanged already
-    // fails today exactly like typing any other non-existent path would,
-    // same as before translation.
+    // the class actually checks.
     CopyToBuffer(m_path_buf, sizeof(m_path_buf), Tr("filedialog.this_pc"));
 }
 #endif//_WINAPI

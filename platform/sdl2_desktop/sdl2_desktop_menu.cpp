@@ -264,17 +264,15 @@ bool HandleMenuShortcut(SDL_Event& e)
 // ---------------------------------------------------------------------------
 // Language switcher - see sdl2_desktop_i18n.h. A small globe icon at the
 // right edge of the menu bar, opening a popup with the language list on
-// click - lives here (rather than as a combo inside the Options dialog, an
-// earlier iteration of this) so it's reachable in one click from anywhere,
-// the way a browser's own language switcher usually is.
+// click - lives here (rather than as a combo inside the Options dialog)
+// so it's reachable in one click from anywhere, the way a browser's own
+// language switcher usually is.
 //
 // Drawn as plain ImDrawList shapes rather than a text glyph: this
 // project's Dear ImGui build uses the default 16-bit ImWchar (no
 // IMGUI_USE_WCHAR32 anywhere in build/cmake/CMakeLists.txt), so an actual
 // "globe" Unicode character such as U+1F310 (outside the Basic
-// Multilingual Plane) can't even be represented, let alone rendered by
-// Roboto-Regular.ttf - a plain text face with no pictographic glyphs to
-// begin with, see LoadFont() in sdl2_desktop_imgui.cpp. Hand-drawn vector
+// Multilingual Plane) can't even be represented. Hand-drawn vector
 // shapes sidestep both problems and render identically regardless of
 // which language - or font - is active.
 // ---------------------------------------------------------------------------
@@ -587,10 +585,9 @@ static void DrawAboutWindow()
 		ImGui::TextWrapped("%s", Tr("about.tagline"));
 		ImGui::Spacing();
 		// Copyright line, URL and the GPL paragraph below are deliberately
-		// left untranslated, as legal/licensing boilerplate normally is -
-		// same reasoning as sdl2_desktop_gamepad.cpp's SourceTypeToString()
-		// staying untranslated: this text has a specific, citable form that
-		// an ad hoc per-string translation shouldn't paraphrase.
+		// left untranslated, as legal/licensing boilerplate normally is:
+		// this text has a specific, citable form that an ad hoc
+		// per-string translation shouldn't paraphrase.
 		ImGui::TextWrapped("Copyright (C) 2001-2020 SMT, Dexus, Alone Coder, deathsoft, djdron, scor.");
 		ImGui::Spacing();
 		ImGui::TextUnformatted("https://bitbucket.org/djdron/unrealspeccyp");

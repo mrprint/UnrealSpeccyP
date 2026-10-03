@@ -74,13 +74,7 @@ namespace fs = std::filesystem;
 // writes res/lang/ into this platform's own build output directory
 // (right next to the built binary), never into the shared top-level
 // res/ any other platform's build might also read from - see the
-// sdl2_desktop_lang custom target there for the full reasoning, which
-// includes a confirmed, reproduced bug from writing it anywhere in the
-// shared source tree, even transiently: a plain-SDL2 or wx build,
-// invoked from the very same checkout right after an sdl2_desktop
-// build/dobuild.bat with no cleanup in between, would otherwise still
-// find (and, packaged, previously did bundle) a leftover res/lang that
-// has nothing to do with what's actually being built.
+// sdl2_desktop_lang custom target there for the full reasoning.
 //
 // SDL_GetBasePath() answers "where am I actually running from" directly
 // (GetModuleFileName on Windows, /proc/self/exe on Linux, etc.) without
@@ -239,10 +233,8 @@ void Init()
 	std::string unused_code, unused_name;
 	LoadLanguageFile(g_lang_dir + "/en.xml", &g_english, &unused_code, &unused_name);
 
-	// Resolves whatever the "language" xOption currently holds (still its
-	// just-constructed default, "auto", this early - see the file comment
-	// on why Init() runs before xOptions::Load()) now that g_available/
-	// g_english actually exist.
+	// Resolves whatever the "language" xOption currently holds now that
+	// g_available/g_english actually exist.
 	SetLanguage(g_language_setting);
 }
 

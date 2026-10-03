@@ -370,8 +370,7 @@ static struct eOptionWindowDisplay : public xOptions::eOptionString
 // same field rate then - vsync does the rest, no extra timer/pacing logic
 // required.
 //
-// That field rate is NOT a flat 50Hz, and hardcoding 50 here would in fact
-// be wrong for this specific codebase: eSpeccy always drives the Z80 with
+// That field rate is NOT a flat 50Hz: eSpeccy always drives the Z80 with
 // Pentagon-style video timing (speccy.cpp: frame_tacts = 71680, "// pentagon
 // timings" - not switched per loaded ROM/snapshot) at the fixed 3.5MHz Z80
 // clock used throughout this codebase (see Z80FQ in devices/fdd/wd1793.cpp,
@@ -381,8 +380,7 @@ static struct eOptionWindowDisplay : public xOptions::eOptionString
 // 50.08Hz); Pentagon's 320-line video timing is a well-known deviation from
 // that. EmulatedFieldRateHz() below reads frame_tacts back out of the
 // running Z80 core rather than hardcoding either number, so this keeps
-// tracking reality if that ever changes upstream instead of silently
-// drifting out of sync with a stale magic number here.
+// tracking reality if that ever changes upstream.
 //
 // Windowed mode is deliberately left alone: it runs at whatever rate the
 // desktop compositor uses (unrelated to what op_full_screen does at all).
@@ -459,11 +457,11 @@ static double FieldRateToleranceHz(double target)
 // have no phosphor afterglow of their own to lean on - the blend is carried
 // entirely by how fast the panel itself is actually flickering. A faster
 // alternation only ever helps that illusion; a slower one only ever risks
-// the two colours reading as separate flicker instead of a blend, and - per
-// user reports - real monitors can also just handle an oddball low rate
-// like 48Hz worse in their own internal processing (overdrive/response-time
-// compensation, backlight PWM, ...) than a closer-to-standard 50Hz,
-// independently of anything on our end. Either way, there's no upside to
+// the two colours reading as separate flicker instead of a blend, and real
+// monitors can also just handle an oddball low rate like 48Hz worse in
+// their own internal processing (overdrive/response-time compensation,
+// backlight PWM, ...) than a closer-to-standard 50Hz, independently of
+// anything on our end. Either way, there's no upside to
 // preferring "below" just for being marginally closer, so this ranking
 // removes that preference entirely rather than only nudging it.
 static double FieldRateRank(double rate, double target)
@@ -979,8 +977,7 @@ void UpdateScreen()
 	// smaller one) - this is what passes the correct resolution to
 	// DrawGL() below. The full-quality FBO in draw.cpp is deliberately
 	// left at its init-time size (the largest connected display) and simply
-	// scaled to this vport - no FBO rebuild when the fullscreen resolution
-	// changes.
+	// scaled to this vport.
 	ePoint s;
 	SDL_GL_GetDrawableSize(g_gl_window.window, &s.x, &s.y);
 

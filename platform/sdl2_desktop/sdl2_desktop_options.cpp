@@ -445,9 +445,8 @@ private:
 // "###" elsewhere in this file, a plain "##" still folds the text before it
 // into the id hash, it just isn't displayed), so if the visible label were
 // passed straight through, the slider's id would change every time the
-// active language changed. Untranslated keys like "options.video.beam_spread"
-// never change, so the id stays stable across a live language switch the
-// same way TrTitle()'s stable_id does for window titles (see imgui_shared.h).
+// active language changed. Untranslated keys never change, so the id
+// stays stable across a live language switch.
 // ---------------------------------------------------------------------------
 
 void SliderRow(const char* label_key, int* value, int lo, int hi, const char* value_fmt_is_percent, const char* tooltip_key)
@@ -734,11 +733,9 @@ void OptionsDialog::Draw()
 	// Loop1()'s ui_want_keyboard gate in sdl2_desktop.cpp - Esc is only even
 	// offered to this window when the UI genuinely wants the keyboard right
 	// now, not e.g. while the emulated ZX keyboard has it with this window
-	// merely sitting open in the background). Goes through Close() rather
-	// than setting m_open directly, matching [x]/Cancel above: discard,
-	// don't CommitToOptions(). RootAndChildWindows so this still fires no
-	// matter which tab/child pane currently has focus, not only the
-	// window's exact root.
+	// merely sitting open in the background). RootAndChildWindows so this
+	// still fires no matter which tab/child pane currently has focus, not
+	// only the window's exact root.
 	if(ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && ImGui::IsKeyPressed(ImGuiKey_Escape))
 	{
 		Close();
@@ -772,10 +769,7 @@ void OptionsDialog::Draw()
 
 	ImGui::BeginChild("##tabcontent", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()));
 	// Dispatches on the enum value m_active_tab already holds directly -
-	// deliberately *not* by matching against a (translated) tab label text,
-	// which is what this used to do via strcmp() before localization: that
-	// broke the instant a tab's label stopped being the literal English
-	// string it was compared against.
+	// deliberately *not* by matching against a (translated) tab label text.
 	switch((EOptionsTab)m_active_tab)
 	{
 	case EOptionsTab::Audio: DrawAudioTab(); break;
