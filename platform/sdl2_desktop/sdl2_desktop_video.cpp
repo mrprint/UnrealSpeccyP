@@ -39,6 +39,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <vector>
 #include "imgui.h"
 #include "imgui_shared.h"
+#include "sdl2_desktop_pacing.h"
+#include "../../devices/sound/device_sound.h"
 #include "../../tools/options.h"
 #include "../../tools/point.h"
 #include "../../devices/video_snapshot.h"
@@ -359,31 +361,28 @@ static struct eOptionWindowDisplay : public xOptions::eOptionString
 
 // --- Fullscreen + real field-rate sync -----------------------------------
 //
-// On real ZX-Spectrum-family hardware the Z80's /INT is tied to the video
-// field rate. sdl2_desktop's own main loop (see Loop()/Loop1() in
-// sdl2_desktop.cpp) already calls Handler()->OnLoop() - which runs exactly
-// one emulated frame, /INT included - exactly once per SDL_GL_SwapWindow()
-// at 1x speed, and that swap already blocks for one real display refresh
-// (SDL_GL_SetSwapInterval(1) below, in InitVideo()). So the only thing
-// actually needed to make the emulated /INT cadence match real hardware
-// while fullscreen is to make sure the *display* is really running at that
-// same field rate then - vsync does the rest, no extra timer/pacing logic
-// required.
+// The emulated machine runs at exactly 50.000 frames per second. A frame is
+// 71680 T-states (speccy.cpp: frame_tacts, Pentagon-style video timing), and
+// the sound engine's tick rate - which is what sets the machine's real-time
+// speed on every platform of this codebase, through audio buffers of
+// 44100*2*2/50 bytes per frame - is 71680 * 50 (devices/sound/device_sound.h,
+// SNDR_DEFAULT_SYSTICK_RATE, commented there as the Z80 clock): 20.000 ms a
+// frame, 882 samples at 44100 Hz. It is NOT 48.828 Hz, which is what 71680
+// T-states come to at the nominal 3.5 MHz that only the floppy code still
+// uses (Z80FQ in devices/fdd/), and not the 50.08 Hz of the 48K Spectrum's
+// 69888-T-state frame either. Measured on real displays: 50.00 emulated
+// frames per second.
 //
-// That field rate is NOT a flat 50Hz: eSpeccy always drives the Z80 with
-// Pentagon-style video timing (speccy.cpp: frame_tacts = 71680, "// pentagon
-// timings" - not switched per loaded ROM/snapshot) at the fixed 3.5MHz Z80
-// clock used throughout this codebase (see Z80FQ in devices/fdd/wd1793.cpp,
-// devices/fdd/fdd.cpp, devices/input/tape.cpp). 3500000/71680 is
-// 48.828125Hz, not 50 - the "50Hz PAL Spectrum" figure people know is
-// specifically the 48K machine's 69888-T-state frame (69888 gives
-// 50.08Hz); Pentagon's 320-line video timing is a well-known deviation from
-// that. EmulatedFieldRateHz() below reads frame_tacts back out of the
-// running Z80 core rather than hardcoding either number, so this keeps
-// tracking reality if that ever changes upstream.
+// How that rate meets the display is the frame scheduler's business
+// (sdl2_desktop_frame_sched.h, used from Loop1()): it locks the machine to the
+// display when that runs at 1x, 2x, 3x ... 50 Hz to within 0.8 %, and
+// otherwise releases frames from a 50.000 Hz clock, spreading the repeats
+// as evenly as the display allows. What this file adds is getting the
+// display into a mode where it can lock: in fullscreen it switches to the
+// mode whose refresh rate is closest to the machine's.
 //
-// Windowed mode is deliberately left alone: it runs at whatever rate the
-// desktop compositor uses (unrelated to what op_full_screen does at all).
+// Windowed mode cannot change the display's mode, so there the scheduler just
+// copes with whatever rate the desktop runs at.
 
 // Whether the display is currently showing a verified exclusive-fullscreen
 // mode picked to match the emulator's real field rate - see
@@ -401,34 +400,48 @@ bool FieldRateSyncActive()
 	return g_field_rate_synced;
 }
 
-// The Z80 clock this codebase assumes everywhere (see the comment above) -
-// not read from anywhere more "canonical" because nothing more canonical
-// exists here: it's a plain duplicated magic number in the .cpp files that
-// need it.
-static const double Z80_CLOCK_HZ = 3500000.0;
-
-// The exact field rate (in Hz) the running emulation core's /INT cadence
-// implies: one Z80 clock tick per T-state, one /INT every FrameTacts()
-// T-states.
-static double EmulatedFieldRateHz()
+// The rate (in Hz) the machine runs at in real time: 50.000 - the sound
+// engine's tick rate over the frame length (see the comment at the top of this
+// section). Read out of the running core, not hardcoded, so it follows if
+// either of them ever changes. The main loop's frame scheduler paces by this.
+double EmulatedFieldRateHz()
 {
-	dword frame_tacts = Handler()->Speccy()->CPU()->FrameTacts();
-	return frame_tacts ? Z80_CLOCK_HZ / frame_tacts : 50.0;
+	const dword frame_tacts = Handler()->Speccy()->CPU()->FrameTacts();
+	return frame_tacts ? (double)SNDR_DEFAULT_SYSTICK_RATE / frame_tacts : 50.0;
+}
+
+// The refresh rate SDL reports for the display the window is on, in whole Hz
+// (59.94 shows up as 59 or 60; a variable-refresh panel reports its maximum);
+// 0 if unknown. Only ever used to bound how fast the main loop may spin when
+// vsync is not pacing it - never as the display's real rate, which the frame
+// scheduler measures.
+int DisplayNominalHz()
+{
+	SDL_Window* w = g_gl_window.window;
+	if(!w)
+		return 0;
+	const int display = SDL_GetWindowDisplayIndex(w);
+	SDL_DisplayMode mode;
+	if(display >= 0 && SDL_GetCurrentDisplayMode(display, &mode) == 0)
+		return mode.refresh_rate;
+	return 0;
 }
 
 // The largest rate deviation still treated as "close enough" to count as a
 // usable sync target, expressed as a fraction of the target rather than a
 // flat Hz number - flat Hz doesn't scale (5Hz is a huge fraction of a slow
-// target, a tiny one of a fast one), and this codebase's whole engine,
-// audio included, runs at whatever rate the display's vsync actually
-// provides (see FieldRateRank()'s comment below) - a mismatch here isn't an
-// abstract number, it's a literal, audible pitch/tempo shift. A semitone
-// (the smallest conventional musical interval, frequency ratio 2^(1/12)) is
-// the standard reference for "the smallest change most people would call a
-// different note": stay under it and the drift reads as maybe-slightly-off;
-// cross it and the audio starts to sound like a different recording. Ratio,
-// not a hardcoded Hz spread, so this keeps making sense if EmulatedFieldRateHz()
-// ever returns something other than Pentagon's ~48.83Hz.
+// target, a tiny one of a fast one).
+//
+// What a mismatch costs is picture, not tempo: the machine's speed does not
+// depend on the display (the frame scheduler releases frames from its own
+// clock, or follows the display by under 1 % when it locks - see
+// sdl2_desktop_frame_sched.h). A display running d Hz away from the machine
+// repeats or drops d frames a second, against 10 a second on a 60 Hz desktop;
+// so this window is how far off a mode may be and still be a clear improvement
+// on the desktop's own rate. A semitone's width (frequency ratio 2^(1/12),
+// +-5.9 %, about +-3 Hz at 50 Hz) keeps that to at most 3 a second. Ratio, not
+// a hardcoded Hz spread, so this keeps making sense if EmulatedFieldRateHz()
+// ever returns something else.
 static double FieldRateToleranceHz(double target)
 {
 	static const double SEMITONE_RATIO = 1.0594630943592953; // 2 ^ (1/12)
@@ -440,20 +453,15 @@ static double FieldRateToleranceHz(double target)
 // rate at or above target always ranks ahead of every rate below it, and
 // within each of those two bands, closer to target is better. A plain
 // fabs(rate - target) would instead just pick whichever side is a hair
-// closer in raw Hz, treating "1Hz low" and "1Hz high" as equally good -
-// they aren't, for what this sync exists for:
-//
-// This codebase runs exactly one emulated frame (Loop() in sdl2_desktop.cpp)
-// per real SDL_GL_SwapWindow() call, vsync'd - there's no software frame-
-// skip/duplicate logic to go wrong, so a *stable* mismatch in either
-// direction just makes the whole emulation (audio included - see
-// FieldRateToleranceHz() above) run uniformly slow or fast in wall-clock
-// time, by however far off-target the chosen rate is - which is why that
-// function bounds how far off "usable" is allowed to mean in the first
-// place. Within that bound, though, the actual reason to prefer high over
-// low is the multicolor/gigascreen effect itself: it's a persistence-of-
-// vision trick (rapidly alternating two colours until the eye blends them),
-// and unlike the CRTs this technique was designed for, modern LCD panels
+// closer in raw Hz, treating "1Hz low" and "1Hz high" as equally good. On
+// cost alone they are: a mismatch in either direction costs the same - a
+// frame repeated per Hz above the machine's rate, a frame dropped per Hz
+// below it (see FieldRateToleranceHz() above), which is why that function
+// bounds how far off "usable" is allowed to mean in the first place. For what
+// this sync exists for, though, they aren't, within that bound: the actual
+// reason to prefer high over low is the multicolor/gigascreen effect itself:
+// it's a persistence-of-vision trick (rapidly alternating two colours until
+// the eye blends them), and unlike the CRTs this technique was designed for, modern LCD panels
 // have no phosphor afterglow of their own to lean on - the blend is carried
 // entirely by how fast the panel itself is actually flickering. A faster
 // alternation only ever helps that illusion; a slower one only ever risks
@@ -480,9 +488,9 @@ static double FieldRateRank(double rate, double target)
 // the emulator at, in two stages:
 //
 // 1. Primary: any of the display's modes whose refresh rate is within
-//    FieldRateToleranceHz() of EmulatedFieldRateHz() (integer-Hz display
-//    modes can't hit a fractional target like 48.828125 exactly, so this is
-//    a window, not an exact match), with the desktop's own aspect ratio (so
+//    FieldRateToleranceHz() of EmulatedFieldRateHz() (display modes are
+//    integer-Hz and a driver may round 49.99 down to 49, so this is a window,
+//    not an exact match), with the desktop's own aspect ratio (so
 //    the picture's shape/letterbox is unchanged) and not larger than the
 //    desktop's current resolution in either dimension. Among those, the
 //    rate FieldRateRank() ranks best wins - i.e. the closest rate that is
@@ -1037,7 +1045,11 @@ void UpdateScreen()
 	// (xImGui::BeginFrame() already ran earlier in Loop1(), right after this
 	// frame's SDL events were fed in and before they were routed - see there)
 
-	SDL_GL_SwapWindow(g_gl_window.window); // the only swap for the whole frame (video + UI)
+	// The only swap for the whole frame (video + UI). The post-SwapWindow
+	// timestamp is the clean signal the frame scheduler needs (see
+	// LastPresentTime()).
+	SDL_GL_SwapWindow(g_gl_window.window);
+	xPacing::OnPresent(xPacing::NowSeconds());
 }
 
 }//namespace xPlatform

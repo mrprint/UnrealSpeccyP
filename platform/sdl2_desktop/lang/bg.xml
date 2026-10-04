@@ -40,8 +40,6 @@
 	<string id="tip.menu.device.tape_fast">Възпроизвежда лентата с висока скорост</string>
 	<string id="menu.device.pause">Пауза</string>
 	<string id="tip.menu.device.pause">Пауза или възобновяване на емулацията</string>
-	<string id="menu.device.true_speed">Реална скорост</string>
-	<string id="tip.menu.device.true_speed">Изпълнява Z80 на реалната му тактова честота вместо честотата на опресняване на дисплея</string>
 	<string id="menu.device.mode_48k">Режим 48k</string>
 	<string id="tip.menu.device.mode_48k">Принудително включва режим 48k (48 КБ RAM)</string>
 	<string id="menu.device.reset_to_service_rom">Сервизен ROM</string>
@@ -76,8 +74,6 @@
 	<string id="status.tape.started">Лентата е стартирана</string>
 	<string id="status.tape.stopped">Лентата е спряна</string>
 	<string id="status.tape.not_inserted">Лентата не е поставена</string>
-	<string id="status.true_speed.on">Реална скорост (50Hz) включена</string>
-	<string id="status.true_speed.off">Реална скорост изключена</string>
 	<string id="status.mode_48k.on">Режим 48k включен</string>
 	<string id="status.mode_48k.off">Режим 48k изключен</string>
 	<string id="status.pause.paused">Пауза...</string>

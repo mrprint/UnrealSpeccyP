@@ -40,8 +40,6 @@
 	<string id="tip.menu.device.tape_fast">Esita linti suurel kiirusel</string>
 	<string id="menu.device.pause">Paus</string>
 	<string id="tip.menu.device.pause">Peata või jätka emulatsiooni</string>
-	<string id="menu.device.true_speed">Tegelik kiirus</string>
-	<string id="tip.menu.device.true_speed">Käivitab Z80 tegelikul taktsagedusel, mitte ekraani värskendussagedusel</string>
 	<string id="menu.device.mode_48k">48k režiim</string>
 	<string id="tip.menu.device.mode_48k">Sunnib peale 48k režiimi (48 KB RAM)</string>
 	<string id="menu.device.reset_to_service_rom">Hoolde-ROM</string>
@@ -76,8 +74,6 @@
 	<string id="status.tape.started">Lint käivitatud</string>
 	<string id="status.tape.stopped">Lint peatatud</string>
 	<string id="status.tape.not_inserted">Lint puudub</string>
-	<string id="status.true_speed.on">Tegelik kiirus (50 Hz) sees</string>
-	<string id="status.true_speed.off">Tegelik kiirus väljas</string>
 	<string id="status.mode_48k.on">48k režiim sees</string>
 	<string id="status.mode_48k.off">48k režiim väljas</string>
 	<string id="status.pause.paused">Peatatud...</string>

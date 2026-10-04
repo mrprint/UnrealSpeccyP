@@ -40,8 +40,6 @@
 	<string id="tip.menu.device.tape_fast">Odtwarzaj taśmę z dużą prędkością</string>
 	<string id="menu.device.pause">Pauza</string>
 	<string id="tip.menu.device.pause">Wstrzymaj lub wznów emulację</string>
-	<string id="menu.device.true_speed">Rzeczywista prędkość</string>
-	<string id="tip.menu.device.true_speed">Uruchamia Z80 z jego rzeczywistą częstotliwością zegara zamiast częstotliwości odświeżania ekranu</string>
 	<string id="menu.device.mode_48k">Tryb 48k</string>
 	<string id="tip.menu.device.mode_48k">Wymusza tryb 48k (48 KB RAM)</string>
 	<string id="menu.device.reset_to_service_rom">ROM serwisowy</string>
@@ -76,8 +74,6 @@
 	<string id="status.tape.started">Taśma uruchomiona</string>
 	<string id="status.tape.stopped">Taśma zatrzymana</string>
 	<string id="status.tape.not_inserted">Taśma nie włożona</string>
-	<string id="status.true_speed.on">Rzeczywista prędkość (50Hz) włączona</string>
-	<string id="status.true_speed.off">Rzeczywista prędkość wyłączona</string>
 	<string id="status.mode_48k.on">Tryb 48k włączony</string>
 	<string id="status.mode_48k.off">Tryb 48k wyłączony</string>
 	<string id="status.pause.paused">Pauza...</string>

@@ -40,8 +40,6 @@
 	<string id="tip.menu.device.tape_fast">Přehrát pásku vysokou rychlostí</string>
 	<string id="menu.device.pause">Pauza</string>
 	<string id="tip.menu.device.pause">Pozastavit nebo obnovit emulaci</string>
-	<string id="menu.device.true_speed">Skutečná rychlost</string>
-	<string id="tip.menu.device.true_speed">Spouští Z80 na jeho skutečné taktovací frekvenci místo obnovovací frekvence displeje</string>
 	<string id="menu.device.mode_48k">Režim 48k</string>
 	<string id="tip.menu.device.mode_48k">Vynutit režim 48k (48 KB RAM)</string>
 	<string id="menu.device.reset_to_service_rom">Servisní ROM</string>
@@ -76,8 +74,6 @@
 	<string id="status.tape.started">Páska spuštěna</string>
 	<string id="status.tape.stopped">Páska zastavena</string>
 	<string id="status.tape.not_inserted">Páska není vložena</string>
-	<string id="status.true_speed.on">Skutečná rychlost (50Hz) zapnuta</string>
-	<string id="status.true_speed.off">Skutečná rychlost vypnuta</string>
 	<string id="status.mode_48k.on">Režim 48k zapnut</string>
 	<string id="status.mode_48k.off">Režim 48k vypnut</string>
 	<string id="status.pause.paused">Pauza...</string>

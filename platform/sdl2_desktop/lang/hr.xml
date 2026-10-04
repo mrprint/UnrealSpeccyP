@@ -40,8 +40,6 @@
 	<string id="tip.menu.device.tape_fast">Reproduciraj traku velikom brzinom</string>
 	<string id="menu.device.pause">Pauza</string>
 	<string id="tip.menu.device.pause">Pauziraj ili nastavi emulaciju</string>
-	<string id="menu.device.true_speed">Stvarna brzina</string>
-	<string id="tip.menu.device.true_speed">Pokreće Z80 na njegovoj stvarnoj frekvenciji takta umjesto frekvencije osvježavanja zaslona</string>
 	<string id="menu.device.mode_48k">Način 48k</string>
 	<string id="tip.menu.device.mode_48k">Prisiljava način 48k (48 KB RAM-a)</string>
 	<string id="menu.device.reset_to_service_rom">Servisni ROM</string>
@@ -76,8 +74,6 @@
 	<string id="status.tape.started">Traka pokrenuta</string>
 	<string id="status.tape.stopped">Traka zaustavljena</string>
 	<string id="status.tape.not_inserted">Traka nije umetnuta</string>
-	<string id="status.true_speed.on">Stvarna brzina (50Hz) uključena</string>
-	<string id="status.true_speed.off">Stvarna brzina isključena</string>
 	<string id="status.mode_48k.on">Način 48k uključen</string>
 	<string id="status.mode_48k.off">Način 48k isključen</string>
 	<string id="status.pause.paused">Pauza...</string>

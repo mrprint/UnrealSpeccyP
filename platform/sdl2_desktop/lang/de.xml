@@ -40,8 +40,6 @@
 	<string id="tip.menu.device.tape_fast">Spielt das Band mit hoher Geschwindigkeit ab</string>
 	<string id="menu.device.pause">Pause</string>
 	<string id="tip.menu.device.pause">Emulation anhalten oder fortsetzen</string>
-	<string id="menu.device.true_speed">Echte Geschwindigkeit</string>
-	<string id="tip.menu.device.true_speed">Lässt die Z80 mit ihrer tatsächlichen Taktfrequenz statt der Bildwiederholrate laufen</string>
 	<string id="menu.device.mode_48k">48k-Modus</string>
 	<string id="tip.menu.device.mode_48k">Erzwingt den 48k-Modus (48 KB RAM)</string>
 	<string id="menu.device.reset_to_service_rom">Service-ROM</string>
@@ -76,8 +74,6 @@
 	<string id="status.tape.started">Band gestartet</string>
 	<string id="status.tape.stopped">Band gestoppt</string>
 	<string id="status.tape.not_inserted">Kein Band eingelegt</string>
-	<string id="status.true_speed.on">Echte Geschwindigkeit (50Hz) aktiviert</string>
-	<string id="status.true_speed.off">Echte Geschwindigkeit deaktiviert</string>
 	<string id="status.mode_48k.on">48k-Modus aktiviert</string>
 	<string id="status.mode_48k.off">48k-Modus deaktiviert</string>
 	<string id="status.pause.paused">Pause...</string>

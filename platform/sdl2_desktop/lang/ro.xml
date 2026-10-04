@@ -40,8 +40,6 @@
 	<string id="tip.menu.device.tape_fast">Redă banda la viteză mare</string>
 	<string id="menu.device.pause">Pauză</string>
 	<string id="tip.menu.device.pause">Pune pauză sau reia emularea</string>
-	<string id="menu.device.true_speed">Viteză reală</string>
-	<string id="tip.menu.device.true_speed">Rulează Z80 la frecvența sa reală de tact în locul frecvenței de reîmprospătare a ecranului</string>
 	<string id="menu.device.mode_48k">Mod 48k</string>
 	<string id="tip.menu.device.mode_48k">Forțează modul 48k (48 KB RAM)</string>
 	<string id="menu.device.reset_to_service_rom">ROM de service</string>
@@ -76,8 +74,6 @@
 	<string id="status.tape.started">Bandă pornită</string>
 	<string id="status.tape.stopped">Bandă oprită</string>
 	<string id="status.tape.not_inserted">Banda nu este introdusă</string>
-	<string id="status.true_speed.on">Viteză reală (50Hz) activată</string>
-	<string id="status.true_speed.off">Viteză reală dezactivată</string>
 	<string id="status.mode_48k.on">Mod 48k activat</string>
 	<string id="status.mode_48k.off">Mod 48k dezactivat</string>
 	<string id="status.pause.paused">Pauză...</string>

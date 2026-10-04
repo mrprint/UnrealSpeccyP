@@ -155,9 +155,9 @@ static byte TranslateKey(SDL_Keycode _key, dword& _flags)
 // the physical key (scancode), not by SDL_Keycode: the matching key-up must
 // undo exactly that, no matter what the modifiers, the layout or the selected
 // joystick type (OpJoyKeyFlags()) look like by the time the key comes up.
-// Re-deriving the ZX key from the key-up event itself (what this file used to
-// do) can release a different ZX key than the one that was pressed, and - the
-// bigger problem - it relies on the key-up being delivered at all.
+// Re-deriving the ZX key from the key-up event itself can release a different
+// ZX key than the one that was pressed, and - the bigger problem - it relies
+// on the key-up being delivered at all.
 // An emulated key that is never released is auto-repeated by the Spectrum ROM
 // with a click on every repeat: an endless row of key clicks.
 struct PressedKey

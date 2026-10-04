@@ -41,6 +41,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <SDL.h>
 #include <vector>
 #include "imgui_shared.h"
+#include "sdl2_desktop_frame_sched.h"
+#include "sdl2_desktop_pacing.h"
 #include "sdl2_desktop_gamepad.h"
 #include "../../options_common.h"
 #include "../../tools/options.h"
@@ -132,6 +134,8 @@ void DoneVideo();
 void DoneAudio();
 void UpdateAudio();
 void UpdateScreen();
+double EmulatedFieldRateHz(); // sdl2_desktop_video.cpp: 50.000
+int DisplayNominalHz();       // sdl2_desktop_video.cpp
 void ProcessKey(SDL_Event& e);
 void ReleaseAllKeys(); // sdl2_desktop_keys.cpp
 
@@ -298,6 +302,10 @@ void Done()
 }
 
 static bool quit = false;
+
+// Decides, once per presented frame, how many emulated frames to run: see
+// sdl2_desktop_frame_sched.h.
+static xPacing::FrameScheduler frame_sched;
 
 #ifdef SDL_USE_JOYSTICK
 static JoystickMapper joystick_mapper;
@@ -539,37 +547,69 @@ void Loop1()
 	}
 #endif//SDL_USE_JOYSTICK
 
-	Handler()->OnLoop();
+	// How many emulated frames this present gets. At a display running at the
+	// machine's rate (or a multiple of it) that is exactly one every N presents;
+	// on any other display a clock releases them, 1 1 1 1 2 on a 60 Hz one. Fast
+	// forward and fast tape loading are exempt: one frame per present, as ever.
+	{
+		const bool bypass = OpSpeed() > 0 || Handler()->FullSpeed();
+		// The clean signal for the scheduler is the wall-clock time of the
+		// previous present (right after SDL_GL_SwapWindow() returned), stored
+		// by OnPresent(). Using it - rather than NowSeconds() here, which is
+		// polluted by event handling, ImGui setup and audio lock - lets the
+		// scheduler measure the display's real refresh rate and lock to it.
+		const double now = xPacing::LastPresentTime();
+		int steps = frame_sched.Steps(now, bypass);
+		// The audio mixer ran empty (a pause, a stall, the end of a tape load):
+		// one frame more per present until its cushion is back, instead of seconds
+		// of dropouts while the controller slowly rebuilds it.
+		const bool refill = !bypass && xPacing::AudioRefillWanted();
+		if(refill && steps < xPacing::FrameScheduler::kMaxSteps)
+			++steps;
+		const int frame_before = Handler()->VideoFrame();
+		for(int i = 0; i < steps; ++i)
+			Handler()->OnLoop();
+		if(refill && Handler()->VideoFrame() != frame_before) // frames really were emulated
+			xPacing::AudioRefillDone();
+	}
 	UpdateScreen(); // DrawGL() + xImGui::EndFrame() (draws the menu/About/toast + Render) + SwapWindow
 	UpdateAudio();
 }
 
 void Loop()
 {
-	// At 1x speed (OpSpeed() == 0) this calls Handler()->OnLoop() - one
-	// emulated frame, one Z80 /INT - exactly once per iteration, and Loop1()
-	// below blocks on SDL_GL_SwapWindow() (vsync'd - SDL_GL_SetSwapInterval(1)
-	// in sdl2_desktop_video.cpp's InitVideo()) once per iteration too. So the
-	// real-time cadence of the emulated /INT already just follows whatever
-	// rate the display is actually running at, and it only requires the
-	// display itself to really be running close to the emulation core's own
-	// field rate (fixed Pentagon timing in this codebase, ~48.83Hz - see the
-	// comment above EmulatedFieldRateHz() in sdl2_desktop_video.cpp). The
-	// SDL_Delay loop below is an independent safety net for when vsync alone
-	// doesn't pace things (e.g. a driver that ignores the swap interval): its
-	// 15ms floor caps the loop at ~66fps and stays a no-op under any vsync
-	// rate at or below that (a 48.83Hz field is ~20.5ms), so it doesn't fight
-	// that case either way.
+	// The machine runs at exactly 50.000 frames per second (see the comment
+	// above EmulatedFieldRateHz() in sdl2_desktop_video.cpp). How many emulated
+	// frames each iteration gets is decided in Loop1() by frame_sched, from the
+	// real time between iterations, and audio follows the machine, not the
+	// other way round (platform/sdl2/sdl2_audio.cpp).
+	//
+	// Iterations are meant to be paced by vsync: SDL_GL_SwapWindow() in Loop1()
+	// blocks for one display refresh (SDL_GL_SetSwapInterval(1) in
+	// sdl2_desktop_video.cpp's InitVideo()). The wait below is only a safety net
+	// for when it doesn't (a driver that ignores the swap interval, a minimized
+	// window): it stops the loop from spinning faster than 1/0.9 of the
+	// display's nominal rate.
 	eTick last_tick;
 	last_tick.SetCurrent();
+	int floor_ms = 15;
+	int iteration = 0;
+	frame_sched.SetMachineHz(EmulatedFieldRateHz());
 	while(!quit)
 	{
 		for(int i = OpSpeed(); --i >= 0;)
 			Handler()->OnLoop();
 		Loop1();
-		while(last_tick.Passed().Ms() < 15)
+		if((iteration++ & 63) == 0)
 		{
-			SDL_Delay(3);
+			const int hz = DisplayNominalHz();
+			floor_ms = (hz > 0) ? (int)(900.0 / hz) : 15;
+			if(floor_ms < 3) floor_ms = 3;
+			if(floor_ms > 15) floor_ms = 15;
+		}
+		while(last_tick.Passed().Ms() < floor_ms)
+		{
+			SDL_Delay(1);
 		}
 		last_tick.SetCurrent();
 		if(OpQuit())

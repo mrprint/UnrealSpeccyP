@@ -40,8 +40,6 @@
 	<string id="tip.menu.device.tape_fast">Groti juostą dideliu greičiu</string>
 	<string id="menu.device.pause">Pauzė</string>
 	<string id="tip.menu.device.pause">Pristabdyti arba tęsti emuliaciją</string>
-	<string id="menu.device.true_speed">Tikras greitis</string>
-	<string id="tip.menu.device.true_speed">Paleidžia Z80 jo realiu takto dažniu vietoje ekrano atnaujinimo dažnio</string>
 	<string id="menu.device.mode_48k">48k režimas</string>
 	<string id="tip.menu.device.mode_48k">Priverstinai įjungia 48k režimą (48 KB RAM)</string>
 	<string id="menu.device.reset_to_service_rom">Tarnybinis ROM</string>
@@ -76,8 +74,6 @@
 	<string id="status.tape.started">Juosta paleista</string>
 	<string id="status.tape.stopped">Juosta sustabdyta</string>
 	<string id="status.tape.not_inserted">Juosta neįdėta</string>
-	<string id="status.true_speed.on">Tikras greitis (50 Hz) įjungtas</string>
-	<string id="status.true_speed.off">Tikras greitis išjungtas</string>
 	<string id="status.mode_48k.on">48k režimas įjungtas</string>
 	<string id="status.mode_48k.off">48k režimas išjungtas</string>
 	<string id="status.pause.paused">Pristabdyta...</string>

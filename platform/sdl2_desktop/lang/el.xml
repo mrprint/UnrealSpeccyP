@@ -40,8 +40,6 @@
 	<string id="tip.menu.device.tape_fast">Αναπαραγωγή της ταινίας σε υψηλή ταχύτητα</string>
 	<string id="menu.device.pause">Παύση</string>
 	<string id="tip.menu.device.pause">Παύση ή συνέχιση της προσομοίωσης</string>
-	<string id="menu.device.true_speed">Πραγματική ταχύτητα</string>
-	<string id="tip.menu.device.true_speed">Εκτελεί τον Z80 στην πραγματική συχνότητα ρολογιού του αντί για τον ρυθμό ανανέωσης της οθόνης</string>
 	<string id="menu.device.mode_48k">Λειτουργία 48k</string>
 	<string id="tip.menu.device.mode_48k">Εξαναγκάζει τη λειτουργία 48k (48KB RAM)</string>
 	<string id="menu.device.reset_to_service_rom">Service ROM</string>
@@ -76,8 +74,6 @@
 	<string id="status.tape.started">Η ταινία ξεκίνησε</string>
 	<string id="status.tape.stopped">Η ταινία σταμάτησε</string>
 	<string id="status.tape.not_inserted">Δεν έχει τοποθετηθεί ταινία</string>
-	<string id="status.true_speed.on">Πραγματική ταχύτητα (50Hz) ενεργή</string>
-	<string id="status.true_speed.off">Πραγματική ταχύτητα ανενεργή</string>
 	<string id="status.mode_48k.on">Λειτουργία 48k ενεργή</string>
 	<string id="status.mode_48k.off">Λειτουργία 48k ανενεργή</string>
 	<string id="status.pause.paused">Παύση...</string>

@@ -40,8 +40,6 @@
 	<string id="tip.menu.device.tape_fast">Відтворювати стрічку на високій швидкості</string>
 	<string id="menu.device.pause">Пауза</string>
 	<string id="tip.menu.device.pause">Призупинити або відновити емуляцію</string>
-	<string id="menu.device.true_speed">Реальна швидкість</string>
-	<string id="tip.menu.device.true_speed">Запускає Z80 на його реальній тактовій частоті замість частоти оновлення екрана</string>
 	<string id="menu.device.mode_48k">Режим 48k</string>
 	<string id="tip.menu.device.mode_48k">Примусово вмикає режим 48k (48 КБ ОЗП)</string>
 	<string id="menu.device.reset_to_service_rom">Сервісна ПЗП</string>
@@ -76,8 +74,6 @@
 	<string id="status.tape.started">Стрічку запущено</string>
 	<string id="status.tape.stopped">Стрічку зупинено</string>
 	<string id="status.tape.not_inserted">Стрічку не вставлено</string>
-	<string id="status.true_speed.on">Реальна швидкість (50Hz) увімкнена</string>
-	<string id="status.true_speed.off">Реальна швидкість вимкнена</string>
 	<string id="status.mode_48k.on">Режим 48k увімкнено</string>
 	<string id="status.mode_48k.off">Режим 48k вимкнено</string>
 	<string id="status.pause.paused">Пауза...</string>

@@ -48,8 +48,6 @@
 	<string id="tip.menu.device.tape_fast">Воспроизводить ленту на высокой скорости</string>
 	<string id="menu.device.pause">Пауза</string>
 	<string id="tip.menu.device.pause">Приостановить или возобновить эмуляцию</string>
-	<string id="menu.device.true_speed">Реальная скорость</string>
-	<string id="tip.menu.device.true_speed">Запускать Z80 на его реальной тактовой частоте вместо частоты обновления экрана</string>
 	<string id="menu.device.mode_48k">Режим 48k</string>
 	<string id="tip.menu.device.mode_48k">Принудительно включить режим 48k (48 КБ ОЗУ)</string>
 	<string id="menu.device.reset_to_service_rom">Сервисное ПЗУ</string>
@@ -90,8 +88,6 @@
 	<string id="status.tape.started">Лента запущена</string>
 	<string id="status.tape.stopped">Лента остановлена</string>
 	<string id="status.tape.not_inserted">Лента не вставлена</string>
-	<string id="status.true_speed.on">Реальная скорость (50Hz) включена</string>
-	<string id="status.true_speed.off">Реальная скорость выключена</string>
 	<string id="status.mode_48k.on">Режим 48k включён</string>
 	<string id="status.mode_48k.off">Режим 48k выключен</string>
 	<string id="status.pause.paused">Пауза...</string>

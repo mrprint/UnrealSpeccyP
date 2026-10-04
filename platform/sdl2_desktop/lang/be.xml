@@ -40,8 +40,6 @@
 	<string id="tip.menu.device.tape_fast">Прайграваць стужку на высокай хуткасці</string>
 	<string id="menu.device.pause">Паўза</string>
 	<string id="tip.menu.device.pause">Прыпыніць або аднавіць эмуляцыю</string>
-	<string id="menu.device.true_speed">Рэальная хуткасць</string>
-	<string id="tip.menu.device.true_speed">Запускаць Z80 на яго рэальнай тактавай частаце замест частаты абнаўлення экрана</string>
 	<string id="menu.device.mode_48k">Рэжым 48k</string>
 	<string id="tip.menu.device.mode_48k">Прымусова ўключыць рэжым 48k (48 КБ RAM)</string>
 	<string id="menu.device.reset_to_service_rom">Сэрвіснае ПЗП</string>
@@ -76,8 +74,6 @@
 	<string id="status.tape.started">Стужка запушчана</string>
 	<string id="status.tape.stopped">Стужка спынена</string>
 	<string id="status.tape.not_inserted">Стужка не ўстаўлена</string>
-	<string id="status.true_speed.on">Рэальная хуткасць (50Гц) уключана</string>
-	<string id="status.true_speed.off">Рэальная хуткасць выключана</string>
 	<string id="status.mode_48k.on">Рэжым 48k уключаны</string>
 	<string id="status.mode_48k.off">Рэжым 48k выключаны</string>
 	<string id="status.pause.paused">Паўза...</string>

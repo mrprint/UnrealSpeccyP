@@ -216,7 +216,6 @@ bool HandleMenuShortcut(SDL_Event& e)
 		case SDLK_F6:  if(down && g_quick_save_enabled) OnQuickSave(); return true;
 		case SDLK_F5:  if(down) OnTapeToggle();               return true;
 		case SDLK_F7:  if(down) OnPauseToggle();              return true;
-		case SDLK_F8:  if(down) ToggleBoolOption("true speed", Tr("status.true_speed.on"), Tr("status.true_speed.off")); return true;
 		case SDLK_F9:  if(down) ToggleBoolOption("mode 48k", Tr("status.mode_48k.on"), Tr("status.mode_48k.off")); return true;
 		// F11 is the full screen key that never touches the Spectrum. Ctrl+F
 		// (below) does the same, but Ctrl is also the joystick fire key and goes
@@ -479,15 +478,6 @@ void DrawMenuBar()
 				if(ImGui::MenuItem(Tr("menu.device.pause"), "F7", *op))
 					OnPauseToggle();
 				ItemTooltip("tip.menu.device.pause");
-			}
-		}
-		{
-			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("true speed");
-			if(op)
-			{
-				if(ImGui::MenuItem(Tr("menu.device.true_speed"), "F8", *op))
-					ToggleBoolOption("true speed", Tr("status.true_speed.on"), Tr("status.true_speed.off"));
-				ItemTooltip("tip.menu.device.true_speed");
 			}
 		}
 		{

@@ -40,8 +40,6 @@
 	<string id="tip.menu.device.tape_fast">Reproduzir a fita a alta velocidade</string>
 	<string id="menu.device.pause">Pausa</string>
 	<string id="tip.menu.device.pause">Pausar ou retomar a emulação</string>
-	<string id="menu.device.true_speed">Velocidade real</string>
-	<string id="tip.menu.device.true_speed">Executa o Z80 à sua frequência de relógio real em vez da taxa de atualização do ecrã</string>
 	<string id="menu.device.mode_48k">Modo 48k</string>
 	<string id="tip.menu.device.mode_48k">Força o modo 48k (48 KB de RAM)</string>
 	<string id="menu.device.reset_to_service_rom">ROM de serviço</string>
@@ -76,8 +74,6 @@
 	<string id="status.tape.started">Fita iniciada</string>
 	<string id="status.tape.stopped">Fita parada</string>
 	<string id="status.tape.not_inserted">Fita não inserida</string>
-	<string id="status.true_speed.on">Velocidade real (50Hz) ativada</string>
-	<string id="status.true_speed.off">Velocidade real desativada</string>
 	<string id="status.mode_48k.on">Modo 48k ativado</string>
 	<string id="status.mode_48k.off">Modo 48k desativado</string>
 	<string id="status.pause.paused">Pausa...</string>

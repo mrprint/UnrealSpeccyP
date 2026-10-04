@@ -40,8 +40,6 @@
 	<string id="tip.menu.device.tape_fast">Atskaņot lenti lielā ātrumā</string>
 	<string id="menu.device.pause">Pauze</string>
 	<string id="tip.menu.device.pause">Pauzēt vai atsākt emulāciju</string>
-	<string id="menu.device.true_speed">Reālais ātrums</string>
-	<string id="tip.menu.device.true_speed">Darbina Z80 tā reālajā takts frekvencē, nevis ekrāna atsvaidzes frekvencē</string>
 	<string id="menu.device.mode_48k">48k režīms</string>
 	<string id="tip.menu.device.mode_48k">Piespiedu kārtā ieslēdz 48k režīmu (48 KB RAM)</string>
 	<string id="menu.device.reset_to_service_rom">Servisa ROM</string>
@@ -76,8 +74,6 @@
 	<string id="status.tape.started">Lente palaista</string>
 	<string id="status.tape.stopped">Lente apturēta</string>
 	<string id="status.tape.not_inserted">Lente nav ievietota</string>
-	<string id="status.true_speed.on">Reālais ātrums (50Hz) ieslēgts</string>
-	<string id="status.true_speed.off">Reālais ātrums izslēgts</string>
 	<string id="status.mode_48k.on">48k režīms ieslēgts</string>
 	<string id="status.mode_48k.off">48k režīms izslēgts</string>
 	<string id="status.pause.paused">Pauzēts...</string>

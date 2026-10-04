@@ -40,8 +40,6 @@
 	<string id="tip.menu.device.tape_fast">Reproducir la cinta a alta velocidad</string>
 	<string id="menu.device.pause">Pausa</string>
 	<string id="tip.menu.device.pause">Pausar o reanudar la emulación</string>
-	<string id="menu.device.true_speed">Velocidad real</string>
-	<string id="tip.menu.device.true_speed">Ejecuta el Z80 a su frecuencia de reloj real en lugar de la frecuencia de refresco de la pantalla</string>
 	<string id="menu.device.mode_48k">Modo 48k</string>
 	<string id="tip.menu.device.mode_48k">Fuerza el modo 48k (48 KB de RAM)</string>
 	<string id="menu.device.reset_to_service_rom">ROM de servicio</string>
@@ -76,8 +74,6 @@
 	<string id="status.tape.started">Cinta iniciada</string>
 	<string id="status.tape.stopped">Cinta detenida</string>
 	<string id="status.tape.not_inserted">Cinta no insertada</string>
-	<string id="status.true_speed.on">Velocidad real (50Hz) activada</string>
-	<string id="status.true_speed.off">Velocidad real desactivada</string>
 	<string id="status.mode_48k.on">Modo 48k activado</string>
 	<string id="status.mode_48k.off">Modo 48k desactivado</string>
 	<string id="status.pause.paused">Pausa...</string>

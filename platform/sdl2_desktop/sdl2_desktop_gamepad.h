@@ -256,16 +256,14 @@ EHostSourceType StringToSourceType(const std::string& str);
 const char* SourceTypeDisplayString(EHostSourceType type);
 
 // A device key is the GUID for the first attached device with that GUID and
-// "<GUID>#<n>" for the n-th (n >= 2), so keys saved before ordinals existed
-// keep meaning what they did. SplitDeviceKey() is the inverse and rejects
-// anything MakeDeviceKey() could not have produced.
+// "<GUID>#<n>" for the n-th (n >= 2). SplitDeviceKey() is the inverse and
+// rejects anything MakeDeviceKey() could not have produced.
 std::string MakeDeviceKey(const std::string& guid, int ordinal);
 bool SplitDeviceKey(const std::string& key, std::string* guid, int* ordinal);
 
 // The key a player's profile should use: the profile's own if it has one.
-// Only a profile with no key yet (a config written when players were bound to
-// a device *index*, see OpHostGamepadDevice()) falls back to the key of
-// whatever device sits at legacy_device_index now.
+// Only a profile with no key yet falls back to the key of whatever device
+// sits at legacy_device_index (see OpHostGamepadDevice()).
 std::string ResolveProfileKey(const std::string& key, int legacy_device_index);
 
 } // namespace xPlatform
