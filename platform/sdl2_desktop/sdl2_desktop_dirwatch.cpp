@@ -196,7 +196,14 @@ bool DirWatcher::PollChanged()
     // Must re-arm after every signalled wait, or this handle would never
     // signal again - unlike inotify/kqueue, it's edge-triggered exactly
     // once until explicitly told to watch for the next change.
-    FindNextChangeNotification((HANDLE)m_change_handle);
+    //
+    // If re-arming fails the handle stays signalled forever, so every later
+    // poll would report a "change" and the browser would re-list the folder
+    // every single frame. Drop the watch instead (this one change is still
+    // reported; the listing just stops auto-refreshing until the next
+    // Watch()).
+    if (!FindNextChangeNotification((HANDLE)m_change_handle))
+        Reset();
     return true;
 }
 

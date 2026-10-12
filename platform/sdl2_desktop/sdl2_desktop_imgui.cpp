@@ -429,14 +429,20 @@ void ImGuiBackend::BeginFrame()
 		dpi_scale = 1.0f;
 	bool dpi_changed = std::abs(dpi_scale - m_font_baked_scale) > 0.05f;
 
-	// DetectSystemTheme() shells out on Linux (gsettings) and hits the
-	// registry/CFPreferences on Windows/macOS - cheap individually, but not
-	// something to redo every single frame at 60+ fps for no reason. Once a
-	// second is frequent enough that a live OS theme switch while the
-	// emulator is running feels immediate, without measurable overhead.
+	// DetectSystemTheme() hits the registry/CFPreferences on Windows/macOS -
+	// effectively free, so once a second is frequent enough that a live OS
+	// theme switch while the emulator is running feels immediate. On Linux it
+	// instead forks a shell + gsettings and *waits* for it, right here on the
+	// render thread - a few milliseconds that can show up as a hitch in the
+	// frame pacing, so poll that one far less often.
+#ifdef _LINUX
+	const Uint32 kThemePollMs = 5000;
+#else
+	const Uint32 kThemePollMs = 1000;
+#endif
 	Uint32 now = SDL_GetTicks();
 	bool theme_changed = false;
-	if(now - m_last_theme_check_ms >= 1000)
+	if(now - m_last_theme_check_ms >= kThemePollMs)
 	{
 		m_last_theme_check_ms = now;
 		eSystemTheme detected = DetectSystemTheme();
