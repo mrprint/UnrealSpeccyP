@@ -116,12 +116,12 @@ struct JoystickProfile {
 class WxGamepadBackend {
 public:
     struct DeviceInfo {
-        int index; // SDL enumeration order: for display and change detection only, never an identity
+        int index = -1; // SDL enumeration order: for display and change detection only, never an identity
         std::string name;
         std::string guid;
-        int ordinal;     // 1-based position among the attached devices sharing this guid
+        int ordinal = 0;     // 1-based position among the attached devices sharing this guid
         std::string key; // what a profile stores: MakeDeviceKey(guid, ordinal)
-        bool is_gamepad;
+        bool is_gamepad = false;
     };
 
     void Initialize();

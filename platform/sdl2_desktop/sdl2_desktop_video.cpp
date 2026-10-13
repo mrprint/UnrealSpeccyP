@@ -1035,8 +1035,10 @@ void UpdateScreen()
 	// layout-change tracking.
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	// Single-threaded, so the snapshot needs no mutex/atomics.
-	VideoSnapshot snap;
+	// Single-threaded, so the snapshot needs no mutex/atomics. A VideoSnapshot
+	// is ~76 KiB and UpdateScreen() runs every frame, so keep it out of the
+	// stack frame (MSVC C6262): a static buffer, rewritten in full each call.
+	static VideoSnapshot snap;
 	snap.frame = Handler()->VideoFrame();
 	memcpy(snap.video, Handler()->VideoData(), sizeof(snap.video));
 
