@@ -132,6 +132,11 @@
 	<string id="tip.options.video.pal_strength">Intenzivnost barvnih učinkov PAL, 0-100 %</string>
 	<string id="options.video.beam_spread">Razpršitev žarka</string>
 	<string id="tip.options.video.beam_spread">Vodoravno razpršenje CRT žarka (zamegljenost), 0-200 %</string>
+	<string id="options.video.ui_theme">Tema vmesnika</string>
+	<string id="options.video.ui_theme.auto">Samodejno</string>
+	<string id="options.video.ui_theme.light">Svetla</string>
+	<string id="options.video.ui_theme.dark">Temna</string>
+	<string id="tip.options.video.ui_theme">Barvna shema menijev in pogovornih oken. Pri možnosti Samodejno se upošteva svetla ali temna nastavitev sistema.</string>
 	<string id="options.video.restore_defaults">Obnovi privzete nastavitve</string>
 	<string id="tip.options.video.restore_defaults">Obnovi video možnosti na privzete vrednosti</string>
 	<string id="options.input.joystick_type">Vrsta igralne palice</string>

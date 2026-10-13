@@ -149,6 +149,11 @@
 	<string id="tip.options.video.pal_strength">Интенсивность цветовых эффектов PAL, 0-100%</string>
 	<string id="options.video.beam_spread">Разброс луча</string>
 	<string id="tip.options.video.beam_spread">Горизонтальное рассеивание луча ЭЛТ (размытие), 0-200%</string>
+	<string id="options.video.ui_theme">Тема интерфейса</string>
+	<string id="options.video.ui_theme.auto">Авто</string>
+	<string id="options.video.ui_theme.light">Светлая</string>
+	<string id="options.video.ui_theme.dark">Тёмная</string>
+	<string id="tip.options.video.ui_theme">Цветовая схема меню и диалогов. В режиме Авто используется светлая или тёмная тема системы.</string>
 	<string id="options.video.restore_defaults">Сбросить настройки</string>
 	<string id="tip.options.video.restore_defaults">Сбросить настройки видео к значениям по умолчанию</string>
 

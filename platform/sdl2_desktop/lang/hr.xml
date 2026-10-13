@@ -132,6 +132,11 @@
 	<string id="tip.options.video.pal_strength">Intenzitet PAL efekata boje, 0-100%</string>
 	<string id="options.video.beam_spread">Raspršenje snopa</string>
 	<string id="tip.options.video.beam_spread">Vodoravno rasipanje CRT snopa (zamućenje), 0-200%</string>
+	<string id="options.video.ui_theme">Tema sučelja</string>
+	<string id="options.video.ui_theme.auto">Automatski</string>
+	<string id="options.video.ui_theme.light">Svijetla</string>
+	<string id="options.video.ui_theme.dark">Tamna</string>
+	<string id="tip.options.video.ui_theme">Shema boja izbornika i dijaloga. Kod opcije Automatski prati se svijetla ili tamna postavka sustava.</string>
 	<string id="options.video.restore_defaults">Vrati zadane postavke</string>
 	<string id="tip.options.video.restore_defaults">Vraća video postavke na zadane vrijednosti</string>
 	<string id="options.input.joystick_type">Vrsta joysticka</string>

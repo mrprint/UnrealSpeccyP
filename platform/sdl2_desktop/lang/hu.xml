@@ -132,6 +132,11 @@
 	<string id="tip.options.video.pal_strength">A PAL színhatások intenzitása, 0-100%</string>
 	<string id="options.video.beam_spread">Sugárszórás</string>
 	<string id="tip.options.video.beam_spread">A CRT sugár vízszintes szóródása (elmosás), 0-200%</string>
+	<string id="options.video.ui_theme">Felület témája</string>
+	<string id="options.video.ui_theme.auto">Automatikus</string>
+	<string id="options.video.ui_theme.light">Világos</string>
+	<string id="options.video.ui_theme.dark">Sötét</string>
+	<string id="tip.options.video.ui_theme">A menük és a párbeszédablakok színsémája. Automatikus esetén a rendszer világos vagy sötét beállítását követi.</string>
 	<string id="options.video.restore_defaults">Alapértelmezések visszaállítása</string>
 	<string id="tip.options.video.restore_defaults">Visszaállítja a videobeállításokat az alapértelmezett értékekre</string>
 	<string id="options.input.joystick_type">Botkormány típusa</string>

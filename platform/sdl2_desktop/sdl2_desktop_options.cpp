@@ -488,6 +488,7 @@ private:
 	bool m_mipmapping = true;
 	int m_mask_scale = 1;
 	bool m_prefer_pal_refresh = false;
+	int m_theme_mode = (int)eThemeMode::Auto; // index into theme_keys[] in DrawVideoTab()
 
 	int m_joystick = J_KEMPSTON;
 
@@ -526,6 +527,8 @@ void OptionsDialog::LoadCurrentSettings()
 	op = xOptions::eOption<int>::Find("mask scale");     m_mask_scale = op ? *op : DEFAULT_MASK_SCALE;
 	opb = xOptions::eOption<bool>::Find("Prefer PAL refresh"); m_prefer_pal_refresh = opb ? (bool)*opb : DEFAULT_PAL_REFRESH_RATE;
 
+	m_theme_mode = (int)GetThemeMode();
+
 	m_drive = OpDrive();
 	m_joystick = OpJoystick();
 }
@@ -548,6 +551,8 @@ void OptionsDialog::CommitToOptions()
 	opb = xOptions::eOption<bool>::Find("mipmapping");  if(opb) { opb->Set(m_mipmapping); opb->Apply(); }
 	op = xOptions::eOption<int>::Find("mask scale");    if(op) { op->Set(m_mask_scale); op->Apply(); }
 	opb = xOptions::eOption<bool>::Find("Prefer PAL refresh"); if(opb) { opb->Set(m_prefer_pal_refresh); opb->Apply(); }
+
+	SetThemeMode((eThemeMode)m_theme_mode);
 
 #ifdef SDL_USE_JOYSTICK
 	m_gamepad.Commit();
@@ -615,6 +620,28 @@ void OptionsDialog::DrawVideoTab()
 	ItemTooltip("tip.options.video.pal_effects");
 	SliderRow("options.video.pal_strength", &m_pal_strength, 0, 100, "%d%%", "tip.options.video.pal_strength");
 	SliderRow("options.video.beam_spread", &m_beam_spread, 0, 200, "%d", "tip.options.video.beam_spread");
+
+	// Not a video setting, but the only tab this fits: it is about how the UI
+	// itself is drawn. Deliberately left out of "Restore defaults" below, which
+	// is about the emulated picture. Labels go through Tr() at draw time; the
+	// list is indexed by eThemeMode, so keep the order in step with it.
+	ImGui::Spacing();
+	ImGui::SeparatorText(Tr("options.video.ui_theme"));
+	static const char* const theme_keys[] = {
+		"options.video.ui_theme.auto", "options.video.ui_theme.light", "options.video.ui_theme.dark" };
+	const int theme_count = (int)(sizeof(theme_keys) / sizeof(theme_keys[0]));
+	ImGui::SetNextItemWidth(160.0f);
+	if(ImGui::BeginCombo("##ui_theme", Tr(theme_keys[m_theme_mode >= 0 && m_theme_mode < theme_count ? m_theme_mode : 0])))
+	{
+		for(int i = 0; i < theme_count; ++i)
+		{
+			bool sel = (i == m_theme_mode);
+			if(ImGui::Selectable(Tr(theme_keys[i]), sel)) m_theme_mode = i;
+			if(sel) ImGui::SetItemDefaultFocus();
+		}
+		ImGui::EndCombo();
+	}
+	ItemTooltip("tip.options.video.ui_theme");
 
 	ImGui::Spacing();
 	ImGui::Spacing();

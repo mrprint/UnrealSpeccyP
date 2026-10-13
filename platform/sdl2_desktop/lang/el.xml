@@ -132,6 +132,11 @@
 	<string id="tip.options.video.pal_strength">Ένταση των εφέ χρώματος PAL, 0-100%</string>
 	<string id="options.video.beam_spread">Διασπορά δέσμης</string>
 	<string id="tip.options.video.beam_spread">Οριζόντια διασπορά δέσμης CRT (θόλωμα), 0-200%</string>
+	<string id="options.video.ui_theme">Θέμα διεπαφής</string>
+	<string id="options.video.ui_theme.auto">Αυτόματο</string>
+	<string id="options.video.ui_theme.light">Φωτεινό</string>
+	<string id="options.video.ui_theme.dark">Σκούρο</string>
+	<string id="tip.options.video.ui_theme">Χρωματικό σχήμα των μενού και των διαλόγων. Με το Αυτόματο ακολουθείται η φωτεινή ή σκούρα ρύθμιση του συστήματος.</string>
 	<string id="options.video.restore_defaults">Επαναφορά προεπιλογών</string>
 	<string id="tip.options.video.restore_defaults">Επαναφέρει τις επιλογές βίντεο στις προεπιλεγμένες τιμές τους</string>
 	<string id="options.input.joystick_type">Τύπος joystick</string>

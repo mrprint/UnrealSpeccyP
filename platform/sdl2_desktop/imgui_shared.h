@@ -162,6 +162,16 @@ void CloseMenuDialogs();
 // from sdl2_desktop_keys.cpp. Returns true if the event was consumed as a
 // shortcut.
 
+// --- UI theme (sdl2_desktop_imgui.cpp) ---
+// Whether the overlay's light/dark scheme follows the operating system
+// (Auto, the default) or is pinned. Backed by the "ui theme" xOption, so it
+// is saved and restored with the rest of the settings; the Options dialog's
+// "Interface theme" combo is its only UI. The change takes effect on the next
+// frame - nothing needs to be called besides SetThemeMode().
+enum class eThemeMode { Auto, Light, Dark };
+eThemeMode GetThemeMode();
+void SetThemeMode(eThemeMode mode);
+
 // --- Options dialog (sdl2_desktop_options.cpp) ---
 void OpenOptionsDialog();
 void CloseOptionsDialog(); // see CloseMenuDialogs() above

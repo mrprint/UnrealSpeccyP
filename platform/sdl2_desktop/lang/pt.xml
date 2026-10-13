@@ -132,6 +132,11 @@
 	<string id="tip.options.video.pal_strength">Intensidade dos efeitos de cor PAL, 0-100%</string>
 	<string id="options.video.beam_spread">Dispersão do feixe</string>
 	<string id="tip.options.video.beam_spread">Dispersão horizontal do feixe CRT (desfoque), 0-200%</string>
+	<string id="options.video.ui_theme">Tema da interface</string>
+	<string id="options.video.ui_theme.auto">Automático</string>
+	<string id="options.video.ui_theme.light">Claro</string>
+	<string id="options.video.ui_theme.dark">Escuro</string>
+	<string id="tip.options.video.ui_theme">Esquema de cores dos menus e das caixas de diálogo. Com Automático, segue-se a definição clara ou escura do sistema.</string>
 	<string id="options.video.restore_defaults">Repor predefinições</string>
 	<string id="tip.options.video.restore_defaults">Repõe as opções de vídeo nos valores predefinidos</string>
 	<string id="options.input.joystick_type">Tipo de joystick</string>

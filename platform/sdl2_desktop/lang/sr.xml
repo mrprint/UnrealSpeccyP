@@ -132,6 +132,11 @@
 	<string id="tip.options.video.pal_strength">Интензитет PAL ефеката боје, 0-100%</string>
 	<string id="options.video.beam_spread">Расипање снопа</string>
 	<string id="tip.options.video.beam_spread">Хоризонтално расипање CRT снопа (замућење), 0-200%</string>
+	<string id="options.video.ui_theme">Тема интерфејса</string>
+	<string id="options.video.ui_theme.auto">Аутоматски</string>
+	<string id="options.video.ui_theme.light">Светла</string>
+	<string id="options.video.ui_theme.dark">Тамна</string>
+	<string id="tip.options.video.ui_theme">Шема боја менија и дијалога. Код опције Аутоматски прати се светло или тамно подешавање система.</string>
 	<string id="options.video.restore_defaults">Врати подразумевано</string>
 	<string id="tip.options.video.restore_defaults">Враћа видео подешавања на подразумеване вредности</string>
 	<string id="options.input.joystick_type">Тип џојстика</string>

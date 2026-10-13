@@ -769,7 +769,8 @@ elseif(USE_SDL2_DESKTOP)
 #USE_WX_WIDGETS uses - gigascreen/scanlines/PAL effects/mipmapping) for
 #video, and platform/sdl2/sdl2_{keys,mouse,joystick,audio}.cpp as-is for
 #input/audio. Everything (event polling, emulator tick, video+UI render)
-#runs on a single thread - see platform/sdl2_desktop/*.cpp.
+#runs on a single thread (bar the tiny OS-theme poller on Linux, see
+#ThemeWatcher in sdl2_desktop_imgui.cpp) - see platform/sdl2_desktop/*.cpp.
 
 if(WIN32 AND USE_SDL2_DESKTOP)
     set(SDL_SHARED OFF CACHE BOOL "" FORCE)
@@ -959,6 +960,8 @@ target_link_libraries(${PROJECT} stdc++fs)
 endif()
 
 if(UNIX AND NOT APPLE)
+find_package(Threads REQUIRED) #std::thread (ThemeWatcher in sdl2_desktop_imgui.cpp); needs -pthread before glibc 2.34
+target_link_libraries(${PROJECT} Threads::Threads)
 find_package(X11 REQUIRED)
 find_package(OpenGL COMPONENTS OpenGL GLX)
 if(TARGET OpenGL::GLX)

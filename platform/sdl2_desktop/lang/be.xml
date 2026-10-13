@@ -132,6 +132,11 @@
 	<string id="tip.options.video.pal_strength">Інтэнсіўнасць колеравых эфектаў PAL, 0-100%</string>
 	<string id="options.video.beam_spread">Рассейванне пучка</string>
 	<string id="tip.options.video.beam_spread">Гарызантальнае рассейванне пучка ЭПТ (размыццё), 0-200%</string>
+	<string id="options.video.ui_theme">Тэма інтэрфейсу</string>
+	<string id="options.video.ui_theme.auto">Аўтаматычна</string>
+	<string id="options.video.ui_theme.light">Светлая</string>
+	<string id="options.video.ui_theme.dark">Цёмная</string>
+	<string id="tip.options.video.ui_theme">Колеравая схема меню і дыялогавых вокнаў. Аўтаматычны рэжым наследуе светлую або цёмную тэму сістэмы.</string>
 	<string id="options.video.restore_defaults">Скінуць налады</string>
 	<string id="tip.options.video.restore_defaults">Скідае налады відэа да прадвызначаных значэнняў</string>
 	<string id="options.input.joystick_type">Тып джойсціка</string>

@@ -54,7 +54,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #elif defined(_MAC)
 #include <CoreFoundation/CoreFoundation.h>
 #include <strings.h> // strcasecmp()
-#endif//_LINUX needs neither - popen()/fgets()/strstr() below come from <cstdio>/<cstring> already included above
+#else//_LINUX
+// popen()/fgets()/strstr() come from <cstdio>/<cstring> already included above.
+// The Linux theme lookup forks a process and waits for it, so it runs on a
+// small background thread instead of the render thread - see ThemeWatcher.
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+#include <cstdlib>   // getenv()
+#include <fstream>   // kdeglobals
+#include <string>
+#include <vector>
+#include <strings.h> // strncasecmp()
+#include <sys/wait.h> // WIFEXITED()/WEXITSTATUS() for popen()'s pclose()
+#define XIMGUI_THEME_WATCHER 1
+#endif//_WINAPI / _MAC / _LINUX
 
 namespace xPlatform
 {
@@ -71,8 +87,306 @@ namespace xImGui
 // periodically from ImGuiBackend::BeginFrame() below (see
 // ImGuiBackend::m_last_theme_check_ms), not just once here, so toggling the
 // OS theme while the emulator is already running updates the overlay too,
-// instead of only taking effect on the next launch.
+// instead of only taking effect on the next launch. (On Linux that polling
+// happens on a background thread - see ThemeWatcher below.) The "ui theme"
+// option below can pin Light or Dark instead, in which case none of this runs.
 enum class eSystemTheme { Light, Dark };
+
+#ifdef XIMGUI_THEME_WATCHER
+// Outcome of one lookup of the OS theme.
+enum class eThemeQuery
+{
+	Answered,   // `theme` is valid
+	NoAnswer,   // gave nothing, cause unknown (no session bus yet, schema missing, ...) - worth retrying soon
+	Unavailable // the lookup tool isn't there at all - not worth asking again for a long while
+};
+
+// Asks gsettings for the current preference; `theme` is only written when it
+// answers.
+//
+// popen() runs the command through /bin/sh, which exits with 127 when the
+// command isn't found (also what the dynamic loader exits with for a missing
+// library, i.e. just as unusable). That is told apart from a mere empty answer
+// so a machine without gsettings isn't made to fork a shell every few seconds
+// for the whole session.
+static eThemeQuery QueryGsettingsTheme(eSystemTheme& theme)
+{
+	FILE* pipe = popen("gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null", "r");
+	if(!pipe)
+		return eThemeQuery::NoAnswer; // fork/pipe failure: resource pressure, may well pass
+	char buf[128] = {};
+	const bool got_line = fgets(buf, sizeof(buf), pipe) != nullptr;
+	const int status = pclose(pipe); // reaps the child either way
+	if(got_line)
+	{
+		theme = strstr(buf, "dark") ? eSystemTheme::Dark : eSystemTheme::Light;
+		return eThemeQuery::Answered;
+	}
+	// status is -1 if the child couldn't be waited for (e.g. SIGCHLD ignored) -
+	// then nothing is known, which is the NoAnswer case.
+	if(status != -1 && WIFEXITED(status) && WEXITSTATUS(status) == 127)
+		return eThemeQuery::Unavailable;
+	return eThemeQuery::NoAnswer;
+}
+
+// ---- KDE Plasma ------------------------------------------------------------
+// Plasma keeps its colour scheme in kdeglobals, and that file is what Plasma
+// itself (and every Qt/KDE app) goes by, whereas the gsettings key GNOME-style
+// desktops use may not be kept in step with it on every Plasma version or
+// setup. So on a Plasma session the file is read directly: no process to
+// spawn, no D-Bus dependency, and a switch of the global theme (including
+// Plasma's automatic day/night switching) shows up as soon as it is written.
+
+// Where the theme is read from, decided once from the environment on the
+// main thread: getenv() from the worker thread could race with a setenv()
+// somewhere else in the process (SDL does call it).
+struct ThemeSource
+{
+	bool kde = false;                    // Plasma session: read kdeglobals instead of asking gsettings
+	std::vector<std::string> kdeglobals; // candidate files, highest priority first
+};
+
+// KDE_FULL_SESSION is set by Plasma's session startup; XDG_CURRENT_DESKTOP is a
+// colon-separated list ("KDE", "ubuntu:GNOME", ...), matched per entry so
+// that e.g. "KDEX" doesn't count.
+static bool IsKdeSession()
+{
+	const char* full = getenv("KDE_FULL_SESSION");
+	if(full && *full)
+		return true;
+	for(const char* p = getenv("XDG_CURRENT_DESKTOP"); p && *p; )
+	{
+		const char* end = strchr(p, ':');
+		const size_t len = end ? (size_t)(end - p) : strlen(p);
+		if(len == 3 && strncasecmp(p, "KDE", 3) == 0)
+			return true;
+		p = end ? end + 1 : nullptr;
+	}
+	return false;
+}
+
+static ThemeSource DetectThemeSource()
+{
+	ThemeSource src;
+	src.kde = IsKdeSession();
+	if(!src.kde)
+		return src;
+	// The lookup order KDE's own config system uses: the user's file first,
+	// then each XDG_CONFIG_DIRS entry (default /etc/xdg), so a distro-wide
+	// default scheme still applies until the user picks one of their own.
+	const char* cfg_home = getenv("XDG_CONFIG_HOME");
+	const char* home = getenv("HOME");
+	if(cfg_home && *cfg_home)
+		src.kdeglobals.push_back(std::string(cfg_home) + "/kdeglobals");
+	else if(home && *home)
+		src.kdeglobals.push_back(std::string(home) + "/.config/kdeglobals");
+	const char* dirs_env = getenv("XDG_CONFIG_DIRS");
+	const std::string dirs = (dirs_env && *dirs_env) ? dirs_env : "/etc/xdg";
+	for(size_t pos = 0; pos <= dirs.size(); )
+	{
+		size_t end = dirs.find(':', pos);
+		if(end == std::string::npos)
+			end = dirs.size();
+		if(end > pos)
+			src.kdeglobals.push_back(dirs.substr(pos, end - pos) + "/kdeglobals");
+		pos = end + 1;
+	}
+	return src;
+}
+
+// Pulls BackgroundNormal=R,G,B out of the [Colors:Window] section of a
+// kdeglobals-style INI stream. False if the stream doesn't define it.
+static bool ParseKdeWindowBackground(std::istream& in, int& r, int& g, int& b)
+{
+	static const char kKey[] = "BackgroundNormal=";
+	const size_t key_len = sizeof(kKey) - 1;
+	bool in_window = false;
+	std::string line;
+	while(std::getline(in, line))
+	{
+		if(!line.empty() && line.back() == '\r')
+			line.pop_back();
+		if(!line.empty() && line[0] == '[')
+		{
+			in_window = (line == "[Colors:Window]");
+			continue;
+		}
+		if(in_window && line.compare(0, key_len, kKey) == 0
+			&& sscanf(line.c_str() + key_len, "%d,%d,%d", &r, &g, &b) == 3)
+			return true;
+	}
+	return false;
+}
+
+// The scheme's own name ("BreezeDark", a user's custom one, ...) says little;
+// the window background it actually paints with decides, by perceived
+// luminance. Always answers: a Plasma that never wrote any colours is on its
+// stock scheme, which is light.
+static eThemeQuery QueryKdeTheme(const ThemeSource& src, eSystemTheme& theme)
+{
+	for(const std::string& path : src.kdeglobals)
+	{
+		std::ifstream file(path);
+		int r = 0, g = 0, b = 0;
+		if(file && ParseKdeWindowBackground(file, r, g, b))
+		{
+			theme = (299 * r + 587 * g + 114 * b < 128 * 1000) ? eSystemTheme::Dark : eSystemTheme::Light;
+			return eThemeQuery::Answered;
+		}
+	}
+	theme = eSystemTheme::Light;
+	return eThemeQuery::Answered;
+}
+
+// One lookup, whichever way the desktop wants it.
+static eThemeQuery QueryTheme(const ThemeSource& src, eSystemTheme& theme)
+{
+	return src.kde ? QueryKdeTheme(src, theme) : QueryGsettingsTheme(theme);
+}
+
+// ---- ThemeWatcher ----------------------------------------------------------
+// Keeps track of the Linux theme on a background thread. On GNOME-style
+// desktops the lookup is a popen() of gsettings: fork + exec + wait, several
+// milliseconds, and unbounded if gsettings stalls on a broken session bus -
+// far too long to block the render thread, where it showed up as a periodic
+// hitch in the frame pacing (the KDE file read is cheap, but goes through the
+// same thread so there is a single path). The render thread only ever does
+// Current(), one atomic load.
+//
+// All shared state lives in a reference-counted State that the thread holds
+// a share of, and the thread is detached: Stop() just raises the flag and
+// lets go, so shutting down never waits for a gsettings that is hung, and a
+// late-finishing thread can't touch freed memory.
+class ThemeWatcher
+{
+public:
+	~ThemeWatcher() { Stop(); }
+
+	// `initial` is what Current() reports until the thread has an answer: either
+	// what the caller already detected synchronously (first frame is right
+	// without waiting for the first poll), or - on resuming after a pause - what
+	// is on screen right now, so nothing flickers. With `poll_now` the thread
+	// asks straight away instead of after the first interval.
+	void Start(eSystemTheme initial, bool poll_now = false)
+	{
+		Stop();
+		m_state = std::make_shared<State>();
+		m_state->dark.store(initial == eSystemTheme::Dark, std::memory_order_relaxed);
+		m_state->source = DetectThemeSource();
+		m_state->poll_now = poll_now;
+		std::thread(&ThemeWatcher::Run, m_state).detach();
+	}
+
+	void Stop()
+	{
+		if(!m_state)
+			return;
+		{
+			std::lock_guard<std::mutex> lock(m_state->mutex);
+			m_state->stop = true;
+		}
+		m_state->cv.notify_all();
+		m_state.reset();
+	}
+
+	bool Running() const { return m_state != nullptr; }
+
+	// Latest answer; `fallback` while the watcher isn't running.
+	eSystemTheme Current(eSystemTheme fallback) const
+	{
+		if(!m_state)
+			return fallback;
+		return m_state->dark.load(std::memory_order_relaxed) ? eSystemTheme::Dark : eSystemTheme::Light;
+	}
+
+private:
+	struct State
+	{
+		std::mutex mutex;
+		std::condition_variable cv;
+		bool stop = false; // guarded by mutex
+		std::atomic<bool> dark{false};
+		ThemeSource source; // written before the thread starts, read-only afterwards
+		bool poll_now = false; // likewise
+	};
+
+	static void Run(std::shared_ptr<State> s)
+	{
+		using namespace std::chrono;
+		const milliseconds kPoll(2000);     // a live OS theme switch still feels immediate
+		const milliseconds kRetry(30000);   // no answer, cause unknown: try again, but not hammering
+		const milliseconds kGone(600000);   // gsettings isn't installed: look again only now and then
+		milliseconds interval = kPoll;
+		bool first = s->poll_now;
+		std::unique_lock<std::mutex> lock(s->mutex);
+		// wait_for() with a predicate returns true once `stop` is set (leave),
+		// false on timeout (poll again); `first` skips the wait once for an
+		// immediate poll. The lock is dropped around the slow part so Stop() is
+		// never held up by it.
+		while(first || !s->cv.wait_for(lock, interval, [&s] { return s->stop; }))
+		{
+			first = false;
+			lock.unlock();
+			eSystemTheme theme = eSystemTheme::Light;
+			const eThemeQuery result = QueryTheme(s->source, theme);
+			lock.lock();
+			if(result == eThemeQuery::Answered)
+			{
+				s->dark.store(theme == eSystemTheme::Dark, std::memory_order_relaxed);
+				interval = kPoll;
+			}
+			else // keep the last known value rather than flipping to Light on a failure
+				interval = (result == eThemeQuery::Unavailable) ? kGone : kRetry;
+		}
+	}
+
+	std::shared_ptr<State> m_state;
+};
+#endif//XIMGUI_THEME_WATCHER
+
+// ---------------------------------------------------------------------------
+// "ui theme" xOption: whether the overlay follows the OS (Auto, the default)
+// or is pinned to Light or Dark - the only way to get a dark UI on a system
+// whose theme can't be detected, and an override anywhere else. Stored as
+// text ("auto"/"light"/"dark") so the config file stays readable and doesn't
+// depend on enum order; anything else (hand-edited, or from a future
+// version) reads as Auto.
+// ---------------------------------------------------------------------------
+namespace {
+
+struct eOptionUiTheme : public xOptions::eOptionString
+{
+	eOptionUiTheme() { Value("auto"); }
+	const char* Name() const override { return "ui theme"; }
+} op_ui_theme;
+
+}//anonymous namespace
+
+eThemeMode GetThemeMode()
+{
+	const char* v = op_ui_theme.Value();
+	if(v && !strcmp(v, "light"))
+		return eThemeMode::Light;
+	if(v && !strcmp(v, "dark"))
+		return eThemeMode::Dark;
+	return eThemeMode::Auto;
+}
+
+void SetThemeMode(eThemeMode mode)
+{
+	op_ui_theme.Value(mode == eThemeMode::Light ? "light" : mode == eThemeMode::Dark ? "dark" : "auto");
+	op_ui_theme.Apply(); // no-op today; keeps this in line with how every other option is set
+}
+
+// What to show: a pinned choice wins, otherwise whatever the OS says.
+static eSystemTheme ResolveTheme(eThemeMode mode, eSystemTheme os)
+{
+	if(mode == eThemeMode::Light)
+		return eSystemTheme::Light;
+	if(mode == eThemeMode::Dark)
+		return eSystemTheme::Dark;
+	return os;
+}
 
 static eSystemTheme DetectSystemTheme()
 {
@@ -114,26 +428,19 @@ static eSystemTheme DetectSystemTheme()
 	}
 	return theme;
 #else//_LINUX
-	// No single universal API here; org.gnome.desktop.interface's
-	// color-scheme key is honoured (directly, or mapped from
-	// org.freedesktop.appearance's own color-scheme via a compatibility
-	// shim built into gsettings-desktop-schemas) by GNOME, Cinnamon,
-	// Budgie, MATE, XFCE-with-gsettings, and KDE Plasma 5.24+ - covers the
-	// large majority of desktops without pulling in a libdbus dependency
-	// just for this one lookup. Falls back to light if gsettings isn't
-	// present at all (e.g. a minimal window-manager-only setup).
+	// No single universal API here. A KDE Plasma session is read straight from
+	// kdeglobals (see QueryKdeTheme). Everything else goes through
+	// org.gnome.desktop.interface's color-scheme key via gsettings, which
+	// (directly, or mapped from org.freedesktop.appearance's own color-scheme
+	// via a compatibility shim built into gsettings-desktop-schemas) is
+	// honoured by GNOME, Cinnamon, Budgie, MATE and XFCE-with-gsettings -
+	// without pulling in a libdbus dependency just for this one lookup. Falls
+	// back to light if nothing answers (e.g. a minimal window-manager-only
+	// setup).
+	// One-shot, blocking: only used for the very first frame (ImGuiBackend::
+	// Init()). Later changes are picked up by ThemeWatcher's thread instead.
 	eSystemTheme theme = eSystemTheme::Light;
-	// RAII: pclose on scope exit — no need for manual close or worrying about
-	// early returns between popen and pclose.
-	std::unique_ptr<FILE, decltype(&pclose)> pipe(
-		popen("gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null", "r"),
-		&pclose);
-	if(pipe)
-	{
-		char buf[128] = {};
-		if(fgets(buf, sizeof(buf), pipe.get()) && strstr(buf, "dark"))
-			theme = eSystemTheme::Dark;
-	}
+	QueryTheme(DetectThemeSource(), theme); // no answer leaves the Light default
 	return theme;
 #endif
 }
@@ -298,8 +605,13 @@ public:
 private:
 	bool m_inited = false; // guards Done() against running without a matching Init() (see sdl2_desktop_video.cpp's graphics_inited comment - same failure class)
 	float m_font_baked_scale = 0.0f;
-	eSystemTheme m_current_theme = eSystemTheme::Dark; // overwritten by DetectSystemTheme() before first use, in Init()
-	Uint32 m_last_theme_check_ms = 0;
+	eSystemTheme m_current_theme = eSystemTheme::Dark; // what is applied right now; set in Init() before first use
+	eSystemTheme m_os_theme = eSystemTheme::Light;      // last known OS preference (meaningful while the mode is Auto)
+	eThemeMode m_theme_mode = eThemeMode::Auto;         // mode as of the last frame, to notice a change in the option
+	Uint32 m_last_theme_check_ms = 0; // Windows/macOS polling only; Linux uses m_theme_watcher
+#ifdef XIMGUI_THEME_WATCHER
+	ThemeWatcher m_theme_watcher;
+#endif
 
 	// Loads (or reloads) the font atlas at the given DPI scale and uploads
 	// it to the GPU. Called once from Init(), and again from BeginFrame()
@@ -390,9 +702,19 @@ void ImGuiBackend::Init(SDL_Window* window, SDL_GLContext context)
 	if(dpi_scale < 1.0f)
 		dpi_scale = 1.0f;
 
-	m_current_theme = DetectSystemTheme();
+	// xOptions::Load() has already run (Handler()->OnInit() comes before video
+	// init), so a saved Light/Dark choice is known here. Pinned, there is no OS
+	// lookup to make at all - in particular no blocking gsettings call at startup.
+	m_theme_mode = GetThemeMode();
+	if(m_theme_mode == eThemeMode::Auto)
+		m_os_theme = DetectSystemTheme();
+	m_current_theme = ResolveTheme(m_theme_mode, m_os_theme);
 	ApplyStyle(dpi_scale, m_current_theme);
 	m_last_theme_check_ms = SDL_GetTicks();
+#ifdef XIMGUI_THEME_WATCHER
+	if(m_theme_mode == eThemeMode::Auto)
+		m_theme_watcher.Start(m_os_theme);
+#endif
 
 	ImGui_ImplSDL2_InitForOpenGL(window, context);
 	ImGui_ImplOpenGL3_Init("#version 330");
@@ -408,6 +730,9 @@ void ImGuiBackend::Done()
 		return;
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplSDL2_Shutdown();
+#ifdef XIMGUI_THEME_WATCHER
+	m_theme_watcher.Stop();
+#endif
 	ImGui::DestroyContext();
 	m_inited = false;
 }
@@ -429,28 +754,56 @@ void ImGuiBackend::BeginFrame()
 		dpi_scale = 1.0f;
 	bool dpi_changed = std::abs(dpi_scale - m_font_baked_scale) > 0.05f;
 
-	// DetectSystemTheme() hits the registry/CFPreferences on Windows/macOS -
-	// effectively free, so once a second is frequent enough that a live OS
-	// theme switch while the emulator is running feels immediate. On Linux it
-	// instead forks a shell + gsettings and *waits* for it, right here on the
-	// render thread - a few milliseconds that can show up as a hitch in the
-	// frame pacing, so poll that one far less often.
-#ifdef _LINUX
-	const Uint32 kThemePollMs = 5000;
-#else
-	const Uint32 kThemePollMs = 1000;
-#endif
-	Uint32 now = SDL_GetTicks();
-	bool theme_changed = false;
-	if(now - m_last_theme_check_ms >= kThemePollMs)
+	// Theme: a pinned Light/Dark choice (the "ui theme" option, changed from the
+	// Options dialog), or the OS's own. The OS is only asked while the mode is
+	// Auto, so switching to a pinned theme stops the lookups and switching back
+	// resumes them.
+	const eThemeMode mode = GetThemeMode();
+	if(mode != m_theme_mode)
 	{
-		m_last_theme_check_ms = now;
-		eSystemTheme detected = DetectSystemTheme();
-		if(detected != m_current_theme)
+		const bool was_auto = (m_theme_mode == eThemeMode::Auto);
+		m_theme_mode = mode;
+		if(mode == eThemeMode::Auto && !was_auto)
 		{
-			m_current_theme = detected;
-			theme_changed = true;
+#ifdef XIMGUI_THEME_WATCHER
+			// Keep showing what is on screen until the first fresh answer comes
+			// in (a few ms), instead of flashing a stale value.
+			m_os_theme = m_current_theme;
+			m_theme_watcher.Start(m_os_theme, true);
+#else
+			m_os_theme = DetectSystemTheme();
+			m_last_theme_check_ms = SDL_GetTicks();
+#endif
 		}
+#ifdef XIMGUI_THEME_WATCHER
+		else if(mode != eThemeMode::Auto)
+			m_theme_watcher.Stop(); // pinned: nobody reads the answer, so stop asking for it
+#endif
+	}
+	if(mode == eThemeMode::Auto)
+	{
+		// Windows/macOS: one registry/CFPreferences read, effectively free, so once
+		// a second keeps a live OS theme switch feeling immediate. Linux: the
+		// answer is kept up to date by ThemeWatcher's background thread (the
+		// lookup forks gsettings and waits for it - see there), so all that is
+		// left here is one atomic load, cheap enough to do on every frame.
+#ifdef XIMGUI_THEME_WATCHER
+		m_os_theme = m_theme_watcher.Current(m_os_theme);
+#else
+		const Uint32 now = SDL_GetTicks();
+		if(now - m_last_theme_check_ms >= 1000)
+		{
+			m_last_theme_check_ms = now;
+			m_os_theme = DetectSystemTheme();
+		}
+#endif
+	}
+	bool theme_changed = false;
+	const eSystemTheme wanted = ResolveTheme(mode, m_os_theme);
+	if(wanted != m_current_theme)
+	{
+		m_current_theme = wanted;
+		theme_changed = true;
 	}
 
 	if(dpi_changed || theme_changed)
