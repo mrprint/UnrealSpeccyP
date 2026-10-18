@@ -103,6 +103,7 @@
 	<string id="options.ok">OK</string>
 	<string id="options.cancel">Abbrechen</string>
 	<string id="options.language.auto">Automatisch</string>
+	<string id="options.tab.appearance">Erscheinungsbild</string>
 	<string id="options.tab.audio">Audio</string>
 	<string id="options.tab.video">Video</string>
 	<string id="options.tab.input">Steuerung</string>
@@ -132,11 +133,13 @@
 	<string id="tip.options.video.pal_strength">Intensität der PAL-Farbeffekte, 0–100 %</string>
 	<string id="options.video.beam_spread">Strahlstreuung</string>
 	<string id="tip.options.video.beam_spread">Horizontale CRT-Strahlstreuung (Unschärfe), 0–200 %</string>
-	<string id="options.video.ui_theme">Oberflächendesign</string>
-	<string id="options.video.ui_theme.auto">Automatisch</string>
-	<string id="options.video.ui_theme.light">Hell</string>
-	<string id="options.video.ui_theme.dark">Dunkel</string>
-	<string id="tip.options.video.ui_theme">Farbschema der Menüs und Dialoge. Bei Automatisch richtet es sich nach der Hell-/Dunkel-Einstellung des Systems.</string>
+	<string id="options.appearance.ui_theme">Oberflächendesign</string>
+	<string id="options.appearance.ui_theme.auto">Automatisch</string>
+	<string id="options.appearance.ui_theme.light">Hell</string>
+	<string id="options.appearance.ui_theme.dark">Dunkel</string>
+	<string id="tip.options.appearance.ui_theme">Farbschema der Menüs und Dialoge. Bei Automatisch richtet es sich nach der Hell-/Dunkel-Einstellung des Systems.</string>
+	<string id="options.appearance.restore_defaults">Standardwerte wiederherstellen</string>
+	<string id="tip.options.appearance.restore_defaults">Setzt die Darstellungsoptionen auf ihre Standardwerte zurück</string>
 	<string id="options.video.restore_defaults">Standardwerte wiederherstellen</string>
 	<string id="tip.options.video.restore_defaults">Setzt die Videooptionen auf ihre Standardwerte zurück</string>
 	<string id="options.input.joystick_type">Joystick-Typ</string>

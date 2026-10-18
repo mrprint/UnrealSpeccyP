@@ -103,6 +103,7 @@
 	<string id="options.ok">OK</string>
 	<string id="options.cancel">Tühista</string>
 	<string id="options.language.auto">Automaatne</string>
+	<string id="options.tab.appearance">Välimus</string>
 	<string id="options.tab.audio">Heli</string>
 	<string id="options.tab.video">Video</string>
 	<string id="options.tab.input">Juhtimine</string>
@@ -132,11 +133,13 @@
 	<string id="tip.options.video.pal_strength">PAL-i värviefektide intensiivsus, 0-100%</string>
 	<string id="options.video.beam_spread">Kiire hajumine</string>
 	<string id="tip.options.video.beam_spread">CRT kiire horisontaalne hajumine (hägusus), 0-200%</string>
-	<string id="options.video.ui_theme">Liidese teema</string>
-	<string id="options.video.ui_theme.auto">Automaatne</string>
-	<string id="options.video.ui_theme.light">Hele</string>
-	<string id="options.video.ui_theme.dark">Tume</string>
-	<string id="tip.options.video.ui_theme">Menüüde ja dialoogide värviskeem. Automaatse valiku korral järgitakse süsteemi heledat või tumedat seadet.</string>
+	<string id="options.appearance.ui_theme">Liidese teema</string>
+	<string id="options.appearance.ui_theme.auto">Automaatne</string>
+	<string id="options.appearance.ui_theme.light">Hele</string>
+	<string id="options.appearance.ui_theme.dark">Tume</string>
+	<string id="tip.options.appearance.ui_theme">Menüüde ja dialoogide värviskeem. Automaatse valiku korral järgitakse süsteemi heledat või tumedat seadet.</string>
+	<string id="options.appearance.restore_defaults">Taasta vaikeväärtused</string>
+	<string id="tip.options.appearance.restore_defaults">Taastab välimussätted vaikeväärtustele</string>
 	<string id="options.video.restore_defaults">Taasta vaikeväärtused</string>
 	<string id="tip.options.video.restore_defaults">Taastab videosätted vaikeväärtustele</string>
 	<string id="options.input.joystick_type">Juhtkangi tüüp</string>

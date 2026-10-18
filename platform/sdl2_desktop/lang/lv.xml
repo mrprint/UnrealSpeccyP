@@ -103,6 +103,7 @@
 	<string id="options.ok">Labi</string>
 	<string id="options.cancel">Atcelt</string>
 	<string id="options.language.auto">Automātiski</string>
+	<string id="options.tab.appearance">Izskats</string>
 	<string id="options.tab.audio">Skaņa</string>
 	<string id="options.tab.video">Video</string>
 	<string id="options.tab.input">Vadība</string>
@@ -132,11 +133,13 @@
 	<string id="tip.options.video.pal_strength">PAL krāsu efektu intensitāte, 0-100%</string>
 	<string id="options.video.beam_spread">Stara izkliede</string>
 	<string id="tip.options.video.beam_spread">Horizontāla CRT stara izkliede (izpludinājums), 0-200%</string>
-	<string id="options.video.ui_theme">Saskarnes motīvs</string>
-	<string id="options.video.ui_theme.auto">Automātiski</string>
-	<string id="options.video.ui_theme.light">Gaišs</string>
-	<string id="options.video.ui_theme.dark">Tumšs</string>
-	<string id="tip.options.video.ui_theme">Izvēlņu un dialoglodziņu krāsu shēma. Izvēloties Automātiski, tiek ievērots sistēmas gaišais vai tumšais iestatījums.</string>
+	<string id="options.appearance.ui_theme">Saskarnes motīvs</string>
+	<string id="options.appearance.ui_theme.auto">Automātiski</string>
+	<string id="options.appearance.ui_theme.light">Gaišs</string>
+	<string id="options.appearance.ui_theme.dark">Tumšs</string>
+	<string id="tip.options.appearance.ui_theme">Izvēlņu un dialoglodziņu krāsu shēma. Izvēloties Automātiski, tiek ievērots sistēmas gaišais vai tumšais iestatījums.</string>
+	<string id="options.appearance.restore_defaults">Atjaunot noklusējumus</string>
+	<string id="tip.options.appearance.restore_defaults">Atjauno izskata iestatījumus uz noklusējuma vērtībām</string>
 	<string id="options.video.restore_defaults">Atjaunot noklusējumus</string>
 	<string id="tip.options.video.restore_defaults">Atjauno video iestatījumus uz noklusējuma vērtībām</string>
 	<string id="options.input.joystick_type">Džojstika veids</string>

@@ -36,7 +36,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //                                generic xOptions<->widget helpers, status bar
 //    sdl2_desktop_menu.cpp     - the menu bar, About window,
 //                                window-size/quick-save state
-//    sdl2_desktop_options.cpp  - the 5-tab Options dialog
+//    sdl2_desktop_options.cpp  - the 6-tab Options dialog
 //    sdl2_desktop_filedialog.* - generic in-engine file browser (own header)
 //    sdl2_desktop_gamepad.*    - gamepad backend (own header)
 //    sdl2_desktop_i18n.*       - text localization (res/lang/*.xml)

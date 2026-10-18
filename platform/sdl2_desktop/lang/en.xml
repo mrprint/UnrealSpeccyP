@@ -123,6 +123,7 @@
 	<string id="options.ok">OK</string>
 	<string id="options.cancel">Cancel</string>
 	<string id="options.language.auto">Auto</string>
+	<string id="options.tab.appearance">Appearance</string>
 	<string id="options.tab.audio">Audio</string>
 	<string id="options.tab.video">Video</string>
 	<string id="options.tab.input">Input</string>
@@ -154,11 +155,13 @@
 	<string id="tip.options.video.pal_strength">Intensity of the PAL colour effects, 0-100%</string>
 	<string id="options.video.beam_spread">Beam Spread</string>
 	<string id="tip.options.video.beam_spread">Horizontal CRT beam spread (blur), 0-200%</string>
-	<string id="options.video.ui_theme">Interface theme</string>
-	<string id="options.video.ui_theme.auto">Auto</string>
-	<string id="options.video.ui_theme.light">Light</string>
-	<string id="options.video.ui_theme.dark">Dark</string>
-	<string id="tip.options.video.ui_theme">Colour scheme of the menus and dialogs. Auto follows the system's light/dark setting.</string>
+	<string id="options.appearance.ui_theme">Interface theme</string>
+	<string id="options.appearance.ui_theme.auto">Auto</string>
+	<string id="options.appearance.ui_theme.light">Light</string>
+	<string id="options.appearance.ui_theme.dark">Dark</string>
+	<string id="tip.options.appearance.ui_theme">Colour scheme of the menus and dialogs. Auto follows the system's light/dark setting.</string>
+	<string id="options.appearance.restore_defaults">Restore defaults</string>
+	<string id="tip.options.appearance.restore_defaults">Restore the appearance options to their default values</string>
 	<string id="options.video.restore_defaults">Restore defaults</string>
 	<string id="tip.options.video.restore_defaults">Restore the video options to their default values</string>
 

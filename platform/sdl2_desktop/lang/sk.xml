@@ -103,6 +103,7 @@
 	<string id="options.ok">OK</string>
 	<string id="options.cancel">Zrušiť</string>
 	<string id="options.language.auto">Automaticky</string>
+	<string id="options.tab.appearance">Vzhľad</string>
 	<string id="options.tab.audio">Zvuk</string>
 	<string id="options.tab.video">Video</string>
 	<string id="options.tab.input">Ovládanie</string>
@@ -132,11 +133,13 @@
 	<string id="tip.options.video.pal_strength">Intenzita farebných efektov PAL, 0 – 100 %</string>
 	<string id="options.video.beam_spread">Rozptyl lúča</string>
 	<string id="tip.options.video.beam_spread">Vodorovné rozptýlenie lúča CRT (rozmazanie), 0 – 200 %</string>
-	<string id="options.video.ui_theme">Motív rozhrania</string>
-	<string id="options.video.ui_theme.auto">Automaticky</string>
-	<string id="options.video.ui_theme.light">Svetlý</string>
-	<string id="options.video.ui_theme.dark">Tmavý</string>
-	<string id="tip.options.video.ui_theme">Farebná schéma ponúk a dialógov. Pri možnosti Automaticky sa použije svetlé alebo tmavé nastavenie systému.</string>
+	<string id="options.appearance.ui_theme">Motív rozhrania</string>
+	<string id="options.appearance.ui_theme.auto">Automaticky</string>
+	<string id="options.appearance.ui_theme.light">Svetlý</string>
+	<string id="options.appearance.ui_theme.dark">Tmavý</string>
+	<string id="tip.options.appearance.ui_theme">Farebná schéma ponúk a dialógov. Pri možnosti Automaticky sa použije svetlé alebo tmavé nastavenie systému.</string>
+	<string id="options.appearance.restore_defaults">Obnoviť predvolené nastavenia</string>
+	<string id="tip.options.appearance.restore_defaults">Obnoví možnosti vzhľadu na predvolené hodnoty</string>
 	<string id="options.video.restore_defaults">Obnoviť predvolené nastavenia</string>
 	<string id="tip.options.video.restore_defaults">Obnoví video možnosti na predvolené hodnoty</string>
 	<string id="options.input.joystick_type">Typ joysticku</string>

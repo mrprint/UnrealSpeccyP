@@ -19,7 +19,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // =============================================================================
 //  platform/sdl2_desktop/sdl2_desktop_options.cpp
 //
-//  Options dialog - 5 tabs (Audio / Video / Input / Gamepads / Disk Drives)
+//  Options dialog - 6 tabs (Appearance / Audio / Video / Input / Gamepads /
+//  Disk Drives)
 //  as an ImGui overlay. Tab list is a manual left-side selectable list
 //  rather than ImGui's own top tab bar, so the tab captions read the same
 //  way as in the classic dialog.
@@ -66,7 +67,7 @@ namespace {
 // OptionsDialog::Draw(). (The Gamepads tab is only in the list when
 // SDL_USE_JOYSTICK is defined, so only that entry is ever referenced by
 // name; everything else treats m_active_tab as a plain list index.)
-enum class EOptionsTab { Audio, Video, Input, Gamepads, Drives };
+enum class EOptionsTab { Appearance, Audio, Video, Input, Gamepads, Drives };
 
 #ifdef SDL_USE_JOYSTICK
 
@@ -488,7 +489,7 @@ private:
 	bool m_mipmapping = true;
 	int m_mask_scale = 1;
 	bool m_prefer_pal_refresh = false;
-	int m_theme_mode = (int)eThemeMode::Auto; // index into theme_keys[] in DrawVideoTab()
+	int m_theme_mode = (int)eThemeMode::Auto; // index into theme_keys[] in DrawAppearanceTab()
 
 	int m_joystick = J_KEMPSTON;
 
@@ -501,6 +502,7 @@ private:
 	void LoadCurrentSettings();
 	void CommitToOptions();
 
+	void DrawAppearanceTab();
 	void DrawAudioTab();
 	void DrawVideoTab();
 	void DrawInputTab();
@@ -563,6 +565,37 @@ void OptionsDialog::CommitToOptions()
 // Tabs
 // ---------------------------------------------------------------------------
 
+void OptionsDialog::DrawAppearanceTab()
+{
+	// The UI's own colour scheme - how the menus and dialogs are drawn, not
+	// the emulated picture. It now has a tab of its own (the first one, since
+	// it is what the user sees before anything else). Labels go through Tr()
+	// at draw time; the list is indexed by eThemeMode, so keep the order in
+	// step with it.
+	ImGui::SeparatorText(Tr("options.appearance.ui_theme"));
+	static const char* const theme_keys[] = {
+		"options.appearance.ui_theme.auto", "options.appearance.ui_theme.light", "options.appearance.ui_theme.dark" };
+	const int theme_count = (int)(sizeof(theme_keys) / sizeof(theme_keys[0]));
+	ImGui::SetNextItemWidth(160.0f);
+	if(ImGui::BeginCombo("##ui_theme", Tr(theme_keys[m_theme_mode >= 0 && m_theme_mode < theme_count ? m_theme_mode : 0])))
+	{
+		for(int i = 0; i < theme_count; ++i)
+		{
+			bool sel = (i == m_theme_mode);
+			if(ImGui::Selectable(Tr(theme_keys[i]), sel)) m_theme_mode = i;
+			if(sel) ImGui::SetItemDefaultFocus();
+		}
+		ImGui::EndCombo();
+	}
+	ItemTooltip("tip.options.appearance.ui_theme");
+
+	ImGui::Spacing();
+	ImGui::Spacing();
+	if(ImGui::Button(Tr("options.appearance.restore_defaults")))
+		m_theme_mode = (int)eThemeMode::Auto;
+	ItemTooltip("tip.options.appearance.restore_defaults");
+}
+
 void OptionsDialog::DrawAudioTab()
 {
 	ImGui::SeparatorText(Tr("options.audio.sound_chip"));
@@ -620,28 +653,6 @@ void OptionsDialog::DrawVideoTab()
 	ItemTooltip("tip.options.video.pal_effects");
 	SliderRow("options.video.pal_strength", &m_pal_strength, 0, 100, "%d%%", "tip.options.video.pal_strength");
 	SliderRow("options.video.beam_spread", &m_beam_spread, 0, 200, "%d", "tip.options.video.beam_spread");
-
-	// Not a video setting, but the only tab this fits: it is about how the UI
-	// itself is drawn. Deliberately left out of "Restore defaults" below, which
-	// is about the emulated picture. Labels go through Tr() at draw time; the
-	// list is indexed by eThemeMode, so keep the order in step with it.
-	ImGui::Spacing();
-	ImGui::SeparatorText(Tr("options.video.ui_theme"));
-	static const char* const theme_keys[] = {
-		"options.video.ui_theme.auto", "options.video.ui_theme.light", "options.video.ui_theme.dark" };
-	const int theme_count = (int)(sizeof(theme_keys) / sizeof(theme_keys[0]));
-	ImGui::SetNextItemWidth(160.0f);
-	if(ImGui::BeginCombo("##ui_theme", Tr(theme_keys[m_theme_mode >= 0 && m_theme_mode < theme_count ? m_theme_mode : 0])))
-	{
-		for(int i = 0; i < theme_count; ++i)
-		{
-			bool sel = (i == m_theme_mode);
-			if(ImGui::Selectable(Tr(theme_keys[i]), sel)) m_theme_mode = i;
-			if(sel) ImGui::SetItemDefaultFocus();
-		}
-		ImGui::EndCombo();
-	}
-	ItemTooltip("tip.options.video.ui_theme");
 
 	ImGui::Spacing();
 	ImGui::Spacing();
@@ -714,7 +725,7 @@ void OptionsDialog::DrawGamepadsTab()
 void OptionsDialog::Open()
 {
 	m_open = true;
-	m_active_tab = (int)EOptionsTab::Audio;
+	m_active_tab = (int)EOptionsTab::Appearance;
 	LoadCurrentSettings();
 #ifdef SDL_USE_JOYSTICK
 	m_gamepad.Load();
@@ -772,6 +783,7 @@ void OptionsDialog::Draw()
 
 	struct TabEntry { EOptionsTab id; const char* label_key; };
 	static const TabEntry tabs[] = {
+		{ EOptionsTab::Appearance, "options.tab.appearance" },
 		{ EOptionsTab::Audio, "options.tab.audio" },
 		{ EOptionsTab::Video, "options.tab.video" },
 		{ EOptionsTab::Input, "options.tab.input" },
@@ -799,6 +811,7 @@ void OptionsDialog::Draw()
 	// deliberately *not* by matching against a (translated) tab label text.
 	switch((EOptionsTab)m_active_tab)
 	{
+	case EOptionsTab::Appearance: DrawAppearanceTab(); break;
 	case EOptionsTab::Audio: DrawAudioTab(); break;
 	case EOptionsTab::Video: DrawVideoTab(); break;
 	case EOptionsTab::Input: DrawInputTab(); break;

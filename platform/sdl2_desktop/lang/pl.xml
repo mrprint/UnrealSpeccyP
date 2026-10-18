@@ -103,6 +103,7 @@
 	<string id="options.ok">OK</string>
 	<string id="options.cancel">Anuluj</string>
 	<string id="options.language.auto">Automatyczny</string>
+	<string id="options.tab.appearance">Wygląd</string>
 	<string id="options.tab.audio">Dźwięk</string>
 	<string id="options.tab.video">Wideo</string>
 	<string id="options.tab.input">Sterowanie</string>
@@ -132,11 +133,13 @@
 	<string id="tip.options.video.pal_strength">Intensywność efektów koloru PAL, 0-100%</string>
 	<string id="options.video.beam_spread">Rozproszenie wiązki</string>
 	<string id="tip.options.video.beam_spread">Poziome rozproszenie wiązki CRT (rozmycie), 0-200%</string>
-	<string id="options.video.ui_theme">Motyw interfejsu</string>
-	<string id="options.video.ui_theme.auto">Automatyczny</string>
-	<string id="options.video.ui_theme.light">Jasny</string>
-	<string id="options.video.ui_theme.dark">Ciemny</string>
-	<string id="tip.options.video.ui_theme">Schemat kolorów menu i okien dialogowych. Opcja Automatyczny stosuje jasne lub ciemne ustawienie systemu.</string>
+	<string id="options.appearance.ui_theme">Motyw interfejsu</string>
+	<string id="options.appearance.ui_theme.auto">Automatyczny</string>
+	<string id="options.appearance.ui_theme.light">Jasny</string>
+	<string id="options.appearance.ui_theme.dark">Ciemny</string>
+	<string id="tip.options.appearance.ui_theme">Schemat kolorów menu i okien dialogowych. Opcja Automatyczny stosuje jasne lub ciemne ustawienie systemu.</string>
+	<string id="options.appearance.restore_defaults">Przywróć domyślne ustawienia</string>
+	<string id="tip.options.appearance.restore_defaults">Przywraca opcje wyglądu do wartości domyślnych</string>
 	<string id="options.video.restore_defaults">Przywróć domyślne ustawienia</string>
 	<string id="tip.options.video.restore_defaults">Przywraca opcje wideo do wartości domyślnych</string>
 	<string id="options.input.joystick_type">Typ joysticka</string>

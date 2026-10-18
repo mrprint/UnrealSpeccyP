@@ -103,6 +103,7 @@
 	<string id="options.ok">OK</string>
 	<string id="options.cancel">Скасувати</string>
 	<string id="options.language.auto">Авто</string>
+	<string id="options.tab.appearance">Зовнішній вигляд</string>
 	<string id="options.tab.audio">Звук</string>
 	<string id="options.tab.video">Відео</string>
 	<string id="options.tab.input">Керування</string>
@@ -132,11 +133,13 @@
 	<string id="tip.options.video.pal_strength">Інтенсивність колірних ефектів PAL, 0-100%</string>
 	<string id="options.video.beam_spread">Розсіювання променя</string>
 	<string id="tip.options.video.beam_spread">Горизонтальне розсіювання променя ЕПТ (розмиття), 0-200%</string>
-	<string id="options.video.ui_theme">Тема інтерфейсу</string>
-	<string id="options.video.ui_theme.auto">Авто</string>
-	<string id="options.video.ui_theme.light">Світла</string>
-	<string id="options.video.ui_theme.dark">Темна</string>
-	<string id="tip.options.video.ui_theme">Колірна схема меню та діалогів. У режимі Авто використовується світла або темна тема системи.</string>
+	<string id="options.appearance.ui_theme">Тема інтерфейсу</string>
+	<string id="options.appearance.ui_theme.auto">Авто</string>
+	<string id="options.appearance.ui_theme.light">Світла</string>
+	<string id="options.appearance.ui_theme.dark">Темна</string>
+	<string id="tip.options.appearance.ui_theme">Колірна схема меню та діалогів. У режимі Авто використовується світла або темна тема системи.</string>
+	<string id="options.appearance.restore_defaults">Скинути налаштування</string>
+	<string id="tip.options.appearance.restore_defaults">Скидає налаштування зовнішнього вигляду до значень за замовчуванням</string>
 	<string id="options.video.restore_defaults">Скинути налаштування</string>
 	<string id="tip.options.video.restore_defaults">Скидає налаштування відео до значень за замовчуванням</string>
 	<string id="options.input.joystick_type">Тип джойстика</string>

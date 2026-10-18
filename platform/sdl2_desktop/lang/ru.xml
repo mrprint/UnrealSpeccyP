@@ -118,6 +118,7 @@
 	<string id="options.ok">ОК</string>
 	<string id="options.cancel">Отмена</string>
 	<string id="options.language.auto">Авто</string>
+	<string id="options.tab.appearance">Внешний вид</string>
 	<string id="options.tab.audio">Звук</string>
 	<string id="options.tab.video">Видео</string>
 	<string id="options.tab.input">Управление</string>
@@ -149,11 +150,13 @@
 	<string id="tip.options.video.pal_strength">Интенсивность цветовых эффектов PAL, 0-100%</string>
 	<string id="options.video.beam_spread">Разброс луча</string>
 	<string id="tip.options.video.beam_spread">Горизонтальное рассеивание луча ЭЛТ (размытие), 0-200%</string>
-	<string id="options.video.ui_theme">Тема интерфейса</string>
-	<string id="options.video.ui_theme.auto">Авто</string>
-	<string id="options.video.ui_theme.light">Светлая</string>
-	<string id="options.video.ui_theme.dark">Тёмная</string>
-	<string id="tip.options.video.ui_theme">Цветовая схема меню и диалогов. В режиме Авто используется светлая или тёмная тема системы.</string>
+	<string id="options.appearance.ui_theme">Тема интерфейса</string>
+	<string id="options.appearance.ui_theme.auto">Авто</string>
+	<string id="options.appearance.ui_theme.light">Светлая</string>
+	<string id="options.appearance.ui_theme.dark">Тёмная</string>
+	<string id="tip.options.appearance.ui_theme">Цветовая схема меню и диалогов. В режиме Авто используется светлая или тёмная тема системы.</string>
+	<string id="options.appearance.restore_defaults">Сбросить настройки</string>
+	<string id="tip.options.appearance.restore_defaults">Сбросить настройки внешнего вида к значениям по умолчанию</string>
 	<string id="options.video.restore_defaults">Сбросить настройки</string>
 	<string id="tip.options.video.restore_defaults">Сбросить настройки видео к значениям по умолчанию</string>
 

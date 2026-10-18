@@ -103,6 +103,7 @@
 	<string id="options.ok">OK</string>
 	<string id="options.cancel">Anulează</string>
 	<string id="options.language.auto">Automat</string>
+	<string id="options.tab.appearance">Aspect</string>
 	<string id="options.tab.audio">Audio</string>
 	<string id="options.tab.video">Video</string>
 	<string id="options.tab.input">Control</string>
@@ -132,11 +133,13 @@
 	<string id="tip.options.video.pal_strength">Intensitatea efectelor de culoare PAL, 0-100%</string>
 	<string id="options.video.beam_spread">Dispersia fasciculului</string>
 	<string id="tip.options.video.beam_spread">Dispersia orizontală a fasciculului CRT (neclaritate), 0-200%</string>
-	<string id="options.video.ui_theme">Tema interfeței</string>
-	<string id="options.video.ui_theme.auto">Automat</string>
-	<string id="options.video.ui_theme.light">Luminoasă</string>
-	<string id="options.video.ui_theme.dark">Întunecată</string>
-	<string id="tip.options.video.ui_theme">Schema de culori a meniurilor și a dialogurilor. Cu opțiunea Automat se respectă setarea luminoasă sau întunecată a sistemului.</string>
+	<string id="options.appearance.ui_theme">Tema interfeței</string>
+	<string id="options.appearance.ui_theme.auto">Automat</string>
+	<string id="options.appearance.ui_theme.light">Luminoasă</string>
+	<string id="options.appearance.ui_theme.dark">Întunecată</string>
+	<string id="tip.options.appearance.ui_theme">Schema de culori a meniurilor și a dialogurilor. Cu opțiunea Automat se respectă setarea luminoasă sau întunecată a sistemului.</string>
+	<string id="options.appearance.restore_defaults">Restabilește setările implicite</string>
+	<string id="tip.options.appearance.restore_defaults">Restabilește opțiunile de aspect la valorile implicite</string>
 	<string id="options.video.restore_defaults">Restabilește setările implicite</string>
 	<string id="tip.options.video.restore_defaults">Restabilește opțiunile video la valorile implicite</string>
 	<string id="options.input.joystick_type">Tip joystick</string>

@@ -103,6 +103,7 @@
 	<string id="options.ok">OK</string>
 	<string id="options.cancel">Mégse</string>
 	<string id="options.language.auto">Automatikus</string>
+	<string id="options.tab.appearance">Megjelenés</string>
 	<string id="options.tab.audio">Hang</string>
 	<string id="options.tab.video">Videó</string>
 	<string id="options.tab.input">Vezérlés</string>
@@ -132,11 +133,13 @@
 	<string id="tip.options.video.pal_strength">A PAL színhatások intenzitása, 0-100%</string>
 	<string id="options.video.beam_spread">Sugárszórás</string>
 	<string id="tip.options.video.beam_spread">A CRT sugár vízszintes szóródása (elmosás), 0-200%</string>
-	<string id="options.video.ui_theme">Felület témája</string>
-	<string id="options.video.ui_theme.auto">Automatikus</string>
-	<string id="options.video.ui_theme.light">Világos</string>
-	<string id="options.video.ui_theme.dark">Sötét</string>
-	<string id="tip.options.video.ui_theme">A menük és a párbeszédablakok színsémája. Automatikus esetén a rendszer világos vagy sötét beállítását követi.</string>
+	<string id="options.appearance.ui_theme">Felület témája</string>
+	<string id="options.appearance.ui_theme.auto">Automatikus</string>
+	<string id="options.appearance.ui_theme.light">Világos</string>
+	<string id="options.appearance.ui_theme.dark">Sötét</string>
+	<string id="tip.options.appearance.ui_theme">A menük és a párbeszédablakok színsémája. Automatikus esetén a rendszer világos vagy sötét beállítását követi.</string>
+	<string id="options.appearance.restore_defaults">Alapértelmezések visszaállítása</string>
+	<string id="tip.options.appearance.restore_defaults">Visszaállítja a megjelenésbeállításokat az alapértelmezett értékekre</string>
 	<string id="options.video.restore_defaults">Alapértelmezések visszaállítása</string>
 	<string id="tip.options.video.restore_defaults">Visszaállítja a videobeállításokat az alapértelmezett értékekre</string>
 	<string id="options.input.joystick_type">Botkormány típusa</string>

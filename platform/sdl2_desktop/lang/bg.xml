@@ -103,6 +103,7 @@
 	<string id="options.ok">ОК</string>
 	<string id="options.cancel">Отказ</string>
 	<string id="options.language.auto">Автоматично</string>
+	<string id="options.tab.appearance">Външен вид</string>
 	<string id="options.tab.audio">Звук</string>
 	<string id="options.tab.video">Видео</string>
 	<string id="options.tab.input">Управление</string>
@@ -132,11 +133,13 @@
 	<string id="tip.options.video.pal_strength">Интензивност на цветовите ефекти на PAL, 0-100%</string>
 	<string id="options.video.beam_spread">Разсейване на лъча</string>
 	<string id="tip.options.video.beam_spread">Хоризонтално разсейване на CRT лъча (замъгляване), 0-200%</string>
-	<string id="options.video.ui_theme">Тема на интерфейса</string>
-	<string id="options.video.ui_theme.auto">Автоматично</string>
-	<string id="options.video.ui_theme.light">Светла</string>
-	<string id="options.video.ui_theme.dark">Тъмна</string>
-	<string id="tip.options.video.ui_theme">Цветова схема на менютата и диалозите. При Автоматично се следва светлата или тъмната настройка на системата.</string>
+	<string id="options.appearance.ui_theme">Тема на интерфейса</string>
+	<string id="options.appearance.ui_theme.auto">Автоматично</string>
+	<string id="options.appearance.ui_theme.light">Светла</string>
+	<string id="options.appearance.ui_theme.dark">Тъмна</string>
+	<string id="tip.options.appearance.ui_theme">Цветова схема на менютата и диалозите. При Автоматично се следва светлата или тъмната настройка на системата.</string>
+	<string id="options.appearance.restore_defaults">Възстановяване по подразбиране</string>
+	<string id="tip.options.appearance.restore_defaults">Връща настройките за външен вид към стойностите по подразбиране</string>
 	<string id="options.video.restore_defaults">Възстановяване по подразбиране</string>
 	<string id="tip.options.video.restore_defaults">Връща видео настройките към стойностите по подразбиране</string>
 	<string id="options.input.joystick_type">Тип джойстик</string>

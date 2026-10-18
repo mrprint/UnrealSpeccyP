@@ -103,6 +103,7 @@
 	<string id="options.ok">Gerai</string>
 	<string id="options.cancel">Atšaukti</string>
 	<string id="options.language.auto">Automatinis</string>
+	<string id="options.tab.appearance">Išvaizda</string>
 	<string id="options.tab.audio">Garsas</string>
 	<string id="options.tab.video">Vaizdas</string>
 	<string id="options.tab.input">Valdymas</string>
@@ -132,11 +133,13 @@
 	<string id="tip.options.video.pal_strength">PAL spalvų efektų intensyvumas, 0-100%</string>
 	<string id="options.video.beam_spread">Spindulio sklaida</string>
 	<string id="tip.options.video.beam_spread">Horizontali CRT spindulio sklaida (suliejimas), 0-200%</string>
-	<string id="options.video.ui_theme">Sąsajos tema</string>
-	<string id="options.video.ui_theme.auto">Automatinis</string>
-	<string id="options.video.ui_theme.light">Šviesi</string>
-	<string id="options.video.ui_theme.dark">Tamsi</string>
-	<string id="tip.options.video.ui_theme">Meniu ir dialogo langų spalvų schema. Pasirinkus Automatinis, laikomasi sistemos šviesios arba tamsios nuostatos.</string>
+	<string id="options.appearance.ui_theme">Sąsajos tema</string>
+	<string id="options.appearance.ui_theme.auto">Automatinis</string>
+	<string id="options.appearance.ui_theme.light">Šviesi</string>
+	<string id="options.appearance.ui_theme.dark">Tamsi</string>
+	<string id="tip.options.appearance.ui_theme">Meniu ir dialogo langų spalvų schema. Pasirinkus Automatinis, laikomasi sistemos šviesios arba tamsios nuostatos.</string>
+	<string id="options.appearance.restore_defaults">Atkurti numatytuosius</string>
+	<string id="tip.options.appearance.restore_defaults">Atkuria išvaizdos parinktis į numatytąsias reikšmes</string>
 	<string id="options.video.restore_defaults">Atkurti numatytuosius</string>
 	<string id="tip.options.video.restore_defaults">Atkuria vaizdo parinktis į numatytąsias reikšmes</string>
 	<string id="options.input.joystick_type">Vairasvirtės tipas</string>
