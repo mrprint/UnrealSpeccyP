@@ -178,7 +178,7 @@ static void ReleaseKey(SDL_Scancode sc)
 
 // Releases every key this file has pressed in the emulator. Called whenever
 // key-ups may never arrive: the window lost focus (an exclusive-fullscreen
-// mode switch - "Prefer PAL refresh" - does exactly that, and the key-ups
+// mode switch - "Native refresh" - does exactly that, and the key-ups
 // SDL synthesizes for it are not guaranteed to reach us).
 void ReleaseAllKeys()
 {

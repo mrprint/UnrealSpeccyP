@@ -28,7 +28,9 @@
 
 	<string id="menu.view">View</string>
 	<string id="menu.view.fill_screen">Fill screen</string>
-	<string id="tip.menu.view.fill_screen">Show the whole 320x240 area, black border included</string>
+	<string id="tip.menu.view.fill_screen">Show the whole 340x284 area, black border included</string>
+	<string id="menu.view.overscan">Overscan</string>
+	<string id="tip.menu.view.overscan">Show the whole 352x304 overscan area, black border included</string>
 	<string id="menu.view.small_border">Small border</string>
 	<string id="tip.menu.view.small_border">Zoom in slightly, cropping most of the black border around the screen</string>
 	<string id="menu.view.no_border">No border</string>
@@ -41,7 +43,7 @@
 	<string id="tip.menu.view.pal_effects">Simulate the PAL colour effects (chroma blur, tint, crosstalk)</string>
 	<string id="menu.view.full_screen">Full screen</string>
 	<string id="tip.menu.view.full_screen">Toggle fullscreen</string>
-	<string id="menu.view.prefer_pal_refresh">PAL refresh</string>
+	<string id="menu.view.prefer_pal_refresh">Native refresh</string>
 	<string id="tip.menu.view.prefer_pal_refresh">In fullscreen, switch the display to a mode close to the emulated field rate</string>
 
 	<string id="menu.device">Device</string>
@@ -106,8 +108,8 @@
 	<string id="status.scanlines.off">CRT scanlines simulation off</string>
 	<string id="status.pal_effects.on">PAL effects on</string>
 	<string id="status.pal_effects.off">PAL effects off</string>
-	<string id="status.pal_refresh.on">Prefer PAL refresh on</string>
-	<string id="status.pal_refresh.off">Prefer PAL refresh off</string>
+	<string id="status.pal_refresh.on">Native refresh on</string>
+	<string id="status.pal_refresh.off">Native refresh off</string>
 	<string id="status.mouse_captured">Mouse captured, press ESC to cancel</string>
 	<string id="status.mouse_released">Mouse released</string>
 	<string id="status.shader.lightweight">Lightweight shader enabled</string>
@@ -115,8 +117,9 @@
 	<!-- %d/%.2f are the actual refresh rate and the emulator's own field rate - kept as printf placeholders, see sdl2_desktop_video.cpp -->
 	<string id="status.fullscreen.sync_enabled">Fullscreen: synced %dHz (emulator %.2fHz)</string>
 	<string id="status.fullscreen.frame_sync_enabled">Fullscreen: sync enabled</string>
-	<string id="status.fullscreen.pal_refresh_off">Fullscreen: desktop rate (PAL sync off)</string>
+	<string id="status.fullscreen.pal_refresh_off">Fullscreen: desktop rate (native refresh off)</string>
 	<string id="status.fullscreen.no_better_rate">Fullscreen: desktop rate (no match)</string>
+	<string id="status.emulation_preset">Emulation speed: %s (%.2f Hz)</string>
 
 	<!-- Options dialog -->
 	<string id="options.title">Options</string>
@@ -124,6 +127,7 @@
 	<string id="options.cancel">Cancel</string>
 	<string id="options.language.auto">Auto</string>
 	<string id="options.tab.appearance">Appearance</string>
+	<string id="options.tab.emulation">Emulation</string>
 	<string id="options.tab.audio">Audio</string>
 	<string id="options.tab.video">Video</string>
 	<string id="options.tab.input">Input</string>
@@ -144,7 +148,7 @@
 	<string id="tip.options.video.gigascreen">Gigascreen: blend the two AY colour frames to get 256 colours instead of 15</string>
 	<string id="options.video.scanlines">CRT scanlines</string>
 	<string id="tip.options.video.scanlines">Simulate CRT scanlines</string>
-	<string id="options.video.prefer_pal_refresh">PAL refresh</string>
+	<string id="options.video.prefer_pal_refresh">Native refresh</string>
 	<string id="tip.options.video.prefer_pal_refresh">In fullscreen, switch the display to a mode close to the emulated field rate</string>
 	<string id="options.video.crt_mask_scale">CRT Mask Scale</string>
 	<string id="tip.options.video.crt_mask_scale">Width of the simulated CRT phosphor mask columns; 0 disables the mask</string>
@@ -162,6 +166,16 @@
 	<string id="tip.options.appearance.ui_theme">Colour scheme of the menus and dialogs. Auto follows the system's light/dark setting.</string>
 	<string id="options.appearance.restore_defaults">Restore defaults</string>
 	<string id="tip.options.appearance.restore_defaults">Restore the appearance options to their default values</string>
+	<string id="options.emulation.speed_header">Emulation speed</string>
+	<string id="options.emulation.speed_preset">Speed preset</string>
+	<string id="tip.options.emulation.speed_preset">CPU clock and frame timing of a known computer. Hover over an entry to see its exact values.</string>
+	<string id="options.emulation.speed_note">This sets only the emulation speed: the CPU clock and the screen refresh rate of the chosen computer. It does not emulate that computer - the ROMs, the memory model and the hardware behaviour stay as they are. The memory model is chosen with Device &gt; Mode 48k.</string>
+	<string id="options.emulation.speed_reset_note">Changing the preset resets the emulated machine.</string>
+	<string id="options.emulation.preset.default">Emulator default</string>
+	<string id="options.emulation.preset.default_desc">The speed this emulator has always used, not a real computer: a Pentagon-sized frame at exactly 50 Hz.</string>
+	<string id="options.emulation.preset_values">CPU clock: %s MHz&#10;Frame: %d T-states (%d lines x %d T-states)&#10;Screen refresh: %.3f Hz</string>
+	<string id="options.emulation.restore_defaults">Restore defaults</string>
+	<string id="tip.options.emulation.restore_defaults">Restore the emulation options to their default values</string>
 	<string id="options.video.restore_defaults">Restore defaults</string>
 	<string id="tip.options.video.restore_defaults">Restore the video options to their default values</string>
 

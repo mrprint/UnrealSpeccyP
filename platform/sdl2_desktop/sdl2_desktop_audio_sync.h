@@ -60,7 +60,7 @@ namespace xPacing
 class AudioSync
 {
 public:
-	static constexpr double kFrameSamples = 882.0;   // one emulated frame at 44100 Hz
+	static constexpr double kDefaultFrameSamples = 882.0; // one emulated frame at 44100 Hz and 50 Hz
 	static constexpr double kTargetFrames = 2.5;     // fill level to hold, in emulated frames
 	static constexpr double kMaxDeviation = 0.015;   // consumption ratio stays within 1 +- this
 	static constexpr double kKp = 0.016;             // per frame of fill error
@@ -70,7 +70,14 @@ public:
 	static constexpr int kRefillMax = 3;             // most extra frames run to put the cushion back after an event
 	static constexpr double kRefillStopFrames = 2.0; // ...and the level that counts as put back (a frame is the smallest step, so stop a half frame short)
 
-	void Reset() { *this = AudioSync(); }
+	// One emulated frame in samples: the sample rate over the machine's field
+	// rate. The platform sets it whenever the emulated speed (the CPU clock and
+	// the frame length) changes, since that moves the frame length: 903 samples
+	// at 48.83 Hz, 882 at 50 Hz, 881 at 50.08 Hz at 44100 Hz.
+	double FrameSamples() const { return m_frame_samples; }
+	void SetFrameSamples(double n) { if(n > 1.0) m_frame_samples = n; }
+
+	void Reset() { const double f = m_frame_samples; *this = AudioSync(); m_frame_samples = f; }
 
 	// Once per presented frame, main thread, with the mixer in its post-
 	// production state. 'fill_samples' is what is queued; 'active' is false
@@ -96,7 +103,7 @@ public:
 		const bool resumed = m_inactive; // audio is back and the mixer was left to drain
 		m_inactive = false;
 
-		const bool starved = fill_samples < kStarvedFrames * kFrameSamples;
+		const bool starved = fill_samples < kStarvedFrames * m_frame_samples;
 		if((starved || underran || resumed) && !m_refilling)
 		{
 			// Empty (a pause, a stall, a long load) or caught short. Producing
@@ -108,7 +115,7 @@ public:
 			m_refilling = true;
 			m_refill_left = kRefillMax;
 		}
-		if(m_refilling && fill_samples >= kRefillStopFrames * kFrameSamples)
+		if(m_refilling && fill_samples >= kRefillStopFrames * m_frame_samples)
 			m_refilling = false; // restored
 		if(m_refilling || starved)
 		{
@@ -119,7 +126,7 @@ public:
 			// (which pulls the pitch down by the full 1.5 % for seconds).
 			m_i = 0;
 			m_ratio = 1.0;
-			m_avg = kTargetFrames * kFrameSamples;
+			m_avg = kTargetFrames * m_frame_samples;
 			m_have = true;
 			return;
 		}
@@ -135,7 +142,7 @@ public:
 			m_avg += a * (fill_samples - m_avg);
 		}
 
-		const double err = (m_avg - kTargetFrames * kFrameSamples) / kFrameSamples; // frames
+		const double err = (m_avg - kTargetFrames * m_frame_samples) / m_frame_samples; // frames
 		m_i += err * dt_s;
 		const double i_limit = kMaxDeviation / kKi;
 		if(m_i > i_limit) m_i = i_limit;
@@ -161,6 +168,7 @@ private:
 	bool m_have = false, m_inactive = false, m_refilling = false;
 	int m_refill_left = 0;
 	double m_avg = 0.0, m_i = 0.0, m_ratio = 1.0;
+	double m_frame_samples = kDefaultFrameSamples;
 };
 
 // Stereo interleaved 16-bit, as the mixer produces and the device wants.

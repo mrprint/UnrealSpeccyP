@@ -41,6 +41,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 constexpr int slines_cnt = 256;
 constexpr int sline_len = 512;
+// Texture height while the extended raster (see SetExtendedRaster() below) is
+// shown: 304 lines do not fit into 256. Everything else keeps the 512x256 texture.
+constexpr int slines_cnt_ext = 320;
 
 PROFILER_DECLARE(draw_p);
 PROFILER_DECLARE(draw);
@@ -74,7 +77,10 @@ namespace xPlatform
         virtual const char* Name() const { return "zoom"; }
         virtual const char** Values() const
         {
-            static const char* values[] = { "fill screen", "small border", "no border", NULL };
+            // The order is the numbering the options of the platforms that share this
+            // file go by (wxWidgets checks its menu by 0, 1, 2), so "overscan" is last.
+            // Change() cycles through the first three: the ones wxWidgets has.
+            static const char* values[] = { "fill screen", "small border", "no border", "overscan", NULL };
             return values;
         }
         virtual void Change(bool next = true) { eOptionInt::Change(0, 3, next); }
@@ -179,6 +185,8 @@ namespace xPlatform
     CachedUniform<int>                 u_enable_pal_effects_cached;
     CachedUniform<float>               u_pal_strength_cached;
     CachedUniform<float>               u_beam_spread_cached;
+    CachedUniform<float>               u_slines_cnt_cached;
+    CachedUniform<float>               u_src_width_cached;
 
     // Lightweight uniforms
     CachedUniform<std::array<float, 2>> u_lw_scale;
@@ -187,6 +195,7 @@ namespace xPlatform
     CachedUniform<int>                 u_lw_texture2;
     CachedUniform<int>                 u_lw_show_scanlines;
     CachedUniform<int>                 u_lw_mask_scale;
+    CachedUniform<float>               u_lw_slines_cnt;
 
     // Driver-call reduction
     static GLuint current_program = 0;
@@ -248,14 +257,22 @@ namespace xPlatform
     static int fb_width = sline_len * 4;
     static int fb_height = slines_cnt * 4;
 
-    static dword tex1[sline_len * slines_cnt], * p_tex1 = tex1;
-    static dword tex2[sline_len * slines_cnt], * p_tex2 = tex2;
+    // The picture that is shown: src_w x src_h source pixels in a texture that is
+    // sline_len x tex_lines. Normally the 320x240 raster of the emulation core in
+    // 512x256; SetExtendedRaster() switches to a bigger one (and back).
+    static int tex_lines = slines_cnt, src_w = 320, src_h = 240;
+    static int init_scr_w = -1, init_scr_h = -1;     // what initGraphics() was given
+    static const byte* ext_data = nullptr;           // the extended raster of this frame
+    static int ext_w = 0, ext_h = 0;
+
+    static dword tex1[sline_len * slines_cnt_ext], * p_tex1 = tex1;
+    static dword tex2[sline_len * slines_cnt_ext], * p_tex2 = tex2;
     static int   video_frame_last = -1;
     static bool  giga_was_enabled = false;
 
 #ifdef USE_SDL2_DESKTOP
     // sdl2_desktop/sdl2_desktop_video.cpp - true only while fullscreen with
-    // "Prefer PAL refresh" on and a matching display mode actually applied.
+    // "Native refresh" on and a matching display mode actually applied.
     // Forward-declared here rather than pulled in via a shared header,
     // matching how this codebase already wires up other cross-file calls
     // (see e.g. ResizeToOrgSizeMultiple() in sdl2_desktop_menu.cpp).
@@ -322,7 +339,7 @@ uniform vec2 fbSize;          // Size of input framebuffer
 
 // Precomputed constants (for readability and optimization)
 const float PI = 3.141592653589793;          // Precise Pi value
-const float SLINES_CNT = 256.0;              // PAL scanline count per frame
+uniform float slinesCnt;                     // scanline waves per frame: 256 for the 320x240 picture
 const float SLINE_LEN = 512.0;               // Horizontal scan line length
 
 // Luminance (Y) calculation coefficients (BT.601 standard)
@@ -334,7 +351,7 @@ const float DOT_CRAWL_FRAME_SPEED = 0.3;      // Frame animation speed
 const float DOT_CRAWL_STRENGTH = 0.02;        // Base crawl intensity
 
 // PAL Chroma Bandwidth Limit: Simulate low-pass filter on U/V channels
-const float CHROMA_REF_PIXELS = 320.0;         // Reference resolution for scaling
+uniform float srcWidth;                      // Source pixels across the picture: 320 (352 in the extended raster)
 const float CHROMA_RADIUS = 0.5;               // Effective filter radius (texture pixels)
 
 const float CHROMA_WEIGHT_LEFT_1_5 = 0.08;    // Left 1.5x step weight
@@ -399,7 +416,7 @@ void main() {
         vec3 yuv = rgb2yuv(color.rgb);         // Convert initial color to YUV
 
         // Chroma Bandwidth Limit: Low-pass filter on U/V to simulate PAL's limited bandwidth
-        float chromaScale = (fbSize.x / CHROMA_REF_PIXELS) * CHROMA_RADIUS;
+        float chromaScale = (fbSize.x / srcWidth) * CHROMA_RADIUS;
         float sampleStep = texelSize.x * chromaScale;             // Step between samples
 
         vec2 offset1_5 = vec2(sampleStep * 1.5, 0.0);             // ±1.5x step (left/right)
@@ -433,7 +450,7 @@ void main() {
         vec3 crosstalk = (luma - palRgb) * CROSSTALK_STRENGTH * palStrength;
         palRgb += crosstalk;
 
-        float srcTexelX  = texelSize.x * (fbSize.x / 320.0);
+        float srcTexelX  = texelSize.x * (fbSize.x / srcWidth);
         float spreadDist = beamSpread * BEAM_SPREAD_SCALE;
         float spreadMix  = clamp(beamSpread, 0.0, 1.0);
         vec3 left  = texture(fbTexture, uv - vec2(srcTexelX * spreadDist, 0.0)).rgb;
@@ -465,7 +482,7 @@ void main() {
 
     // --- Scanlines: Vertical intensity variation ---
     if (showScanlines != 0) {
-        float scanFreq = SLINES_CNT * 2.0 * PI;              // Full sine waves per frame
+        float scanFreq = slinesCnt * 2.0 * PI;              // Full sine waves per frame
         color.rgb *= SCANLINE_PARAMS.x +
                      SCANLINE_PARAMS.y * sin(TexCoord.y * scanFreq);
     }
@@ -503,7 +520,7 @@ uniform float blendFactor;
 uniform int   showScanlines;
 uniform int   maskScale; // same value as the full-quality pass — screen pixels per phase column
 
-const float SLINES_CNT = 256.0;
+uniform float slinesCnt; // texture height in lines (256; 320 in the extended raster)
 const vec3  LUMINANCE  = vec3(0.299, 0.587, 0.114);
 
 // tri() gives a sharp V-shape — more CRT-like than sine, zero transcendental cost.
@@ -522,7 +539,7 @@ void main()
 
     // Scanlines in normalised texture space — resolution independent.
     if (showScanlines != 0)
-        color *= SCAN_BASE + SCAN_AMP * tri(TexCoord.y * SLINES_CNT);
+        color *= SCAN_BASE + SCAN_AMP * tri(TexCoord.y * slinesCnt);
 
     if (maskScale > 0)
     {
@@ -620,6 +637,20 @@ void main()
         }
     }
 
+    // The size of the FBO: 2x the display (the largest one) in the longer direction,
+    // in the proportions of the texture. Needs init_scr_w/h from initGraphics().
+    static void ComputeFbSize()
+    {
+        if (init_scr_h == -1)
+            return;
+        float base_scale =
+            (float)((init_scr_w > init_scr_h) ? init_scr_w : init_scr_h) /
+            (float)((init_scr_w > init_scr_h) ? sline_len : tex_lines);
+        base_scale *= 2.0f;
+        fb_width = int(sline_len * base_scale);
+        fb_height = int(tex_lines * base_scale);
+    }
+
     // -------------------------------------------------------------------------
     // initGraphics
     // -------------------------------------------------------------------------
@@ -641,12 +672,9 @@ void main()
             fb_width = sline_len * s;
             fb_height = slines_cnt * s;
             */
-            float base_scale =
-                (float)((scr_width > scr_height) ? scr_width : scr_height) /
-                (float)((scr_width > scr_height) ? sline_len : slines_cnt);
-            base_scale *= 2.0f;
-            fb_width = int(sline_len * base_scale);
-            fb_height = int(slines_cnt * base_scale);
+            init_scr_w = scr_width;
+            init_scr_h = scr_height;
+            ComputeFbSize();
         }
 
         glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
@@ -779,6 +807,8 @@ void main()
         u_enable_pal_effects_cached.set(glGetUniformLocation(screen_shader, "enablePalEffects"));
         u_pal_strength_cached.set(glGetUniformLocation(screen_shader, "palStrength"));
         u_beam_spread_cached.set(glGetUniformLocation(screen_shader, "beamSpread"));
+        u_slines_cnt_cached.set(glGetUniformLocation(screen_shader, "slinesCnt"));
+        u_src_width_cached.set(glGetUniformLocation(screen_shader, "srcWidth"));
 
         if (u_scale_cached.location == -1 ||
             u_blend_factor_cached.location == -1 ||
@@ -805,6 +835,7 @@ void main()
         u_lw_texture2.set(glGetUniformLocation(lw_shader, "texture2"));
         u_lw_show_scanlines.set(glGetUniformLocation(lw_shader, "showScanlines"));
         u_lw_mask_scale.set(glGetUniformLocation(lw_shader, "maskScale"));
+        u_lw_slines_cnt.set(glGetUniformLocation(lw_shader, "slinesCnt"));
 
         if (u_lw_scale.location == -1 ||
             u_lw_blend_factor.location == -1 ||
@@ -821,6 +852,51 @@ void main()
         // This keeps current_program consistent so UseProgram() doesn't miss the
         // first real draw call's program switch.
         current_program = lw_shader;
+    }
+
+    // -------------------------------------------------------------------------
+    // ApplyRasterGeometry - the picture is w x h source pixels from now on.
+    // Rare (it follows the zoom mode), so the textures, the FBO and the quad are
+    // simply respecified. w x h = 320x240 is the original geometry: the same
+    // texture, FBO, quad, aspect and shader constants as before this existed.
+    // -------------------------------------------------------------------------
+    static void ApplyRasterGeometry(int w, int h)
+    {
+        if (w == src_w && h == src_h)
+            return;
+        src_w = w;
+        src_h = h;
+        tex_lines = (h > slines_cnt) ? slines_cnt_ext : slines_cnt;
+
+        // Black, so that nothing of the old layout shows (the CPU buffers are
+        // what gigascreen blends with, too).
+        memset(tex1, 0, sizeof(tex1));
+        memset(tex2, 0, sizeof(tex2));
+        for (int i = 0; i < 2; ++i)
+        {
+            glBindTexture(GL_TEXTURE_2D, tex_id_for[i]);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sline_len, tex_lines, 0,
+                GL_RGBA, GL_UNSIGNED_BYTE, i == 0 ? tex1 : tex2);
+        }
+        ComputeFbSize();
+        glBindTexture(GL_TEXTURE_2D, fb_texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, fb_width, fb_height, 0,
+            GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+
+        // The quad that shows the picture: the w x h corner of the texture.
+        const float vertices_cropped[] = {
+            -1.0f,  1.0f, 0.0f,                     0.0f,
+            -1.0f, -1.0f, 0.0f,                     (float)h / tex_lines,
+             1.0f, -1.0f, (float)w / sline_len,     (float)h / tex_lines,
+             1.0f,  1.0f, (float)w / sline_len,     0.0f
+        };
+        glBindBuffer(GL_ARRAY_BUFFER, vbo1);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices_cropped), vertices_cropped);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+        InvalidateTextureCache();   // raw glBindTexture above
+        mip_dirty = true;           // the FBO texture is a new one as far as filtering goes
+        pending_clear = true;
     }
 
     // -------------------------------------------------------------------------
@@ -912,7 +988,7 @@ void main()
         bool giga_enabled = op_gigascreen;
 #ifdef USE_SDL2_DESKTOP
         // A field-rate-synced fullscreen mode is actually running - Prefer
-        // PAL refresh takes priority over Gigascreen rather than the other
+        // Native refresh takes priority over Gigascreen rather than the other
         // way round, so ignore Gigascreen for as long as that holds. Only
         // this condition suppresses it; windowed mode and plain (non-PAL-
         // synced) fullscreen leave Gigascreen exactly as configured.
@@ -921,15 +997,28 @@ void main()
 #endif
         giga_was_enabled = giga_enabled;
 
+        const bool ext = ext_data != nullptr;
+        ApplyRasterGeometry(ext ? ext_w : 320, ext ? ext_h : 240);
+
         if (giga_enabled && video_frame_last != snap.frame)
             std::swap(p_tex1, p_tex2);
         video_frame_last = snap.frame;
 
         // CPU-side colour conversion into p_tex1.
         // Reads only from the snapshot — no emulator memory touched here.
-        const byte* data = snap.video;
+        const byte* data = ext ? ext_data : snap.video;
         dword* p = p_tex1;
 
+        if (ext)
+        {
+            for (int y = 0; y < src_h; ++y)
+            {
+                for (int x = 0; x < src_w; ++x)
+                    *p++ = color_cache.items[*data++];
+                p += sline_len - src_w;
+            }
+        }
+        else
     #ifdef USE_UI
         if (snap.has_ui)
         {
@@ -968,7 +1057,7 @@ void main()
         prev_use_lightweight = use_lightweight;
 
         // Aspect-correction scale (identical for both render paths)
-        const float aspect_src = 320.0f / 240.0f;
+        const float aspect_src = (float)src_w / (float)src_h;
         const float aspect_dst = (float)vport_width / (float)vport_height;
         float scale_x = 1.0f, scale_y = 1.0f;
         if (aspect_dst > aspect_src)
@@ -999,7 +1088,7 @@ void main()
             UseProgram(lw_shader);
 
             // Upload only the freshly written buffer; p_tex2 is already in VRAM.
-            UploadTexture(gl_tex1, p_tex1, sline_len, slines_cnt);
+            UploadTexture(gl_tex1, p_tex1, sline_len, tex_lines);
             // UploadTexture() leaves TEXTURE0 active and gl_tex1 bound via the cache.
             // Re-apply filter state (mip_dirty may have been set by the full path).
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -1017,8 +1106,9 @@ void main()
             }
 
             u_lw_scale.update({ scale_x * opZoom(), scale_y * opZoom() });
+            u_lw_slines_cnt.update((float)tex_lines);
             u_lw_show_scanlines.update(
-                op_scanlines && vport_height > slines_cnt + slines_cnt / 2 ? 1 : 0);
+                op_scanlines && vport_height > (src_h * 8) / 5 ? 1 : 0);
             u_lw_mask_scale.update(OpMaskScale());
 
             glBindVertexArray(vao1); // cropped quad — only the 320x240 visible area
@@ -1046,7 +1136,7 @@ void main()
         u_scale_cached.update({ 1.0f, 1.0f });
 
         // Upload only the freshly written buffer; p_tex2 is already in VRAM.
-        UploadTexture(gl_tex1, p_tex1, sline_len, slines_cnt);
+        UploadTexture(gl_tex1, p_tex1, sline_len, tex_lines);
         // UploadTexture() leaves TEXTURE0/gl_tex1 bound in the cache.
         u_texture1_cached.update(0);
 
@@ -1077,7 +1167,7 @@ void main()
 
         UseProgram(screen_shader);
         u_show_scanlines_cached.update(
-            op_scanlines && vport_height > slines_cnt + slines_cnt / 2 ? 1 : 0);
+            op_scanlines && vport_height > (src_h * 8) / 5 ? 1 : 0);
         u_simple_scale_cached.update({ scale_x * opZoom(), scale_y * opZoom() });
         u_fb_texture_cached.update(0);
         u_fb_size_cached.update({ float(fb_width), float(fb_height) });
@@ -1085,6 +1175,8 @@ void main()
         u_enable_pal_effects_cached.update(OpPalEffects() ? 1 : 0);
         u_pal_strength_cached.update(static_cast<float>(OpPalStrength()) / 100.0f);
         u_beam_spread_cached.update(static_cast<float>(OpBeamSpread()) / 100.0f);
+        u_slines_cnt_cached.update(src_h == 240 ? (float)slines_cnt : (float)src_h);
+        u_src_width_cached.update((float)src_w);
 
         BindTextureUnit(GL_TEXTURE0, fb_texture);
         // Ensure TEXTURE0 is the active unit before glTexParameteri and
@@ -1115,6 +1207,26 @@ void main()
         glBindVertexArray(vao2); // full NDC quad for the screen pass
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         return true;
+    }
+
+    // -------------------------------------------------------------------------
+    // The zoom mode: 0 "fill screen", 1 "small border", 2 "no border", 3 "overscan".
+    // The platform asks which, to give the first and the last the border they show
+    // (see sdl2_desktop_fullborder.cpp).
+    // -------------------------------------------------------------------------
+    int ZoomMode()
+    {
+        return static_cast<int>(op_zoom);
+    }
+
+    // The picture of the next DrawGL() calls is this w x h raster, one palette index
+    // per pixel, tightly packed - instead of the 320x240 one in the snapshot. Valid
+    // until it is called again; nullptr goes back to the snapshot.
+    void SetExtendedRaster(const byte* data, int w, int h)
+    {
+        ext_data = data;
+        ext_w = w;
+        ext_h = h;
     }
 
 }//namespace xPlatform

@@ -42,6 +42,7 @@ static eSoundMixer sound_mixer;
 // The device is slaved to the emulated machine: the controller picks how fast
 // the callback consumes the mixer, the resampler does it (sdl2_desktop_audio_sync.h).
 static xPacing::AudioSync audio_sync;
+static double audio_sample_rate = 44100.0; // what the device actually runs at (InitAudio)
 static xPacing::Resampler resampler;
 static unsigned underruns_total = 0; // callbacks that found the mixer short, ever
 #endif//USE_SDL2_DESKTOP
@@ -107,6 +108,9 @@ bool InitAudio()
 	if(!device)
 		return false;
 	Handler()->AudioSetSampleRate(obtained.freq);
+#ifdef USE_SDL2_DESKTOP
+	audio_sample_rate = obtained.freq;
+#endif//USE_SDL2_DESKTOP
 	SDL_PauseAudioDevice(device, 0);
 	return true;
 }
@@ -150,7 +154,7 @@ void UpdateAudio()
 		// frames until the mixer is back under 5 frames, rather than let it fill
 		// without limit. 6 frames is 120 ms; in normal operation the fill never
 		// gets past 4.
-		const double frame = xPacing::AudioSync::kFrameSamples;
+		const double frame = audio_sync.FrameSamples();
 		const bool held_new = active && (held ? fill > 5 * frame : fill > 6 * frame);
 		if(held != held_new)
 		{
@@ -174,6 +178,12 @@ void UpdateAudio()
 namespace xPacing
 {
 bool AudioRefillWanted() { return device && audio_sync.RefillWanted(); }
+double AudioSampleRate() { return audio_sample_rate; }
+void AudioSetMachineHz(double hz)
+{
+	if(hz > 0.0)
+		audio_sync.SetFrameSamples(audio_sample_rate / hz);
+}
 void AudioRefillDone()
 {
 	audio_sync.RefillDone();

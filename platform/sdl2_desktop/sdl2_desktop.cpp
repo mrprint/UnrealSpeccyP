@@ -43,6 +43,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "imgui_shared.h"
 #include "sdl2_desktop_frame_sched.h"
 #include "sdl2_desktop_pacing.h"
+#include "sdl2_desktop_emulation.h"
+#include "sdl2_desktop_fullborder.h"
 #include "sdl2_desktop_gamepad.h"
 #include "../../options_common.h"
 #include "../../tools/options.h"
@@ -134,7 +136,7 @@ void DoneVideo();
 void DoneAudio();
 void UpdateAudio();
 void UpdateScreen();
-double EmulatedFieldRateHz(); // sdl2_desktop_video.cpp: 50.000
+double EmulatedFieldRateHz(); // sdl2_desktop_video.cpp: the selected emulation preset's field rate
 int DisplayNominalHz();       // sdl2_desktop_video.cpp
 void ProcessKey(SDL_Event& e);
 void ReleaseAllKeys(); // sdl2_desktop_keys.cpp
@@ -223,6 +225,10 @@ bool Init()
 	OpLastFile(SDL_DEFAULT_FOLDER);
 #endif//SDL_DEFAULT_FOLDER
 	Handler()->OnInit();
+	// The saved emulation preset goes in before the video is set up: the fullscreen
+	// display mode is picked for the emulated field rate. (The audio device, opened
+	// later, times the sound devices by the core's own clock: OnEmulationAudioOpened().)
+	ApplyEmulationPreset();
 
 	// Must be set before SDL_Init(SDL_INIT_VIDEO): on Windows, an app with no
 	// manifest is DPI-unaware by default, and the OS bitmap-stretches its
@@ -269,6 +275,7 @@ bool Init()
 		return false;
 	if(!InitAudio())
 		return false;
+	OnEmulationAudioOpened();
 
 	xImGui::InitMenu();
 
@@ -352,6 +359,29 @@ static void UpdateCursorVisibility()
 }
 #endif//SDL_USE_MOUSE
 
+// Everything that is derived from the emulated field rate, after it changed.
+static void PaceByEmulatedFieldRate()
+{
+	const double hz = EmulatedFieldRateHz();
+	frame_sched.SetMachineHz(hz);
+	xPacing::AudioSetMachineHz(hz);
+}
+
+// One emulated frame. The machine is put on the selected emulation preset first
+// (a change of the selection, between two frames) and when the preset has just
+// changed everything that is derived from the field rate follows it: the frame
+// scheduler, the audio controller and (fullscreen, "Native refresh") the display mode.
+static void EmulateFrame()
+{
+	if(ApplyEmulationPreset())
+	{
+		PaceByEmulatedFieldRate();
+		OnEmulatedFieldRateChanged();
+	}
+	SyncFullBorder(); // the raster the ULA draws follows the zoom mode ("fill screen", "overscan": more border)
+	Handler()->OnLoop();
+}
+
 void Loop1()
 {
 	game_input_events.clear();
@@ -403,7 +433,7 @@ void Loop1()
 #endif//SDL_USE_JOYSTICK
 		case SDL_WINDOWEVENT:
 			// Focus loss (alt-tab, and the exclusive-fullscreen mode switch of
-			// "Prefer PAL refresh") can swallow key-ups; nothing the user was
+			// "Native refresh") can swallow key-ups; nothing the user was
 			// holding in the emulator may outlive it - see ReleaseAllKeys().
 			if(e.window.event == SDL_WINDOWEVENT_FOCUS_LOST || e.window.event == SDL_WINDOWEVENT_MINIMIZED)
 				ReleaseAllKeys();
@@ -568,7 +598,7 @@ void Loop1()
 			++steps;
 		const int frame_before = Handler()->VideoFrame();
 		for(int i = 0; i < steps; ++i)
-			Handler()->OnLoop();
+			EmulateFrame();
 		if(refill && Handler()->VideoFrame() != frame_before) // frames really were emulated
 			xPacing::AudioRefillDone();
 	}
@@ -578,8 +608,10 @@ void Loop1()
 
 void Loop()
 {
-	// The machine runs at exactly 50.000 frames per second (see the comment
-	// above EmulatedFieldRateHz() in sdl2_desktop_video.cpp). How many emulated
+	// The machine runs at the field rate of the selected emulation preset - 50.000
+	// frames per second by default (see the comment above EmulatedFieldRateHz()
+	// in sdl2_desktop_video.cpp), and it may change between iterations (see
+	// ApplyEmulationPreset() below). How many emulated
 	// frames each iteration gets is decided in Loop1() by frame_sched, from the
 	// real time between iterations, and audio follows the machine, not the
 	// other way round (platform/sdl2/sdl2_audio.cpp).
@@ -594,11 +626,11 @@ void Loop()
 	last_tick.SetCurrent();
 	int floor_ms = 15;
 	int iteration = 0;
-	frame_sched.SetMachineHz(EmulatedFieldRateHz());
+	PaceByEmulatedFieldRate();
 	while(!quit)
 	{
 		for(int i = OpSpeed(); --i >= 0;)
-			Handler()->OnLoop();
+			EmulateFrame();
 		Loop1();
 		if((iteration++ & 63) == 0)
 		{

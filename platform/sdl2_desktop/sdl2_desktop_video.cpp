@@ -40,6 +40,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "imgui.h"
 #include "imgui_shared.h"
 #include "sdl2_desktop_pacing.h"
+#include "sdl2_desktop_emulation.h"
+#include "sdl2_desktop_fullborder.h"
 #include "../../devices/sound/device_sound.h"
 #include "../../tools/options.h"
 #include "../../tools/point.h"
@@ -62,6 +64,7 @@ void initGlew();
 void initGraphics(int scr_width, int scr_height);
 void cleanupGraphics();
 bool DrawGL(int vport_x, int vport_y, int vport_width, int vport_height, const VideoSnapshot& snap);
+void SetExtendedRaster(const byte* data, int w, int h); // platform/gl/draw.cpp: a bigger picture than the snapshot's, or nullptr
 
 namespace xImGui
 {
@@ -361,17 +364,17 @@ static struct eOptionWindowDisplay : public xOptions::eOptionString
 
 // --- Fullscreen + real field-rate sync -----------------------------------
 //
-// The emulated machine runs at exactly 50.000 frames per second. A frame is
-// 71680 T-states (speccy.cpp: frame_tacts, Pentagon-style video timing), and
-// the sound engine's tick rate - which is what sets the machine's real-time
-// speed on every platform of this codebase, through audio buffers of
-// 44100*2*2/50 bytes per frame - is 71680 * 50 (devices/sound/device_sound.h,
-// SNDR_DEFAULT_SYSTICK_RATE, commented there as the Z80 clock): 20.000 ms a
-// frame, 882 samples at 44100 Hz. It is NOT 48.828 Hz, which is what 71680
-// T-states come to at the nominal 3.5 MHz that only the floppy code still
-// uses (Z80FQ in devices/fdd/), and not the 50.08 Hz of the 48K Spectrum's
-// 69888-T-state frame either. Measured on real displays: 50.00 emulated
-// frames per second.
+// The emulated machine runs at the field rate of the selected emulation
+// preset (sdl2_desktop_emulation.h): its CPU clock over its frame length in
+// T-states, which is also what sets its real-time speed through the sound
+// engine (one frame is frame_tacts / clock seconds of samples). The default
+// entry is the speed this emulator has always had: a 71680-T-state frame at
+// 71680 * 50 Hz (devices/sound/device_sound.h, SNDR_DEFAULT_SYSTICK_RATE) is
+// 20.000 ms, 882 samples at 44100 Hz, exactly 50.000 frames per second - not
+// 48.828 Hz, which is what that frame comes to at 3.5 MHz. The presets for the
+// known computers give 50.08 (ZX Spectrum 48K), 50.02 (ZX Spectrum 128K),
+// 48.83 (Pentagon 48K) and 49.87 Hz (Pentagon 128K). Measured on real displays
+// with the default: 50.00 emulated frames per second.
 //
 // How that rate meets the display is the frame scheduler's business
 // (sdl2_desktop_frame_sched.h, used from Loop1()): it locks the machine to the
@@ -391,7 +394,7 @@ static bool g_field_rate_synced = false;
 
 // Exposed to platform/gl/draw.cpp (DrawGL()) so it can ignore the
 // "gigascreen" option for as long as this holds: true only while fullscreen,
-// "Prefer PAL refresh" is on, AND a matching display mode was actually
+// "Native refresh" is on, AND a matching display mode was actually
 // found and applied - exactly the condition g_field_rate_synced already
 // tracks, so this is a plain read of it rather than a separate flag that
 // could drift out of sync.
@@ -400,14 +403,13 @@ bool FieldRateSyncActive()
 	return g_field_rate_synced;
 }
 
-// The rate (in Hz) the machine runs at in real time: 50.000 - the sound
-// engine's tick rate over the frame length (see the comment at the top of this
-// section). Read out of the running core, not hardcoded, so it follows if
-// either of them ever changes. The main loop's frame scheduler paces by this.
+// The rate (in Hz) the machine runs at in real time: the emulated CPU clock
+// over the frame length (see the comment at the top of this section). Read out
+// of the running core, not hardcoded, so it follows the emulation preset. The
+// main loop's frame scheduler paces by this.
 double EmulatedFieldRateHz()
 {
-	const dword frame_tacts = Handler()->Speccy()->CPU()->FrameTacts();
-	return frame_tacts ? (double)SNDR_DEFAULT_SYSTICK_RATE / frame_tacts : 50.0;
+	return EmulationPreset(RunningEmulationPreset()).FieldRateHz(); // the default entry (50 Hz) before the first apply
 }
 
 // The refresh rate SDL reports for the display the window is on, in whole Hz
@@ -630,6 +632,8 @@ static struct eOptionPreferPalRefresh : public xOptions::eOptionBool
 	// fullscreen at the desktop's own rate, and only switches display modes
 	// once the person explicitly opts in.
 	eOptionPreferPalRefresh() { Set(false); }
+	// Shown as "Native refresh". The key is what saved configs call it,
+	// so it stays.
 	const char* Name() const override { return "Prefer PAL refresh"; }
 	int Order() const override { return 33; }
 	void Set(const bool& v) override
@@ -673,7 +677,7 @@ static void ApplyFullScreen(bool enable)
 		return;
 	}
 
-	// Prefer PAL refresh is off - plain borderless fullscreen at the
+	// Native refresh is off - plain borderless fullscreen at the
 	// desktop's own refresh rate, no modesetting at all.
 	if(!op_prefer_pal_refresh)
 	{
@@ -707,6 +711,28 @@ static void ApplyFullScreen(bool enable)
 	xImGui::SetStatusText(xImGui::Tr("status.fullscreen.no_better_rate"));
 }
 
+// A new emulation preset moves the rate the display mode is picked for. Only
+// matters in fullscreen with "Native refresh" on: re-pick, but leave the running
+// mode alone if it is still the best one (a modeset blinks the screen).
+void OnEmulatedFieldRateChanged()
+{
+	if(!g_gl_window.window || !op_prefer_pal_refresh)
+		return;
+	Uint32 flags = SDL_GetWindowFlags(g_gl_window.window);
+	if(!(flags & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)))
+		return;
+	int display_index = SDL_GetWindowDisplayIndex(g_gl_window.window);
+	if(g_field_rate_synced && display_index >= 0)
+	{
+		SDL_DisplayMode best, current;
+		if(FindBestFieldRateDisplayMode(display_index, &best)
+			&& SDL_GetCurrentDisplayMode(display_index, &current) == 0
+			&& best.w == current.w && best.h == current.h && best.refresh_rate == current.refresh_rate)
+			return;
+	}
+	ApplyFullScreen(true);
+}
+
 static struct eOptionFullScreen : public xOptions::eOptionBool
 {
 	const char* Name() const override { return "full screen"; }
@@ -738,6 +764,24 @@ SDL_Window* GetVideoWindow() { return g_gl_window.window; }
 void OpZoomGet(float* sx, float* sy, const ePoint& org_size, const ePoint& size)
 {
 	(void)org_size;
+	int pw = 0, ph = 0;
+	if(FullBorderSize(&pw, &ph))
+	{
+		// The picture is bigger than 320x240 then, and not 4:3. sdl2_mouse.cpp turns
+		// window pixels into those of 320x240, so hand it the share of the window that
+		// the picture takes in the units of the 320x240 one.
+		const float a_src = (float)pw / ph;
+		const float a = (float)size.x / size.y;
+		*sx = 1.0f;
+		*sy = 1.0f;
+		if(a > a_src)
+			*sx = a_src / a;
+		else
+			*sy = a / a_src;
+		*sx *= 320.0f / pw;
+		*sy *= 240.0f / ph;
+		return;
+	}
 	GetScaleWithAspectRatio43(sx, sy, size.x, size.y);
 }
 
@@ -864,10 +908,9 @@ bool InitVideo()
 			// Recover onto the display it was last on, rather than an
 			// arbitrary default.
 			? ePoint(SDL_WINDOWPOS_CENTERED_DISPLAY(resolved_display), SDL_WINDOWPOS_CENTERED_DISPLAY(resolved_display))
-			// Never recorded (fresh config, or one from before this option
-			// existed) or that display genuinely isn't connected anymore -
-			// let the OS/WM place the window, same default a first-ever
-			// launch gets.
+			// Never recorded (fresh config) or that display genuinely
+			// isn't connected anymore - let the OS/WM place the window,
+			// same default a first-ever launch gets.
 			: ePoint(SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED);
 	}
 
@@ -1040,7 +1083,13 @@ void UpdateScreen()
 	// stack frame (MSVC C6262): a static buffer, rewritten in full each call.
 	static VideoSnapshot snap;
 	snap.frame = Handler()->VideoFrame();
+	// "Fill screen" and "overscan" show more border: the ULA draws a bigger raster
+	// then, and the GL code is given that one (this also brings the 320x240 one, below, up to
+	// date - it is the middle of the big one).
+	int extended_w = 0, extended_h = 0;
+	const byte* extended = FullBorderRaster(&extended_w, &extended_h);
 	memcpy(snap.video, Handler()->VideoData(), sizeof(snap.video));
+	SetExtendedRaster(extended, extended_w, extended_h);
 
 	DrawGL(vport_x, vport_y, vport_w, vport_h, snap);
 	xImGui::EndFrame(); // menu/About/toast overlay, drawn on top, same GL context, same thread

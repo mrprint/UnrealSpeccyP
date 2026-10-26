@@ -246,6 +246,7 @@ bool HandleMenuShortcut(SDL_Event& e)
 		case SDLK_1: if(down) SetZoom(0);                return true;
 		case SDLK_2: if(down) SetZoom(1);                return true;
 		case SDLK_3: if(down) SetZoom(2);                return true;
+		case SDLK_4: if(down) SetZoom(3);                return true;
 		case SDLK_g: if(down) ToggleBoolOption("gigascreen", Tr("status.gigascreen.on"), Tr("status.gigascreen.off")); return true;
 		case SDLK_s: if(down) ToggleBoolOption("scanlines", Tr("status.scanlines.on"), Tr("status.scanlines.off")); return true;
 		case SDLK_p: if(down) ToggleBoolOption("pal effects", Tr("status.pal_effects.on"), Tr("status.pal_effects.off")); return true;
@@ -409,6 +410,9 @@ void DrawMenuBar()
 	{
 		xOptions::eOption<int>* op_zoom = xOptions::eOption<int>::Find("zoom");
 		int zoom = op_zoom ? (int)*op_zoom : -1;
+		if(ImGui::MenuItem(Tr("menu.view.overscan"), "Ctrl+Shift+4", zoom == 3))
+			SetZoom(3);
+		ItemTooltip("tip.menu.view.overscan");
 		if(ImGui::MenuItem(Tr("menu.view.fill_screen"), "Ctrl+Shift+1", zoom == 0))
 			SetZoom(0);
 		ItemTooltip("tip.menu.view.fill_screen");

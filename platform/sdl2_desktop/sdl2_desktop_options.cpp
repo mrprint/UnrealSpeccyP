@@ -19,7 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // =============================================================================
 //  platform/sdl2_desktop/sdl2_desktop_options.cpp
 //
-//  Options dialog - 6 tabs (Appearance / Audio / Video / Input / Gamepads /
+//  Options dialog - 7 tabs (Appearance / Emulation / Audio / Video / Input / Gamepads /
 //  Disk Drives)
 //  as an ImGui overlay. Tab list is a manual left-side selectable list
 //  rather than ImGui's own top tab bar, so the tab captions read the same
@@ -53,6 +53,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "imgui.h"
 #include "imgui_shared.h"
 #include "sdl2_desktop_gamepad.h"
+#include "sdl2_desktop_emulation.h"
 #include "../../tools/options.h"
 #include "../../options_common.h"
 
@@ -67,7 +68,7 @@ namespace {
 // OptionsDialog::Draw(). (The Gamepads tab is only in the list when
 // SDL_USE_JOYSTICK is defined, so only that entry is ever referenced by
 // name; everything else treats m_active_tab as a plain list index.)
-enum class EOptionsTab { Appearance, Audio, Video, Input, Gamepads, Drives };
+enum class EOptionsTab { Appearance, Emulation, Audio, Video, Input, Gamepads, Drives };
 
 #ifdef SDL_USE_JOYSTICK
 
@@ -490,6 +491,7 @@ private:
 	int m_mask_scale = 1;
 	bool m_prefer_pal_refresh = false;
 	int m_theme_mode = (int)eThemeMode::Auto; // index into theme_keys[] in DrawAppearanceTab()
+	int m_emu_preset = 0; // index into the emulation presets (sdl2_desktop_emulation.h); 0 is the default entry
 
 	int m_joystick = J_KEMPSTON;
 
@@ -503,6 +505,7 @@ private:
 	void CommitToOptions();
 
 	void DrawAppearanceTab();
+	void DrawEmulationTab();
 	void DrawAudioTab();
 	void DrawVideoTab();
 	void DrawInputTab();
@@ -530,6 +533,7 @@ void OptionsDialog::LoadCurrentSettings()
 	opb = xOptions::eOption<bool>::Find("Prefer PAL refresh"); m_prefer_pal_refresh = opb ? (bool)*opb : DEFAULT_PAL_REFRESH_RATE;
 
 	m_theme_mode = (int)GetThemeMode();
+	m_emu_preset = SelectedEmulationPreset();
 
 	m_drive = OpDrive();
 	m_joystick = OpJoystick();
@@ -555,6 +559,9 @@ void OptionsDialog::CommitToOptions()
 	opb = xOptions::eOption<bool>::Find("Prefer PAL refresh"); if(opb) { opb->Set(m_prefer_pal_refresh); opb->Apply(); }
 
 	SetThemeMode((eThemeMode)m_theme_mode);
+	// Only the choice is stored here; the main loop pushes it into the emulated
+	// machine between frames (ApplyEmulationPreset()).
+	SelectEmulationPreset(m_emu_preset);
 
 #ifdef SDL_USE_JOYSTICK
 	m_gamepad.Commit();
@@ -594,6 +601,56 @@ void OptionsDialog::DrawAppearanceTab()
 	if(ImGui::Button(Tr("options.appearance.restore_defaults")))
 		m_theme_mode = (int)eThemeMode::Auto;
 	ItemTooltip("tip.options.appearance.restore_defaults");
+}
+
+void OptionsDialog::DrawEmulationTab()
+{
+	// Emulation *speed*: the CPU clock and the video frame timing of a known
+	// computer. It changes how fast the emulated machine runs and nothing else -
+	// not the ROMs, not the memory model (Device -> Mode 48k), not the hardware
+	// behaviour - so it is not an emulation of that computer, and the note below
+	// the combo says so. The figures of each entry are in its tooltip (and in
+	// the tooltip of the combo, for the selected one).
+	ImGui::SeparatorText(Tr("options.emulation.speed_header"));
+	ImGui::TextUnformatted(Tr("options.emulation.speed_preset"));
+
+	const int count = EmulationPresetCount();
+	const int cur = (m_emu_preset >= 0 && m_emu_preset < count) ? m_emu_preset : 0;
+	char details[512];
+
+	ImGui::SetNextItemWidth(260.0f);
+	if(ImGui::BeginCombo("##emu_preset", EmulationPresetName(EmulationPreset(cur))))
+	{
+		for(int i = 0; i < count; ++i)
+		{
+			const eEmulationPreset& p = EmulationPreset(i);
+			const bool sel = (i == cur);
+			if(ImGui::Selectable(EmulationPresetName(p), sel)) m_emu_preset = i;
+			if(sel) ImGui::SetItemDefaultFocus();
+			if(TooltipDue(ImGui::IsItemHovered()))
+			{
+				EmulationPresetDetails(p, details, sizeof(details));
+				ImGui::SetTooltip("%s", details);
+			}
+		}
+		ImGui::EndCombo();
+	}
+	if(TooltipDue(ImGui::IsItemHovered()))
+	{
+		EmulationPresetDetails(EmulationPreset(cur), details, sizeof(details));
+		ImGui::SetTooltip("%s\n\n%s", Tr("tip.options.emulation.speed_preset"), details);
+	}
+
+	ImGui::Spacing();
+	ImGui::TextWrapped("%s", Tr("options.emulation.speed_note"));
+	ImGui::Spacing();
+	ImGui::TextWrapped("%s", Tr("options.emulation.speed_reset_note"));
+
+	ImGui::Spacing();
+	ImGui::Spacing();
+	if(ImGui::Button(Tr("options.emulation.restore_defaults")))
+		m_emu_preset = 0;
+	ItemTooltip("tip.options.emulation.restore_defaults");
 }
 
 void OptionsDialog::DrawAudioTab()
@@ -784,6 +841,7 @@ void OptionsDialog::Draw()
 	struct TabEntry { EOptionsTab id; const char* label_key; };
 	static const TabEntry tabs[] = {
 		{ EOptionsTab::Appearance, "options.tab.appearance" },
+		{ EOptionsTab::Emulation, "options.tab.emulation" },
 		{ EOptionsTab::Audio, "options.tab.audio" },
 		{ EOptionsTab::Video, "options.tab.video" },
 		{ EOptionsTab::Input, "options.tab.input" },
@@ -812,6 +870,7 @@ void OptionsDialog::Draw()
 	switch((EOptionsTab)m_active_tab)
 	{
 	case EOptionsTab::Appearance: DrawAppearanceTab(); break;
+	case EOptionsTab::Emulation: DrawEmulationTab(); break;
 	case EOptionsTab::Audio: DrawAudioTab(); break;
 	case EOptionsTab::Video: DrawVideoTab(); break;
 	case EOptionsTab::Input: DrawInputTab(); break;

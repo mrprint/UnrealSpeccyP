@@ -56,6 +56,10 @@ void OnPresent(double now_s);
 // - but only if frames really were emulated (a paused machine produces none).
 bool AudioRefillWanted();                // sdl2_audio.cpp
 void AudioRefillDone();                  // sdl2_audio.cpp
+// The emulated field rate changed (a new emulation speed): one frame is now
+// sample_rate / hz samples, which the fill-level controller measures in.
+void AudioSetMachineHz(double hz);       // sdl2_audio.cpp
+double AudioSampleRate();                // sdl2_audio.cpp: what the device runs at, 44100 before it is opened
 
 }//namespace xPacing
 }//namespace xPlatform
