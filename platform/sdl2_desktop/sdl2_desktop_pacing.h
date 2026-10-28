@@ -51,6 +51,21 @@ double LastPresentTime();
 // record the wall-clock time of the present.
 void OnPresent(double now_s);
 
+// ---- Waiting for vsync asleep (sdl2_desktop_frame_delay.h) ------------------
+// Keeps the main thread asleep, instead of spinning in the GL driver, while it
+// waits for vsync. Windows: the OS's own vblank wait (D3DKMT, else DwmFlush);
+// elsewhere, or when that does not work out: a sleep up to shortly before the
+// next vblank is due. Hooks, in the order they run each frame:
+//   FrameDelayBegin()  top of Loop1(): waits / sleeps. 'flat_out' = fast
+//                      forward / fast tape loading: no waiting at all.
+//   OnRenderBegin()    entry of UpdateScreen(): ends the frame's own CPU work.
+//   OnPresent()        right after SwapWindow(), above.
+// Environment:
+//   UNREALSPECCYP_FRAME_DELAY=0      all of it off (the old behaviour)
+//   UNREALSPECCYP_VBLANK=kmt|dwm|0   Windows: only that vblank source / none (sleep instead)
+void FrameDelayBegin(bool flat_out);
+void OnRenderBegin();
+
 // The mixer was found empty and extra frames are owed to it: run one more
 // than the schedule says for this present, then say so with AudioRefillDone()
 // - but only if frames really were emulated (a paused machine produces none).

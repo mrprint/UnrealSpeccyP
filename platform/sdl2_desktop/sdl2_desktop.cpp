@@ -384,6 +384,11 @@ static void EmulateFrame()
 
 void Loop1()
 {
+	// Sleep out the first part of the vsync interval here, before input is
+	// polled, rather than let the GL driver spin through it (and input also
+	// gets sampled that much later, i.e. closer to the frame it affects).
+	xPacing::FrameDelayBegin(OpSpeed() > 0 || Handler()->FullSpeed());
+
 	game_input_events.clear();
 
 	SDL_Event e;

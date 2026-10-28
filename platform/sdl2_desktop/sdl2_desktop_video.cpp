@@ -632,8 +632,8 @@ static struct eOptionPreferPalRefresh : public xOptions::eOptionBool
 	// fullscreen at the desktop's own rate, and only switches display modes
 	// once the person explicitly opts in.
 	eOptionPreferPalRefresh() { Set(false); }
-	// Shown as "Native refresh". The key is what saved configs call it,
-	// so it stays.
+	// Shown as "Native refresh". The key is what saved configs call it (it used to be
+	// shown as "PAL refresh"), so it stays.
 	const char* Name() const override { return "Prefer PAL refresh"; }
 	int Order() const override { return 33; }
 	void Set(const bool& v) override
@@ -884,6 +884,13 @@ static bool PositionIsOnSomeDisplay(const ePoint& pos)
 
 bool InitVideo()
 {
+#ifdef _LINUX
+	// NVIDIA's proprietary GL driver waits (for vsync, for the GPU) by spinning
+	// unless told otherwise - a whole core for nothing. Must be set before the
+	// context is created; an explicit setting of the user's is left alone.
+	// Mesa and other drivers do not read it.
+	SDL_setenv("__GL_YIELD", "USLEEP", 0);
+#endif//_LINUX
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
@@ -908,9 +915,10 @@ bool InitVideo()
 			// Recover onto the display it was last on, rather than an
 			// arbitrary default.
 			? ePoint(SDL_WINDOWPOS_CENTERED_DISPLAY(resolved_display), SDL_WINDOWPOS_CENTERED_DISPLAY(resolved_display))
-			// Never recorded (fresh config) or that display genuinely
-			// isn't connected anymore - let the OS/WM place the window,
-			// same default a first-ever launch gets.
+			// Never recorded (fresh config, or one from before this option
+			// existed) or that display genuinely isn't connected anymore -
+			// let the OS/WM place the window, same default a first-ever
+			// launch gets.
 			: ePoint(SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED);
 	}
 
@@ -1017,6 +1025,7 @@ void DoneVideo()
 
 void UpdateScreen()
 {
+	xPacing::OnRenderBegin(); // the frame's own CPU work ends here; what follows may wait in the driver
 	op_window_state.Update();
 	op_window_display.Update();
 	op_full_screen.Update();
