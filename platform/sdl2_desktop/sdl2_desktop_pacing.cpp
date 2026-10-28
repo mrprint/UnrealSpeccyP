@@ -379,7 +379,6 @@ void FrameDelayBegin(bool flat_out)
 			g_bind_time = now;
 			if(hz_changed)
 				g_hold = 60;
-			SDL_Log("frame-sync: %s (display %d Hz)", g_vblank.Name(), hz);
 		}
 		else if(g_downgraded && g_hold == 0 && now >= g_retry_at)
 		{
@@ -388,7 +387,6 @@ void FrameDelayBegin(bool flat_out)
 			g_vblank_hist = 0;
 			g_downgraded = false;
 			g_bind_time = now;
-			SDL_Log("frame-sync: trying %s again", g_vblank.Name());
 		}
 		else if(!g_downgraded && now - g_bind_time > 120.0)
 			g_backoff = kBackoffMin; // has been fine for a while: the next failure is a new one
