@@ -603,6 +603,7 @@ public:
 	void EndFrame();
 
 private:
+	SDL_Window* m_window = nullptr; // only to ask whether the mouse is captured, see BeginFrame()
 	bool m_inited = false; // guards Done() against running without a matching Init() (see sdl2_desktop_video.cpp's graphics_inited comment - same failure class)
 	float m_font_baked_scale = 0.0f;
 	eSystemTheme m_current_theme = eSystemTheme::Dark; // what is applied right now; set in Init() before first use
@@ -689,6 +690,7 @@ void ImGuiBackend::LoadFont(float dpi_scale)
 
 void ImGuiBackend::Init(SDL_Window* window, SDL_GLContext context)
 {
+	m_window = window;
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
@@ -739,6 +741,21 @@ void ImGuiBackend::Done()
 
 void ImGuiBackend::BeginFrame()
 {
+	// While the mouse is captured for the emulated (Kempston) mouse the real pointer is hidden, and the position SDL
+	// reports is a virtual one that drifts with the relative motion: it can sit over the menu bar or a dialog with nothing
+	// on screen to show it. The UI must not react to a pointer nobody can see, so it is deaf to the mouse for as long as
+	// the capture lasts - nothing is hovered, hence nothing can be clicked or opened. (Keyboard use of the UI is not
+	// affected. It is the same grab that UpdateCursorVisibility() in sdl2_desktop.cpp looks at.)
+	// This alone does not hand the mouse to the emulator: io.WantCaptureMouse can stay true (a button held, a popup
+	// open) - Loop1() overrides it while captured.
+	{
+		ImGuiIO& io = ImGui::GetIO();
+		if(m_window && SDL_GetWindowGrab(m_window) != SDL_FALSE)
+			io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
+		else
+			io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+	}
+
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplSDL2_NewFrame();
 

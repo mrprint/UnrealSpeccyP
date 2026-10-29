@@ -357,6 +357,14 @@ static void UpdateCursorVisibility()
 
 	SDL_ShowCursor((grabbed || (fullscreen && !dialog_open)) ? SDL_DISABLE : SDL_ENABLE);
 }
+
+// Gives the mouse back to the user: the same two calls sdl2_mouse.cpp makes on Escape.
+static void ReleaseMouseGrab()
+{
+	SDL_SetWindowGrab(GetVideoWindow(), SDL_FALSE);
+	SDL_SetRelativeMouseMode(SDL_FALSE);
+	xImGui::SetStatusText(xImGui::Tr("status.mouse_released"));
+}
 #endif//SDL_USE_MOUSE
 
 // Everything that is derived from the emulated field rate, after it changed.
@@ -459,6 +467,12 @@ void Loop1()
 
 	bool ui_want_keyboard = xImGui::WantCaptureKeyboard();
 	bool ui_want_mouse = xImGui::WantCaptureMouse();
+#ifdef SDL_USE_MOUSE
+	// A captured mouse is the emulator's: the UI is deaf to it (see ImGuiBackend::BeginFrame()) and must not take it away
+	// either - io.WantCaptureMouse can still be set by a button held or a popup open.
+	if(SDL_GetWindowGrab(GetVideoWindow()) != SDL_FALSE)
+		ui_want_mouse = false;
+#endif//SDL_USE_MOUSE
 	for(size_t i = 0; i < game_input_events.size(); ++i)
 	{
 		SDL_Event& ge = game_input_events[i];
@@ -481,6 +495,10 @@ void Loop1()
 		case SDL_MOUSEBUTTONUP:
 			if(!ui_want_mouse)
 			{
+				// The file browser stays open through an outside click (see CloseMenuDialogs()), and with it open the
+				// mouse is not captured: that would hide the pointer the browser needs, and leave it unreachable.
+				if(ge.type == SDL_MOUSEBUTTONDOWN && xImGui::FileBrowserActive() && SDL_GetWindowGrab(GetVideoWindow()) == SDL_FALSE)
+					break;
 				// A click that lands on the running emulator view while
 				// About/Options is still open elsewhere is a clear "I want
 				// to interact with the game now" signal - honour that by
@@ -520,6 +538,12 @@ void Loop1()
 	}
 
 #ifdef SDL_USE_MOUSE
+	// A dialog open while the mouse is captured (it can only have been opened from the keyboard: the menu bar cannot be
+	// clicked while the mouse is captured) could not be reached with the mouse - the UI is deaf to a captured one. So
+	// opening a dialog hands the mouse back.
+	if(SDL_GetWindowGrab(GetVideoWindow()) != SDL_FALSE && (xImGui::AnyMenuDialogActive() || xImGui::FileBrowserActive()))
+		ReleaseMouseGrab();
+
 	// After this frame's input is fully settled (including any fullscreen
 	// toggle from a shortcut just above, and any grab change from the
 	// ProcessMouse() calls above) - see UpdateCursorVisibility()'s own
