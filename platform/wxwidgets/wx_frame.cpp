@@ -63,6 +63,16 @@ namespace xPlatform
     extern const wxEventType evtSetStatusText;
     extern const wxEventType evtExitFullScreen;
 
+    // Whether the lightweight shader is on. It has no PAL effects at all (the
+    // GL renderer's lightweight path skips the PAL pipeline entirely), so the
+    // "PAL effects" menu item and its Ctrl+Shift+P shortcut are disabled while
+    // it is - the same rule the Options dialog applies to its PAL section.
+    static bool LightweightShaderActive()
+    {
+        xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("lightweight shader");
+        return op ? (bool)*op : false;
+    }
+
 #ifndef _MAC
     struct DropFilesTarget : public wxFileDropTarget
     {
@@ -430,6 +440,9 @@ namespace xPlatform
         UpdateBoolOption(menu_view.gigascreen, "gigascreen");
         UpdateBoolOption(menu_view.scanlines, "scanlines");
         UpdateBoolOption(menu_view.pal_effects, "pal effects");
+        // The lightweight shader has no PAL effects: the item (and its
+        // shortcut) is disabled while it is on (see LightweightShaderActive()).
+        menu_view.pal_effects->Enable(!LightweightShaderActive());
         UpdateViewZoomMenu();
 
         if (!cmdline.file_to_open.empty())
@@ -700,6 +713,11 @@ namespace xPlatform
     }
     void Frame::OnViewPalEffectsToggle(wxCommandEvent& /*event*/)
     {
+        // The lightweight shader has no PAL effects (see
+        // LightweightShaderActive()); the menu item is disabled while it is on,
+        // this guards the shortcut path.
+        if (LightweightShaderActive())
+            return;
         SetStatusText(UpdateBoolOption(menu_view.pal_effects, "pal effects", true)
             ? _("PAL effects on") : _("PAL effects off"));
     }
@@ -828,6 +846,9 @@ namespace xPlatform
             UpdateBoolOption(menu_view.gigascreen, "gigascreen");
             UpdateBoolOption(menu_view.scanlines, "scanlines");
             UpdateBoolOption(menu_view.pal_effects, "pal effects");
+            // The lightweight shader was possibly just switched on/off:
+            // refresh the PAL item's enabled state to match.
+            menu_view.pal_effects->Enable(!LightweightShaderActive());
         }
     }
 

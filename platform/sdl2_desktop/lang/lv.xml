@@ -120,8 +120,8 @@
 	<string id="tip.options.audio.stereo_mode">AY stereo kanālu novirzīšana</string>
 	<string id="options.audio.restore_defaults">Atjaunot noklusējumus</string>
 	<string id="tip.options.audio.restore_defaults">Atjauno skaņas iestatījumus uz noklusējuma vērtībām</string>
-	<string id="options.video.mipmapping">Mipmapping</string>
-	<string id="tip.options.video.mipmapping">Vienmērīgi samazina attēlu, lai mazinātu mirgošanu</string>
+	<string id="options.video.lightweight_shader">Vienkāršotais šeiders</string>
+	<string id="tip.options.video.lightweight_shader">Vienkāršākā un ātrākā atveidošana: mērogošana bez izlīdzināšanas, bez PAL efektiem</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: sajauc divus AY krāsu kadrus, iegūstot 256 krāsas 15 vietā</string>
 	<string id="options.video.scanlines">CRT līnijas</string>

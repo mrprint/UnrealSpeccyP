@@ -145,6 +145,17 @@ static void ToggleBoolOption(const char* option_name, const char* on_msg, const 
 	SetStatusText(*op ? on_msg : off_msg);
 }
 
+// Whether the lightweight shader is on. It has no PAL effects at all (the GL
+// renderer's lightweight path skips the PAL pipeline entirely), so the
+// "pal effects" menu item and its Ctrl+Shift+P shortcut are disabled while
+// it is - the same rule the Options dialog applies to its PAL section
+// (ImGui::BeginDisabled(m_lightweight_shader) in DrawVideoTab()).
+static bool LightweightShaderActive()
+{
+	xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("lightweight shader");
+	return op ? (bool)*op : false;
+}
+
 static void OnPauseToggle()
 {
 	xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("pause");
@@ -249,7 +260,7 @@ bool HandleMenuShortcut(SDL_Event& e)
 		case SDLK_4: if(down) SetZoom(3);                return true;
 		case SDLK_g: if(down) ToggleBoolOption("gigascreen", Tr("status.gigascreen.on"), Tr("status.gigascreen.off")); return true;
 		case SDLK_s: if(down) ToggleBoolOption("scanlines", Tr("status.scanlines.on"), Tr("status.scanlines.off")); return true;
-		case SDLK_p: if(down) ToggleBoolOption("pal effects", Tr("status.pal_effects.on"), Tr("status.pal_effects.off")); return true;
+		case SDLK_p: if(down && !LightweightShaderActive()) ToggleBoolOption("pal effects", Tr("status.pal_effects.on"), Tr("status.pal_effects.off")); return true;
 		case SDLK_r: if(down) ToggleBoolOption("Prefer PAL refresh", Tr("status.pal_refresh.on"), Tr("status.pal_refresh.off")); return true;
 		default: break;
 		}
@@ -445,9 +456,13 @@ void DrawMenuBar()
 			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("pal effects");
 			if(op)
 			{
+				// The lightweight shader has no PAL effects: the item is
+				// disabled while it is on (see LightweightShaderActive()).
+				ImGui::BeginDisabled(LightweightShaderActive());
 				if(ImGui::MenuItem(Tr("menu.view.pal_effects"), "Ctrl+Shift+P", *op))
 					ToggleBoolOption("pal effects", Tr("status.pal_effects.on"), Tr("status.pal_effects.off"));
 				ItemTooltip("tip.menu.view.pal_effects");
+				ImGui::EndDisabled();
 			}
 		}
 		ImGui::Separator();

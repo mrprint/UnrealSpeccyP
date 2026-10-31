@@ -142,8 +142,8 @@
 	<string id="options.audio.restore_defaults">Restore defaults</string>
 	<string id="tip.options.audio.restore_defaults">Restore the audio options to their default values</string>
 
-	<string id="options.video.mipmapping">Mipmapping</string>
-	<string id="tip.options.video.mipmapping">Smoothly downscale the image to reduce shimmering</string>
+	<string id="options.video.lightweight_shader">Lightweight shader</string>
+	<string id="tip.options.video.lightweight_shader">Simplest and fastest rendering: nearest-neighbour scaling, no PAL effects</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: blend the two AY colour frames to get 256 colours instead of 15</string>
 	<string id="options.video.scanlines">CRT scanlines</string>

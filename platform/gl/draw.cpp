@@ -120,12 +120,20 @@ namespace xPlatform
         virtual int Order() const { return 39; }
     } op_scanlines;
 
-    static struct eOptionMipmapping : public xOptions::eOptionBool
+#ifndef DEFAULT_LIGHTWEIGHT_SHADER
+#define DEFAULT_LIGHTWEIGHT_SHADER false   // (normally defined with the other DEFAULT_* values)
+#endif
+
+    // The lightweight shader: the simple single-pass renderer - nearest-neighbour
+    // scaling and no PAL effects (Gigascreen, scanlines and the phosphor mask still
+    // work). Off: the full-quality shader - smooth scaling (an exact box filter,
+    // see Src() in full_fragment_src) and the PAL effects.
+    static struct eOptionLightweightShader : public xOptions::eOptionBool
     {
-        eOptionMipmapping() { Set(DEFAULT_MIPMAPPING); }
-        virtual const char* Name() const { return "mipmapping"; }
+        eOptionLightweightShader() { Set(DEFAULT_LIGHTWEIGHT_SHADER); }
+        virtual const char* Name() const { return "lightweight shader"; }
         virtual int Order() const { return 46; }
-    } op_mipmapping;
+    } op_lightweight_shader;
 
     // -------------------------------------------------------------------------
     // CachedUniform
@@ -163,30 +171,25 @@ namespace xPlatform
     // GL objects
     // -------------------------------------------------------------------------
 
-    static GLuint fb_texture{};
     // tex_id_for[0] -> tex1[] CPU buffer, tex_id_for[1] -> tex2[] CPU buffer.
     static GLuint tex_id_for[2] = { 0, 0 };
     static GLuint ebo{};
-    static GLuint vao1{}, vbo1{};   // cropped quad (320x240 visible area)
-    static GLuint vao2{}, vbo2{};   // full NDC quad (FBO / screen pass)
-    static GLuint fbo{};
-    static GLuint fb_shader{}, screen_shader{}, lw_shader{};
+    static GLuint vao1{}, vbo1{};   // the quad that shows the picture (the w x h corner of the texture)
+    static GLuint full_shader{}, lw_shader{};
 
     // Full-quality uniforms
-    CachedUniform<float>               u_blend_factor_cached;
     CachedUniform<std::array<float, 2>> u_scale_cached;
+    CachedUniform<float>               u_blend_factor_cached;
     CachedUniform<int>                 u_texture1_cached;
     CachedUniform<int>                 u_texture2_cached;
+    CachedUniform<std::array<float, 2>> u_tex_size_cached;
+    CachedUniform<std::array<float, 2>> u_src_size_cached;
     CachedUniform<int>                 u_show_scanlines_cached;
-    CachedUniform<std::array<float, 2>> u_simple_scale_cached;
-    CachedUniform<int>                 u_fb_texture_cached;
-    CachedUniform<std::array<float, 2>> u_fb_size_cached;
     CachedUniform<int>                 u_mask_scale_cached;
     CachedUniform<int>                 u_enable_pal_effects_cached;
     CachedUniform<float>               u_pal_strength_cached;
     CachedUniform<float>               u_beam_spread_cached;
     CachedUniform<float>               u_slines_cnt_cached;
-    CachedUniform<float>               u_src_width_cached;
 
     // Lightweight uniforms
     CachedUniform<std::array<float, 2>> u_lw_scale;
@@ -199,8 +202,7 @@ namespace xPlatform
 
     // Driver-call reduction
     static GLuint current_program = 0;
-    bool          mip_enabled_current = false;
-    bool          mip_dirty = true;
+    static int    src_filter_applied = 0;   // filter of the source textures: 0 = GL_NEAREST (as created), 1 = GL_LINEAR
 
     static constexpr int MAX_CACHED_UNITS = 8;
     static GLuint bound_tex[MAX_CACHED_UNITS] = {};  // zeroed = no texture bound
@@ -228,7 +230,7 @@ namespace xPlatform
     }
 
     // Mark all cached texture bindings as unknown.  Call this after any
-    // raw glBindTexture / FBO attachment / mipmap generation that bypasses
+    // raw glBindTexture / texture respecification that bypasses
     // BindTextureUnit(), so the next BindTextureUnit() call will re-bind.
     inline void InvalidateTextureCache()
     {
@@ -252,16 +254,31 @@ namespace xPlatform
             width, height, GL_RGBA, GL_UNSIGNED_BYTE, src);
     }
 
-    // -------------------------------------------------------------------------
+    // The source textures are sampled with GL_NEAREST by the lightweight shader, and
+    // with GL_LINEAR by the full-quality one: its shader does the scaling filter
+    // itself and needs the bilinear fetch to do it (see Src() in full_fragment_src).
+    // Switches both textures when the path changes; a no-op otherwise.
+    static void SetSourceFilter(int filter)
+    {
+        if (filter == src_filter_applied)
+            return;
+        const GLint f = filter ? GL_LINEAR : GL_NEAREST;
+        for (int i = 0; i < 2; ++i)
+        {
+            BindTextureUnit(GL_TEXTURE0, tex_id_for[i]);
+            glActiveTexture(GL_TEXTURE0);   // glTexParameteri works on the active unit
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, f);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, f);
+        }
+        src_filter_applied = filter;
+    }
 
-    static int fb_width = sline_len * 4;
-    static int fb_height = slines_cnt * 4;
+    // -------------------------------------------------------------------------
 
     // The picture that is shown: src_w x src_h source pixels in a texture that is
     // sline_len x tex_lines. Normally the 320x240 raster of the emulation core in
     // 512x256; SetExtendedRaster() switches to a bigger one (and back).
     static int tex_lines = slines_cnt, src_w = 320, src_h = 240;
-    static int init_scr_w = -1, init_scr_h = -1;     // what initGraphics() was given
     static const byte* ext_data = nullptr;           // the extended raster of this frame
     static int ext_w = 0, ext_h = 0;
 
@@ -305,37 +322,47 @@ void main()
 }
 )";
 
-    // First pass: gigascreen blend into FBO
-    const char* fb_fragment_src =
+    // -------------------------------------------------------------------------
+    // Full-quality single-pass shader: scaling, then PAL effects, phosphor mask and
+    // scanlines.
+    //
+    // Scaling. The picture is a few hundred pixels wide and is shown several times
+    // bigger, usually by a non-integer factor. Plain nearest-neighbour scaling then
+    // makes some pixels wider than others (and they shimmer when the picture moves);
+    // plain bilinear blurs every pixel. What looks right is the nearest-neighbour
+    // picture averaged over the area of each SCREEN pixel: pixels stay crisp, and
+    // only where a screen pixel straddles the edge of two source pixels is it a mix
+    // of the two - in proportion to how much of it each covers. Src() computes that
+    // exactly: the covered part of the neighbouring texel along each axis is a
+    // linear ramp of width w (the size of a screen pixel in texels, from fwidth()),
+    // and a bilinear fetch at the right position returns that blend in one go. (That
+    // is the average that upscaling the picture into a much larger intermediate
+    // texture and filtering it back down only approximates - blurrier, and far more
+    // expensive in memory and in work.)
+    //
+    // Everything below works in texels of the picture. p is the position, in them.
+    // For a screen pixel bigger than a texel (a window smaller than the picture)
+    // the ramp is wider than the fetch can blend and it degrades to plain bilinear.
+    // -------------------------------------------------------------------------
+    const char* full_fragment_src =
         R"(
 #version 130
-out vec4 FragColor;
-in vec2 TexCoord;
-uniform sampler2D texture1;
-uniform sampler2D texture2;
-uniform float blendFactor;
-void main()
-{
-    FragColor = mix(texture(texture1, TexCoord), texture(texture2, TexCoord), blendFactor);
-}
-)";
-
-    // Second pass: post-processing (PAL, mask, scanlines) on FBO output
-    const char* screen_fragment_src =
-        R"(
-#version 130
 
 in vec2 TexCoord;
 out vec4 FragColor;
 
-uniform sampler2D fbTexture;
+uniform sampler2D texture1;   // the picture, GL_LINEAR
+uniform sampler2D texture2;   // the previous frame (Gigascreen)
+uniform float blendFactor;    // 0.5 with Gigascreen, 0.0 without
+uniform vec2 texSize;         // the texture, in texels: 512 x 256 (x 320 in the extended raster)
+uniform vec2 srcSize;         // the picture, in texels: 320 x 240 (the extended raster is bigger)
+
 uniform int showScanlines;
 uniform int enablePalEffects;
 
 uniform float palStrength;    // 0.0 - 1.0 (PAL effect intensity)
 uniform float beamSpread;     // 0.0 - 1.0 (CRT beam spread amount; clamped to [0,1] for mix)
 uniform int maskScale;        // Phosphor mask column width (pixels per phase)
-uniform vec2 fbSize;          // Size of input framebuffer
 
 // Precomputed constants (for readability and optimization)
 const float PI = 3.141592653589793;          // Precise Pi value
@@ -351,8 +378,7 @@ const float DOT_CRAWL_FRAME_SPEED = 0.3;      // Frame animation speed
 const float DOT_CRAWL_STRENGTH = 0.02;        // Base crawl intensity
 
 // PAL Chroma Bandwidth Limit: Simulate low-pass filter on U/V channels
-uniform float srcWidth;                      // Source pixels across the picture: 320 (352 in the extended raster)
-const float CHROMA_RADIUS = 0.5;               // Effective filter radius (texture pixels)
+const float CHROMA_RADIUS = 0.5;               // Effective filter radius (source pixels)
 
 const float CHROMA_WEIGHT_LEFT_1_5 = 0.08;    // Left 1.5x step weight
 const float CHROMA_WEIGHT_LEFT_0_75 = 0.22;   // Left 0.75x step weight
@@ -373,7 +399,7 @@ const vec3 PHASE_MOD_PATTERN = vec3(0.6, -0.4, -1.0); // Combined offset vector
 const float CROSSTALK_STRENGTH = 0.05;         // Base crosstalk intensity
 
 // CRT Beam Spread: Horizontal blur simulation
-const float BEAM_SPREAD_SCALE = 1.5;           // Scale uniform to sample distance
+const float BEAM_SPREAD_SCALE = 1.5;           // Scale uniform to sample distance (source pixels)
 
 // CRT Phosphor Mask: UKTV-style columnar shading
 const vec3 MASK_BASE = vec3(0.90, 0.95, 0.85);      // Base mask color per phase
@@ -386,6 +412,21 @@ const vec2 SCANLINE_PARAMS = vec2(0.95, 0.05); // Min value + amplitude (peak-to
 
 // White Balance: PAL RGB correction to match expected output
 const vec3 WHITE_BALANCE = vec3(1.0, 0.985, 1.03);
+
+// The picture at p (in texels): the nearest-neighbour picture averaged over a screen
+// pixel of w texels (see above). The fetch is clamped to the picture, so that its
+// edges do not blend with the unused rest of the texture.
+vec3 Src(vec2 p, vec2 w)
+{
+    vec2 i = floor(p - 0.5);                                  // texels i and i+1 share the nearest edge
+    vec2 t = clamp((p - (i + 1.0)) / w + 0.5, 0.0, 1.0);      // how much of texel i+1 the pixel covers
+    vec2 q = clamp(i + 0.5 + t, vec2(0.5), srcSize - 0.5);    // the bilinear position that blends (1-t, t)
+    vec2 uv = q / texSize;
+    vec3 c = texture(texture1, uv).rgb;
+    if (blendFactor > 0.0)
+        c = mix(c, texture(texture2, uv).rgb, blendFactor);
+    return c;
+}
 
 // YUV <-> RGB conversion (PAL-specific coefficients from original code)
 vec3 rgb2yuv(vec3 rgb) {
@@ -405,10 +446,9 @@ vec3 yuv2rgb(vec3 yuv) {
 }
 
 void main() {
-    // Precompute values used multiple times to avoid redundant calculations
-    vec2 texelSize = 1.0 / fbSize;             // Texture coordinate per pixel
-    vec2 uv = TexCoord;
-    vec4 color = texture(fbTexture, uv);       // Use uv instead of TexCoord (consistent)
+    vec2 p = TexCoord * texSize;               // this pixel, in texels of the picture
+    vec2 w = max(fwidth(p), vec2(1e-4));       // the size of a screen pixel, in texels
+    vec4 color = vec4(Src(p, w), 1.0);
     vec2 fragPos = gl_FragCoord.xy;            // Fragment position for mask/line math
 
     if (enablePalEffects != 0) {
@@ -416,17 +456,14 @@ void main() {
         vec3 yuv = rgb2yuv(color.rgb);         // Convert initial color to YUV
 
         // Chroma Bandwidth Limit: Low-pass filter on U/V to simulate PAL's limited bandwidth
-        float chromaScale = (fbSize.x / srcWidth) * CHROMA_RADIUS;
-        float sampleStep = texelSize.x * chromaScale;             // Step between samples
-
-        vec2 offset1_5 = vec2(sampleStep * 1.5, 0.0);             // ±1.5x step (left/right)
-        vec2 offset0_75 = vec2(sampleStep * 0.75, 0.0);           // ±0.75x step
+        vec2 offset1_5 = vec2(CHROMA_RADIUS * 1.5, 0.0);          // ±1.5x step (left/right), in texels
+        vec2 offset0_75 = vec2(CHROMA_RADIUS * 0.75, 0.0);        // ±0.75x step
 
         // Sample neighbors and filter chroma (Y is unused—only U/V matter here)
-        vec3 yuvL1_5 = rgb2yuv(texture(fbTexture, uv - offset1_5).rgb);
-        vec3 yuvL0_75 = rgb2yuv(texture(fbTexture, uv - offset0_75).rgb);
-        vec3 yuvR0_75 = rgb2yuv(texture(fbTexture, uv + offset0_75).rgb);
-        vec3 yuvR1_5 = rgb2yuv(texture(fbTexture, uv + offset1_5).rgb);
+        vec3 yuvL1_5 = rgb2yuv(Src(p - offset1_5, w));
+        vec3 yuvL0_75 = rgb2yuv(Src(p - offset0_75, w));
+        vec3 yuvR0_75 = rgb2yuv(Src(p + offset0_75, w));
+        vec3 yuvR1_5 = rgb2yuv(Src(p + offset1_5, w));
 
         vec3 yuvCenter = yuv;
         vec2 filteredChroma =
@@ -450,11 +487,9 @@ void main() {
         vec3 crosstalk = (luma - palRgb) * CROSSTALK_STRENGTH * palStrength;
         palRgb += crosstalk;
 
-        float srcTexelX  = texelSize.x * (fbSize.x / srcWidth);
-        float spreadDist = beamSpread * BEAM_SPREAD_SCALE;
-        float spreadMix  = clamp(beamSpread, 0.0, 1.0);
-        vec3 left  = texture(fbTexture, uv - vec2(srcTexelX * spreadDist, 0.0)).rgb;
-        vec3 right = texture(fbTexture, uv + vec2(srcTexelX * spreadDist, 0.0)).rgb;
+        float spreadDist = beamSpread * BEAM_SPREAD_SCALE;        // in texels
+        vec3 left  = Src(p - vec2(spreadDist, 0.0), w);
+        vec3 right = Src(p + vec2(spreadDist, 0.0), w);
         float sideWeight   = beamSpread * 0.275;
         float centerWeight = 1.0 - sideWeight * 2.0;
         color.rgb = palRgb * centerWeight + (left + right) * sideWeight;
@@ -483,8 +518,9 @@ void main() {
     // --- Scanlines: Vertical intensity variation ---
     if (showScanlines != 0) {
         float scanFreq = slinesCnt * 2.0 * PI;              // Full sine waves per frame
+        float top = 1.0 - p.y / srcSize.y;                  // 1 at the top of the picture, 0 at the bottom
         color.rgb *= SCANLINE_PARAMS.x +
-                     SCANLINE_PARAMS.y * sin(TexCoord.y * scanFreq);
+                     SCANLINE_PARAMS.y * sin(top * scanFreq);
     }
 
     // --- Final White Balance: Correct PAL RGB output ---
@@ -500,8 +536,9 @@ void main() {
     // -------------------------------------------------------------------------
     // Lightweight single-pass shader.
     //
-    // No FBO, no PAL YUV pipeline.  One draw call: Speccy texture (with
-    // optional gigascreen blend) → screen, with scanlines and phosphor mask.
+    // Nearest-neighbour scaling, no PAL YUV pipeline.  One draw call: Speccy
+    // texture (with optional gigascreen blend) → screen, with scanlines and
+    // phosphor mask.
     //
     // Phosphor mask is in screen space (gl_FragCoord) for physically consistent
     // column width.  srcScreenWidth is the screen-pixel span of the 320 source
@@ -637,45 +674,16 @@ void main()
         }
     }
 
-    // The size of the FBO: 2x the display (the largest one) in the longer direction,
-    // in the proportions of the texture. Needs init_scr_w/h from initGraphics().
-    static void ComputeFbSize()
-    {
-        if (init_scr_h == -1)
-            return;
-        float base_scale =
-            (float)((init_scr_w > init_scr_h) ? init_scr_w : init_scr_h) /
-            (float)((init_scr_w > init_scr_h) ? sline_len : tex_lines);
-        base_scale *= 2.0f;
-        fb_width = int(sline_len * base_scale);
-        fb_height = int(tex_lines * base_scale);
-    }
-
     // -------------------------------------------------------------------------
     // initGraphics
     // -------------------------------------------------------------------------
 
-    void initGraphics(int scr_width, int scr_height)
+    // (The arguments are the size of the biggest display; they used to size an
+    // intermediate texture that no longer exists. Left for the callers.)
+    void initGraphics(int /*scr_width*/, int /*scr_height*/)
     {
         // Guarantee black clear color from the very first frame.
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        if (scr_height != -1)
-        {
-            /*
-            // Smallest integer scale that covers the viewport on both axes,
-            // keeping pixels square.  Guarantees scanline/mask apertures land
-            // on whole FBO texel boundaries.
-            int sx = (scr_width + sline_len - 1) / sline_len;
-            int sy = (scr_height + slines_cnt - 1) / slines_cnt;
-            int s = (sx > sy) ? sx : sy;
-            if (s < 1) s = 1;
-            fb_width = sline_len * s;
-            fb_height = slines_cnt * s;
-            */
-            init_scr_w = scr_width;
-            init_scr_h = scr_height;
-            ComputeFbSize();
-        }
 
         glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 
@@ -697,33 +705,14 @@ void main()
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         }
-
-        // FBO texture (intermediate render target for the full-quality path)
-        glGenTextures(1, &fb_texture);
-        glBindTexture(GL_TEXTURE_2D, fb_texture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
-            fb_width, fb_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-#ifdef GLEW_EXT_texture_filter_anisotropic
-        if (GLEW_EXT_texture_filter_anisotropic)
-        {
-            GLfloat maxAniso = 0.0f;
-            glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &maxAniso);
-            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT,
-                maxAniso > 0.0f ? maxAniso : 1.0f);
-        }
-#endif
+        src_filter_applied = 0;   // as created; the full-quality path switches both to GL_LINEAR
 
         // Raw glBindTexture calls above (during texture creation) bypassed the
         // BindTextureUnit cache, so invalidate it now before normal rendering begins.
         InvalidateTextureCache();
 
         // vao1: cropped quad — maps only the 320x240 visible area of the 512x256 texture.
-        // Used for the FBO blit pass and the lightweight single-pass draw.
+        // Used by both shaders (ApplyRasterGeometry() respecifies it for a bigger picture).
         float vertices_cropped[] = {
             -1.0f,  1.0f, 0.0f,             0.0f,
             -1.0f, -1.0f, 0.0f,             240.0f / 256.0f,
@@ -731,93 +720,60 @@ void main()
              1.0f,  1.0f, 320.0f / 512.0f,  0.0f
         };
 
-        // vao2: full NDC quad — maps [0,1]x[0,1] texture to the whole screen.
-        // Used for the screen post-processing pass.
-        float vertices_full[] = {
-            -1.0f,  1.0f,  0.0f, 1.0f,
-            -1.0f, -1.0f,  0.0f, 0.0f,
-             1.0f, -1.0f,  1.0f, 0.0f,
-             1.0f,  1.0f,  1.0f, 1.0f
-        };
-
         unsigned int indices[] = { 0, 1, 2, 0, 2, 3 };
 
-        // Shared EBO — uploaded once, bound into both VAOs.
         glGenBuffers(1, &ebo);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-        auto buildVAO = [](GLuint& vao, GLuint& vbo, float* verts, size_t vsize, GLuint ebo_)
-            {
-                glGenVertexArrays(1, &vao);
-                glGenBuffers(1, &vbo);
-                glBindVertexArray(vao);
-                glBindBuffer(GL_ARRAY_BUFFER, vbo);
-                glBufferData(GL_ARRAY_BUFFER, vsize, verts, GL_STATIC_DRAW);
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_);
-                glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-                glEnableVertexAttribArray(0);
-                glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
-                    (void*)(2 * sizeof(float)));
-                glEnableVertexAttribArray(1);
-            };
-
-        buildVAO(vao1, vbo1, vertices_cropped, sizeof(vertices_cropped), ebo);
-        buildVAO(vao2, vbo2, vertices_full, sizeof(vertices_full), ebo);
+        glGenVertexArrays(1, &vao1);
+        glGenBuffers(1, &vbo1);
+        glBindVertexArray(vao1);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo1);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices_cropped), vertices_cropped, GL_STATIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
+            (void*)(2 * sizeof(float)));
+        glEnableVertexAttribArray(1);
         glBindVertexArray(0);
-
-        glGenFramebuffers(1, &fbo);
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-            GL_TEXTURE_2D, fb_texture, 0);
-        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-            reportError("Framebuffer Not Complete",
-                "The framebuffer is not properly configured.");
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
         // Compile shaders
         GLuint vs = compileShader(GL_VERTEX_SHADER, vertex_src);
-        GLuint fs_fb = compileShader(GL_FRAGMENT_SHADER, fb_fragment_src);
-        GLuint fs_screen = compileShader(GL_FRAGMENT_SHADER, screen_fragment_src);
+        GLuint fs_full = compileShader(GL_FRAGMENT_SHADER, full_fragment_src);
         GLuint fs_lw = compileShader(GL_FRAGMENT_SHADER, lw_fragment_src);
 
-        fb_shader = linkProgram(vs, fs_fb);
-        screen_shader = linkProgram(vs, fs_screen);
+        full_shader = linkProgram(vs, fs_full);
         lw_shader = linkProgram(vs, fs_lw);
 
         glDeleteShader(vs);
-        glDeleteShader(fs_fb);
-        glDeleteShader(fs_screen);
+        glDeleteShader(fs_full);
         glDeleteShader(fs_lw);
 
         // Full-quality uniforms
-        glUseProgram(fb_shader);
-        u_scale_cached.set(glGetUniformLocation(fb_shader, "scale"));
-        u_blend_factor_cached.set(glGetUniformLocation(fb_shader, "blendFactor"));
-        u_texture1_cached.set(glGetUniformLocation(fb_shader, "texture1"));
-        u_texture2_cached.set(glGetUniformLocation(fb_shader, "texture2"));
-
-        glUseProgram(screen_shader);
-        u_simple_scale_cached.set(glGetUniformLocation(screen_shader, "scale"));
-        u_fb_texture_cached.set(glGetUniformLocation(screen_shader, "fbTexture"));
-        u_show_scanlines_cached.set(glGetUniformLocation(screen_shader, "showScanlines"));
-        u_fb_size_cached.set(glGetUniformLocation(screen_shader, "fbSize"));
-        u_mask_scale_cached.set(glGetUniformLocation(screen_shader, "maskScale"));
-        u_enable_pal_effects_cached.set(glGetUniformLocation(screen_shader, "enablePalEffects"));
-        u_pal_strength_cached.set(glGetUniformLocation(screen_shader, "palStrength"));
-        u_beam_spread_cached.set(glGetUniformLocation(screen_shader, "beamSpread"));
-        u_slines_cnt_cached.set(glGetUniformLocation(screen_shader, "slinesCnt"));
-        u_src_width_cached.set(glGetUniformLocation(screen_shader, "srcWidth"));
+        glUseProgram(full_shader);
+        u_scale_cached.set(glGetUniformLocation(full_shader, "scale"));
+        u_blend_factor_cached.set(glGetUniformLocation(full_shader, "blendFactor"));
+        u_texture1_cached.set(glGetUniformLocation(full_shader, "texture1"));
+        u_texture2_cached.set(glGetUniformLocation(full_shader, "texture2"));
+        u_tex_size_cached.set(glGetUniformLocation(full_shader, "texSize"));
+        u_src_size_cached.set(glGetUniformLocation(full_shader, "srcSize"));
+        u_show_scanlines_cached.set(glGetUniformLocation(full_shader, "showScanlines"));
+        u_mask_scale_cached.set(glGetUniformLocation(full_shader, "maskScale"));
+        u_enable_pal_effects_cached.set(glGetUniformLocation(full_shader, "enablePalEffects"));
+        u_pal_strength_cached.set(glGetUniformLocation(full_shader, "palStrength"));
+        u_beam_spread_cached.set(glGetUniformLocation(full_shader, "beamSpread"));
+        u_slines_cnt_cached.set(glGetUniformLocation(full_shader, "slinesCnt"));
 
         if (u_scale_cached.location == -1 ||
             u_blend_factor_cached.location == -1 ||
             u_texture1_cached.location == -1 ||
             u_texture2_cached.location == -1 ||
-            u_simple_scale_cached.location == -1 ||
-            u_fb_texture_cached.location == -1 ||
+            u_tex_size_cached.location == -1 ||
+            u_src_size_cached.location == -1 ||
             u_show_scanlines_cached.location == -1 ||
-            u_fb_size_cached.location == -1 ||
             u_mask_scale_cached.location == -1 ||
             u_enable_pal_effects_cached.location == -1 ||
             u_pal_strength_cached.location == -1 ||
@@ -856,9 +812,9 @@ void main()
 
     // -------------------------------------------------------------------------
     // ApplyRasterGeometry - the picture is w x h source pixels from now on.
-    // Rare (it follows the zoom mode), so the textures, the FBO and the quad are
-    // simply respecified. w x h = 320x240 is the original geometry: the same
-    // texture, FBO, quad, aspect and shader constants as before this existed.
+    // Rare (it follows the zoom mode), so the textures and the quad are simply
+    // respecified. w x h = 320x240 is the original geometry: the same texture,
+    // quad, aspect and shader constants as before this existed.
     // -------------------------------------------------------------------------
     static void ApplyRasterGeometry(int w, int h)
     {
@@ -878,10 +834,6 @@ void main()
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sline_len, tex_lines, 0,
                 GL_RGBA, GL_UNSIGNED_BYTE, i == 0 ? tex1 : tex2);
         }
-        ComputeFbSize();
-        glBindTexture(GL_TEXTURE_2D, fb_texture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, fb_width, fb_height, 0,
-            GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
         // The quad that shows the picture: the w x h corner of the texture.
         const float vertices_cropped[] = {
@@ -895,7 +847,6 @@ void main()
         glBindBuffer(GL_ARRAY_BUFFER, 0);
 
         InvalidateTextureCache();   // raw glBindTexture above
-        mip_dirty = true;           // the FBO texture is a new one as far as filtering goes
         pending_clear = true;
     }
 
@@ -905,25 +856,18 @@ void main()
 
     void cleanupGraphics()
     {
-        // 1. Delete VAOs first: they hold references to VBOs and the EBO.
+        // 1. Delete the VAO first: it holds references to the VBO and the EBO.
         glDeleteVertexArrays(1, &vao1);
-        glDeleteVertexArrays(1, &vao2);
 
-        // 2. VBOs and the shared EBO are now unreferenced.
+        // 2. The VBO and the EBO are now unreferenced.
         glDeleteBuffers(1, &vbo1);
-        glDeleteBuffers(1, &vbo2);
         glDeleteBuffers(1, &ebo);
 
-        // 3. FBO holds a reference to fb_texture; delete it before the texture.
-        glDeleteFramebuffers(1, &fbo);
-
-        // 4. Textures are now unreferenced.
+        // 3. Textures.
         glDeleteTextures(2, tex_id_for);
-        glDeleteTextures(1, &fb_texture);
 
-        // 5. Shader programs (individual shaders were detached after linking).
-        glDeleteProgram(fb_shader);
-        glDeleteProgram(screen_shader);
+        // 4. Shader programs (individual shaders were detached after linking).
+        glDeleteProgram(full_shader);
         glDeleteProgram(lw_shader);
 
         // Reset the software caches so a potential re-init starts clean.
@@ -1051,7 +995,7 @@ void main()
         PROFILER_SECTION(draw);
 
         // --- Track Shader Type Changes ---
-        bool use_lightweight = !OpPalEffects() && !op_mipmapping;
+        const bool use_lightweight = op_lightweight_shader;
         static bool prev_use_lightweight = false;
         LightweightShadersMessage(prev_use_lightweight, use_lightweight);
         prev_use_lightweight = use_lightweight;
@@ -1076,12 +1020,13 @@ void main()
 
         // =====================================================================
         //  LIGHTWEIGHT PATH
-        //  No FBO, no PAL pipeline.  Single draw call directly to screen.
-        //  Gigascreen, scanlines, and screen-space phosphor mask still work.
+        //  Nearest-neighbour scaling, no PAL pipeline.  Single draw call
+        //  directly to screen. Gigascreen, scanlines, and screen-space
+        //  phosphor mask still work.
         // =====================================================================
-        if (!OpPalEffects() && !op_mipmapping)
+        if (use_lightweight)
         {
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            SetSourceFilter(0);
             glViewport(vport_x, vport_y, vport_width, vport_height);
             HandleLayoutClear(vport_width, vport_height);
 
@@ -1090,9 +1035,6 @@ void main()
             // Upload only the freshly written buffer; p_tex2 is already in VRAM.
             UploadTexture(gl_tex1, p_tex1, sline_len, tex_lines);
             // UploadTexture() leaves TEXTURE0 active and gl_tex1 bound via the cache.
-            // Re-apply filter state (mip_dirty may have been set by the full path).
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
             u_lw_texture1.update(0);
             u_lw_blend_factor.update(0.0f);
@@ -1118,27 +1060,21 @@ void main()
 
         // =====================================================================
         //  FULL-QUALITY PATH
-        //  Two-pass: FBO blit/blend → screen post-processing (PAL, mask, lines)
+        //  One pass: the picture is scaled with an exact box filter (crisp pixels,
+        //  no shimmer at any size), then PAL effects, mask and scanlines. See
+        //  full_fragment_src.
         // =====================================================================
+        SetSourceFilter(1);
+        glViewport(vport_x, vport_y, vport_width, vport_height);
+        HandleLayoutClear(vport_width, vport_height);
 
-        if (op_mipmapping != mip_enabled_current)
-        {
-            mip_enabled_current = op_mipmapping;
-            mip_dirty = true;
-        }
-
-        // --- First pass: render into FBO ---
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-        glViewport(0, 0, fb_width, fb_height);
-
-        UseProgram(fb_shader);
-        u_blend_factor_cached.update(giga_enabled ? 0.5f : 0.0f);
-        u_scale_cached.update({ 1.0f, 1.0f });
+        UseProgram(full_shader);
 
         // Upload only the freshly written buffer; p_tex2 is already in VRAM.
         UploadTexture(gl_tex1, p_tex1, sline_len, tex_lines);
-        // UploadTexture() leaves TEXTURE0/gl_tex1 bound in the cache.
+        // UploadTexture() leaves TEXTURE0 active and gl_tex1 bound via the cache.
         u_texture1_cached.update(0);
+        u_blend_factor_cached.update(giga_enabled ? 0.5f : 0.0f);
 
         if (giga_enabled)
         {
@@ -1147,64 +1083,18 @@ void main()
             u_texture2_cached.update(1);
         }
 
-        glBindVertexArray(vao1); // cropped quad
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-        // Unbind FBO before operating on fb_texture to avoid feedback loop
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-        // generate mipmaps for the texture we just rendered
-        if (mip_enabled_current)
-        {
-            glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
-            BindTextureUnit(GL_TEXTURE0, fb_texture);
-            glGenerateMipmap(GL_TEXTURE_2D);
-        }
-
-        // --- Second pass: FBO → screen ---
-        glViewport(vport_x, vport_y, vport_width, vport_height);
-        HandleLayoutClear(vport_width, vport_height);
-
-        UseProgram(screen_shader);
+        u_scale_cached.update({ scale_x * opZoom(), scale_y * opZoom() });
+        u_tex_size_cached.update({ float(sline_len), float(tex_lines) });
+        u_src_size_cached.update({ float(src_w), float(src_h) });
         u_show_scanlines_cached.update(
             op_scanlines && vport_height > (src_h * 8) / 5 ? 1 : 0);
-        u_simple_scale_cached.update({ scale_x * opZoom(), scale_y * opZoom() });
-        u_fb_texture_cached.update(0);
-        u_fb_size_cached.update({ float(fb_width), float(fb_height) });
         u_mask_scale_cached.update(OpMaskScale());
         u_enable_pal_effects_cached.update(OpPalEffects() ? 1 : 0);
         u_pal_strength_cached.update(static_cast<float>(OpPalStrength()) / 100.0f);
         u_beam_spread_cached.update(static_cast<float>(OpBeamSpread()) / 100.0f);
         u_slines_cnt_cached.update(src_h == 240 ? (float)slines_cnt : (float)src_h);
-        u_src_width_cached.update((float)src_w);
 
-        BindTextureUnit(GL_TEXTURE0, fb_texture);
-        // Ensure TEXTURE0 is the active unit before glTexParameteri and
-        // glGenerateMipmap, which both operate on the currently *active* unit.
-        // BindTextureUnit only calls glActiveTexture when it actually issues a
-        // new bind; if fb_texture was already cached, the active unit is stale.
-        glActiveTexture(GL_TEXTURE0);
-
-        if (mip_enabled_current)
-        {
-            if (mip_dirty)
-            {
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                mip_dirty = false;
-            }
-        }
-        else
-        {
-            if (mip_dirty)
-            {
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                mip_dirty = false;
-            }
-        }
-
-        glBindVertexArray(vao2); // full NDC quad for the screen pass
+        glBindVertexArray(vao1); // the quad that shows the picture
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         return true;
     }

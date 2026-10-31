@@ -137,8 +137,8 @@
 	<string id="options.audio.restore_defaults">Сбросить настройки</string>
 	<string id="tip.options.audio.restore_defaults">Сбросить настройки звука к значениям по умолчанию</string>
 
-	<string id="options.video.mipmapping">Mipmapping</string>
-	<string id="tip.options.video.mipmapping">Плавно уменьшать масштаб изображения для снижения мерцания</string>
+	<string id="options.video.lightweight_shader">Облегчённый шейдер</string>
+	<string id="tip.options.video.lightweight_shader">Простейшая и быстрая отрисовка: масштабирование без сглаживания, без PAL-эффектов</string>
 	<string id="options.video.gigascreen">Гигаскрин</string>
 	<string id="tip.options.video.gigascreen">Гигаскрин: смешивание двух цветовых кадров AY для получения 256 цветов вместо 15</string>
 	<string id="options.video.scanlines">Строки ЭЛТ</string>

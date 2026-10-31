@@ -21,6 +21,10 @@
 #include <utility>
 #endif
 
+#ifndef DEFAULT_LIGHTWEIGHT_SHADER
+#define DEFAULT_LIGHTWEIGHT_SHADER false   // (normally defined with the other DEFAULT_* values)
+#endif
+
 namespace xPlatform {
 
 	BEGIN_EVENT_TABLE(OptionsDialog, wxDialog)
@@ -30,7 +34,7 @@ namespace xPlatform {
 		EVT_CHECKBOX(ID_CHECK_GIGASCREEN, OptionsDialog::OnCheckboxChanged)
 		EVT_CHECKBOX(ID_CHECK_SCANLINES, OptionsDialog::OnCheckboxChanged)
 		EVT_CHECKBOX(ID_CHECK_PAL_EFFECTS, OptionsDialog::OnCheckboxChanged)
-		EVT_CHECKBOX(ID_CHECK_MIPMAPPING, OptionsDialog::OnCheckboxChanged)
+		EVT_CHECKBOX(ID_CHECK_LIGHTWEIGHT_SHADER, OptionsDialog::OnCheckboxChanged)
 		EVT_SLIDER(wxID_ANY, OptionsDialog::OnSliderChanged)
 
 #ifdef USE_SDL2_GAMEPAD
@@ -96,7 +100,7 @@ namespace xPlatform {
 
 	OptionsDialog::OptionsDialog(wxWindow* parent)
 		: wxDialog(parent, wxID_ANY, _("Emulator Options"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
-		, mipmap_enabled(DEFAULT_MIPMAPPING)
+		, lightweight_shader_enabled(DEFAULT_LIGHTWEIGHT_SHADER)
 		, mask_scale_val(DEFAULT_MASK_SCALE)
 	{
 		LoadCurrentSettings();
@@ -270,8 +274,13 @@ namespace xPlatform {
 		wxPanel* page = new wxPanel(parent);
 		wxBoxSizer* pageSizer = new wxBoxSizer(wxVERTICAL);
 
-		checkMipmapping_ = new wxCheckBox(page, ID_CHECK_MIPMAPPING, _("Enable Mipmapping"));
-		pageSizer->Add(checkMipmapping_, 0, wxALL, padding);
+		checkLightweightShader_ = new wxCheckBox(page, ID_CHECK_LIGHTWEIGHT_SHADER, _("Lightweight shader"));
+		checkLightweightShader_->SetToolTip(_(
+			"The simple single-pass renderer: nearest-neighbour scaling and no PAL effects "
+			"(Gigascreen, scanlines and the phosphor mask still work). When on, the PAL "
+			"effects section below is disabled; off is the full-quality renderer with "
+			"smooth scaling and the PAL effects."));
+		pageSizer->Add(checkLightweightShader_, 0, wxALL, padding);
 
 		checkGigascreen_ = new wxCheckBox(page, ID_CHECK_GIGASCREEN, _("Enable Gigascreen"));
 		pageSizer->Add(checkGigascreen_, 0, wxALL, padding);
@@ -294,7 +303,8 @@ namespace xPlatform {
 		maskRow->Add(labelMaskScale_, 0, wxALIGN_CENTER_VERTICAL);
 		pageSizer->Add(maskRow, 0, wxALL, padding);
 
-		// PAL Effects Sub-Sizer
+		// PAL Effects Sub-Sizer (disabled while the lightweight shader is on -
+		// it has no PAL effects at all, see UpdatePalEffectsEnabled())
 		wxStaticBoxSizer* palSubSizer = new wxStaticBoxSizer(wxVERTICAL, page, _("PAL Effects"));
 		wxWindow* palBox = palSubSizer->GetStaticBox();
 		checkPalEffects_ = new wxCheckBox(palBox, ID_CHECK_PAL_EFFECTS, _("Enable PAL effects"));
@@ -406,12 +416,26 @@ namespace xPlatform {
 		float beam_val = static_cast<float>(beam_spread_val) / 100.0f * 2.0f;
 		labelBeamSpread_->SetLabel(wxString::Format(_("%.1f"), beam_val));
 
-		checkMipmapping_->SetValue(mipmap_enabled);
+		checkLightweightShader_->SetValue(lightweight_shader_enabled);
 		sliderMaskScale_->SetValue(mask_scale_val);
 
 		wxString label;
 		label.Printf(wxT("%d"), mask_scale_val);
 		labelMaskScale_->SetLabel(label);
+
+		UpdatePalEffectsEnabled();
+	}
+
+	// The lightweight shader has no PAL effects (the GL renderer's lightweight
+	// path skips the PAL pipeline entirely), so there is nothing to set in the
+	// PAL section while it is on - the same rule the View menu applies to its
+	// "PAL effects" item.
+	void OptionsDialog::UpdatePalEffectsEnabled()
+	{
+		bool enabled = !lightweight_shader_enabled;
+		checkPalEffects_->Enable(enabled);
+		sliderPalStrength_->Enable(enabled);
+		sliderBeamSpread_->Enable(enabled);
 	}
 
 	void OptionsDialog::LoadCurrentSettings()
@@ -436,9 +460,9 @@ namespace xPlatform {
 		pal_strength_val = *xOptions::eOption<int>::Find("pal strength");
 		beam_spread_val = *xOptions::eOption<int>::Find("beam spread");
 
-		// Mipmapping option
-		xOptions::eOption<bool>* op_mipmap = xOptions::eOption<bool>::Find("mipmapping");
-		mipmap_enabled = op_mipmap ? *op_mipmap : DEFAULT_MIPMAPPING;
+		// Lightweight shader option
+		xOptions::eOption<bool>* op_lightweight = xOptions::eOption<bool>::Find("lightweight shader");
+		lightweight_shader_enabled = op_lightweight ? *op_lightweight : DEFAULT_LIGHTWEIGHT_SHADER;
 
 		// Mask scale option
 		xOptions::eOption<int>* op_mask = xOptions::eOption<int>::Find("mask scale");
@@ -480,8 +504,9 @@ namespace xPlatform {
 		case ID_CHECK_PAL_EFFECTS:
 			pal_effects_enabled = event.IsChecked();
 			break;
-		case ID_CHECK_MIPMAPPING:
-			mipmap_enabled = event.IsChecked();
+		case ID_CHECK_LIGHTWEIGHT_SHADER:
+			lightweight_shader_enabled = event.IsChecked();
+			UpdatePalEffectsEnabled();
 			break;
 		default:
 			// Handle unexpected IDs (e.g., log a warning)
@@ -542,8 +567,8 @@ namespace xPlatform {
 		xOptions::eOption<int>* op_beam_spread = xOptions::eOption<int>::Find("beam spread");
 		if (op_beam_spread) { op_beam_spread->Set(beam_spread_val); op_beam_spread->Apply(); }
 
-		xOptions::eOption<bool>* op_mipmap = xOptions::eOption<bool>::Find("mipmapping");
-		if (op_mipmap) { op_mipmap->Set(mipmap_enabled); op_mipmap->Apply();}
+		xOptions::eOption<bool>* op_lightweight = xOptions::eOption<bool>::Find("lightweight shader");
+		if (op_lightweight) { op_lightweight->Set(lightweight_shader_enabled); op_lightweight->Apply(); }
 
 		xOptions::eOption<int>* op_mask = xOptions::eOption<int>::Find("mask scale");
 		if (op_mask) { op_mask->Set(mask_scale_val); op_mask->Apply(); }
@@ -588,7 +613,7 @@ namespace xPlatform {
 		pal_effects_enabled = DEFAULT_PAL_EFFECTS;
 		pal_strength_val = DEFAULT_PAL_STRENGTH;
 		beam_spread_val = DEFAULT_BEAM_SPREAD;
-		mipmap_enabled = DEFAULT_MIPMAPPING;
+		lightweight_shader_enabled = DEFAULT_LIGHTWEIGHT_SHADER;
 		mask_scale_val = DEFAULT_MASK_SCALE;
 		ReflectSettings();
 	}

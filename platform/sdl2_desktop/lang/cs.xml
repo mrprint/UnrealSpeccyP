@@ -120,8 +120,8 @@
 	<string id="tip.options.audio.stereo_mode">Směrování stereo kanálů AY</string>
 	<string id="options.audio.restore_defaults">Obnovit výchozí nastavení</string>
 	<string id="tip.options.audio.restore_defaults">Obnoví zvukové možnosti na výchozí hodnoty</string>
-	<string id="options.video.mipmapping">Mipmapping</string>
-	<string id="tip.options.video.mipmapping">Plynule zmenší obraz a omezí blikání</string>
+	<string id="options.video.lightweight_shader">Odlehčený shader</string>
+	<string id="tip.options.video.lightweight_shader">Nejjednodušší a nejrychlejší vykreslování: zvětšení bez vyhlazování, bez efektů PAL</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: mísí dva barevné snímky AY a získá 256 barev místo 15</string>
 	<string id="options.video.scanlines">Řádky CRT</string>

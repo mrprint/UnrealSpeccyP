@@ -766,7 +766,7 @@ elseif(USE_SDL2_DESKTOP)
 #Not to be confused with USE_SDL2 above (GLES2, aimed at Windows/ANGLE,
 #UWP, Emscripten): this is a new platform for classic desktop Linux/
 #Windows/macOS, reusing platform/gl (the same desktop GL renderer
-#USE_WX_WIDGETS uses - gigascreen/scanlines/PAL effects/mipmapping) for
+#USE_WX_WIDGETS uses - gigascreen/scanlines/PAL effects) for
 #video, and platform/sdl2/sdl2_{keys,mouse,joystick,audio}.cpp as-is for
 #input/audio. Everything (event polling, emulator tick, video+UI render)
 #runs on a single thread (bar the tiny OS-theme poller on Linux, see

@@ -120,8 +120,8 @@
 	<string id="tip.options.audio.stereo_mode">AY stereo kanalų paskirstymas</string>
 	<string id="options.audio.restore_defaults">Atkurti numatytuosius</string>
 	<string id="tip.options.audio.restore_defaults">Atkuria garso parinktis į numatytąsias reikšmes</string>
-	<string id="options.video.mipmapping">Mipmapping</string>
-	<string id="tip.options.video.mipmapping">Tolygiai sumažina vaizdą, kad sumažėtų mirgėjimas</string>
+	<string id="options.video.lightweight_shader">Lengvas šeiderys</string>
+	<string id="tip.options.video.lightweight_shader">Paprasčiausias ir greičiausias vaizdavimas: mastelio keitimas be glotninimo, be PAL efektų</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: sumaišo du AY spalvų kadrus, kad gautų 256 spalvas vietoje 15</string>
 	<string id="options.video.scanlines">CRT linijos</string>

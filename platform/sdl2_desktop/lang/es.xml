@@ -120,8 +120,8 @@
 	<string id="tip.options.audio.stereo_mode">Enrutamiento de canales estéreo AY</string>
 	<string id="options.audio.restore_defaults">Restaurar valores predeterminados</string>
 	<string id="tip.options.audio.restore_defaults">Restaura las opciones de audio a sus valores predeterminados</string>
-	<string id="options.video.mipmapping">Mipmapping</string>
-	<string id="tip.options.video.mipmapping">Reduce suavemente la escala de la imagen para disminuir el parpadeo</string>
+	<string id="options.video.lightweight_shader">Shader ligero</string>
+	<string id="tip.options.video.lightweight_shader">Renderizado más simple y rápido: escalado sin suavizado, sin efectos PAL</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: combina los dos fotogramas de color AY para obtener 256 colores en lugar de 15</string>
 	<string id="options.video.scanlines">Líneas CRT</string>

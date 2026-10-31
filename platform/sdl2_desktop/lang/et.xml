@@ -120,8 +120,8 @@
 	<string id="tip.options.audio.stereo_mode">AY stereokanalite suunamine</string>
 	<string id="options.audio.restore_defaults">Taasta vaikeväärtused</string>
 	<string id="tip.options.audio.restore_defaults">Taastab helisätted vaikeväärtustele</string>
-	<string id="options.video.mipmapping">Mipmapping</string>
-	<string id="tip.options.video.mipmapping">Vähendab pilti sujuvalt, et vähendada virvendust</string>
+	<string id="options.video.lightweight_shader">Kerge varjund</string>
+	<string id="tip.options.video.lightweight_shader">Lihtsaim ja kiireim joonistamine: skaleerimine ilma silumiseta, ilma PAL-efektideta</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: segab kaks AY värvikaadrit, et saada 256 värvi 15 asemel</string>
 	<string id="options.video.scanlines">CRT jooned</string>

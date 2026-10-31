@@ -120,8 +120,8 @@
 	<string id="tip.options.audio.stereo_mode">Direcționarea canalelor stereo AY</string>
 	<string id="options.audio.restore_defaults">Restabilește setările implicite</string>
 	<string id="tip.options.audio.restore_defaults">Restabilește opțiunile audio la valorile implicite</string>
-	<string id="options.video.mipmapping">Mipmapping</string>
-	<string id="tip.options.video.mipmapping">Micșorează fin imaginea pentru a reduce sclipirea</string>
+	<string id="options.video.lightweight_shader">Shader ușor</string>
+	<string id="tip.options.video.lightweight_shader">Randare simplă și rapidă: scalare fără netezire, fără efecte PAL</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: combină cele două cadre de culoare AY pentru a obține 256 de culori în loc de 15</string>
 	<string id="options.video.scanlines">Linii CRT</string>

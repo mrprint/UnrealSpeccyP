@@ -120,8 +120,8 @@
 	<string id="tip.options.audio.stereo_mode">Разпределение на AY стерео каналите</string>
 	<string id="options.audio.restore_defaults">Възстановяване по подразбиране</string>
 	<string id="tip.options.audio.restore_defaults">Връща аудио настройките към стойностите по подразбиране</string>
-	<string id="options.video.mipmapping">Mipmapping</string>
-	<string id="tip.options.video.mipmapping">Плавно намалява мащаба на изображението, за да намали трептенето</string>
+	<string id="options.video.lightweight_shader">Лек шейдър</string>
+	<string id="tip.options.video.lightweight_shader">Най-простото и най-бързо изобразяване: мащабиране без изглаждане, без PAL ефекти</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: смесва двата цветови кадъра на AY, за да получи 256 цвята вместо 15</string>
 	<string id="options.video.scanlines">CRT линии</string>

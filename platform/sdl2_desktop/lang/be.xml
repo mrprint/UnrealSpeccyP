@@ -120,8 +120,8 @@
 	<string id="tip.options.audio.stereo_mode">Размеркаванне стэрэаканалаў AY</string>
 	<string id="options.audio.restore_defaults">Скінуць налады</string>
 	<string id="tip.options.audio.restore_defaults">Скідае налады гуку да прадвызначаных значэнняў</string>
-	<string id="options.video.mipmapping">Mipmapping</string>
-	<string id="tip.options.video.mipmapping">Плаўна памяншаць маштаб выявы для зніжэння мігцення</string>
+	<string id="options.video.lightweight_shader">Аблегчаны шэйдар</string>
+	<string id="tip.options.video.lightweight_shader">Найпрасцейшая і хуткая адмалёўка: маштабаванне без згладжвання, без PAL-эфектаў</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: змешванне двух колеравых кадраў AY для атрымання 256 колераў замест 15</string>
 	<string id="options.video.scanlines">Радкі ЭПТ</string>

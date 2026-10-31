@@ -120,8 +120,8 @@
 	<string id="tip.options.audio.stereo_mode">Usmerjanje stereo kanalov AY</string>
 	<string id="options.audio.restore_defaults">Obnovi privzete nastavitve</string>
 	<string id="tip.options.audio.restore_defaults">Obnovi zvočne možnosti na privzete vrednosti</string>
-	<string id="options.video.mipmapping">Mipmapping</string>
-	<string id="tip.options.video.mipmapping">Gladko pomanjša sliko za zmanjšanje utripanja</string>
+	<string id="options.video.lightweight_shader">Lahki senčilnik</string>
+	<string id="tip.options.video.lightweight_shader">Najpreprostejše in najhitrejše izrisovanje: skaliranje brez glajenja, brez učinkov PAL</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: združi dva barvna okvirja AY za 256 barv namesto 15</string>
 	<string id="options.video.scanlines">CRT vrstice</string>

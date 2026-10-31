@@ -57,6 +57,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "../../tools/options.h"
 #include "../../options_common.h"
 
+#ifndef DEFAULT_LIGHTWEIGHT_SHADER
+#define DEFAULT_LIGHTWEIGHT_SHADER false   // (normally defined with the other DEFAULT_* values)
+#endif
+
 namespace xPlatform
 {
 namespace xImGui
@@ -487,7 +491,7 @@ private:
 	bool m_pal_effects = true;
 	int m_pal_strength = 50;
 	int m_beam_spread = 30;
-	bool m_mipmapping = true;
+	bool m_lightweight_shader = DEFAULT_LIGHTWEIGHT_SHADER;
 	int m_mask_scale = 1;
 	bool m_prefer_pal_refresh = false;
 	int m_theme_mode = (int)eThemeMode::Auto; // index into theme_keys[] in DrawAppearanceTab()
@@ -528,7 +532,7 @@ void OptionsDialog::LoadCurrentSettings()
 	opb = xOptions::eOption<bool>::Find("pal effects");  if(opb) m_pal_effects = *opb;
 	op = xOptions::eOption<int>::Find("pal strength");   if(op) m_pal_strength = *op;
 	op = xOptions::eOption<int>::Find("beam spread");    if(op) m_beam_spread = *op;
-	opb = xOptions::eOption<bool>::Find("mipmapping");   m_mipmapping = opb ? (bool)*opb : DEFAULT_MIPMAPPING;
+	opb = xOptions::eOption<bool>::Find("lightweight shader"); m_lightweight_shader = opb ? (bool)*opb : DEFAULT_LIGHTWEIGHT_SHADER;
 	op = xOptions::eOption<int>::Find("mask scale");     m_mask_scale = op ? *op : DEFAULT_MASK_SCALE;
 	opb = xOptions::eOption<bool>::Find("Prefer PAL refresh"); m_prefer_pal_refresh = opb ? (bool)*opb : DEFAULT_PAL_REFRESH_RATE;
 
@@ -554,7 +558,7 @@ void OptionsDialog::CommitToOptions()
 	opb = xOptions::eOption<bool>::Find("pal effects"); if(opb) { opb->Set(m_pal_effects); opb->Apply(); }
 	op = xOptions::eOption<int>::Find("pal strength");  if(op) { op->Set(m_pal_strength); op->Apply(); }
 	op = xOptions::eOption<int>::Find("beam spread");   if(op) { op->Set(m_beam_spread); op->Apply(); }
-	opb = xOptions::eOption<bool>::Find("mipmapping");  if(opb) { opb->Set(m_mipmapping); opb->Apply(); }
+	opb = xOptions::eOption<bool>::Find("lightweight shader"); if(opb) { opb->Set(m_lightweight_shader); opb->Apply(); }
 	op = xOptions::eOption<int>::Find("mask scale");    if(op) { op->Set(m_mask_scale); op->Apply(); }
 	opb = xOptions::eOption<bool>::Find("Prefer PAL refresh"); if(opb) { opb->Set(m_prefer_pal_refresh); opb->Apply(); }
 
@@ -692,8 +696,8 @@ void OptionsDialog::DrawAudioTab()
 
 void OptionsDialog::DrawVideoTab()
 {
-	ImGui::Checkbox(Tr("options.video.mipmapping"), &m_mipmapping);
-	ItemTooltip("tip.options.video.mipmapping");
+	ImGui::Checkbox(Tr("options.video.lightweight_shader"), &m_lightweight_shader);
+	ItemTooltip("tip.options.video.lightweight_shader");
 	ImGui::Checkbox(Tr("options.video.gigascreen"), &m_gigascreen);
 	ItemTooltip("tip.options.video.gigascreen");
 	ImGui::Checkbox(Tr("options.video.scanlines"), &m_scanlines);
@@ -706,10 +710,13 @@ void OptionsDialog::DrawVideoTab()
 
 	ImGui::Spacing();
 	ImGui::SeparatorText(Tr("options.video.pal_effects_header"));
+	// The lightweight shader has no PAL effects: nothing to set here while it is on.
+	ImGui::BeginDisabled(m_lightweight_shader);
 	ImGui::Checkbox(Tr("options.video.pal_effects"), &m_pal_effects);
 	ItemTooltip("tip.options.video.pal_effects");
 	SliderRow("options.video.pal_strength", &m_pal_strength, 0, 100, "%d%%", "tip.options.video.pal_strength");
 	SliderRow("options.video.beam_spread", &m_beam_spread, 0, 200, "%d", "tip.options.video.beam_spread");
+	ImGui::EndDisabled();
 
 	ImGui::Spacing();
 	ImGui::Spacing();
@@ -720,7 +727,7 @@ void OptionsDialog::DrawVideoTab()
 		m_pal_effects = DEFAULT_PAL_EFFECTS;
 		m_pal_strength = DEFAULT_PAL_STRENGTH;
 		m_beam_spread = DEFAULT_BEAM_SPREAD;
-		m_mipmapping = DEFAULT_MIPMAPPING;
+		m_lightweight_shader = DEFAULT_LIGHTWEIGHT_SHADER;
 		m_mask_scale = DEFAULT_MASK_SCALE;
 		m_prefer_pal_refresh = DEFAULT_PAL_REFRESH_RATE;
 	}

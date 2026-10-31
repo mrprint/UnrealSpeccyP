@@ -120,8 +120,8 @@
 	<string id="tip.options.audio.stereo_mode">Usmjeravanje AY stereo kanala</string>
 	<string id="options.audio.restore_defaults">Vrati zadane postavke</string>
 	<string id="tip.options.audio.restore_defaults">Vraća zvučne postavke na zadane vrijednosti</string>
-	<string id="options.video.mipmapping">Mipmapping</string>
-	<string id="tip.options.video.mipmapping">Glatko smanjuje sliku kako bi se smanjilo treperenje</string>
+	<string id="options.video.lightweight_shader">Laki shader</string>
+	<string id="tip.options.video.lightweight_shader">Najjednostavnije i najbrže iscrtavanje: skaliranje bez izglađivanja, bez PAL efekata</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: miješa dva AY sličice boje kako bi se dobilo 256 boja umjesto 15</string>
 	<string id="options.video.scanlines">CRT linije</string>

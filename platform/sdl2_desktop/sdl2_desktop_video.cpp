@@ -21,8 +21,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 //  Window + desktop OpenGL context for the "sdl2_desktop" platform. Draws
 //  the emulator screen through platform/gl/draw.cpp (DrawGL(), the shared
-//  shader-based renderer - gigascreen / scanlines / PAL effects /
-//  mipmapping), and renders the Dear ImGui overlay (menu, About window, ...)
+//  shader-based renderer - gigascreen / scanlines / PAL effects),
+//  and renders the Dear ImGui overlay (menu, About window, ...)
 //  on top, after the emulator frame, still inside the single call to
 //  UpdateScreen() - one thread, one SDL_GL_SwapWindow() per frame.
 // =============================================================================
@@ -785,46 +785,6 @@ void OpZoomGet(float* sx, float* sy, const ePoint& org_size, const ePoint& size)
 	GetScaleWithAspectRatio43(sx, sy, size.x, size.y);
 }
 
-// The full-quality FBO in platform/gl/draw.cpp is sized once, at startup, from
-// the largest connected display rather than from the current (typically small,
-// windowed) drawable size. That way switching to fullscreen never renders the
-// full-quality path through an undersized FBO and stretches it back up with
-// GL_LINEAR, which would look aliased/blurry.
-//
-// Deliberately uses SDL_GetCurrentDisplayMode(), NOT SDL_GetDisplayBounds().
-// SDL_GetDisplayBounds() reports size in "screen coordinates", which on
-// HiDPI/Retina displays are logical points, not the real framebuffer pixel
-// count - e.g. 1440x900 points for a 2880x1800-pixel panel at 2x scale.
-// SDL_GL_GetDrawableSize() (used for `drawable` below, and by UpdateScreen()
-// every frame) is always in actual pixels. Mixing the two unit spaces here
-// would silently pick the smaller, points-based value on exactly the
-// high-DPI screens where it matters, leaving the FBO under-resolved relative
-// to the real fullscreen framebuffer. The visible symptom is subtle: the
-// mask itself is still computed per-pixel (gl_FragCoord in the screen pass),
-// but the picture it's multiplied over is undersampled, so the fine,
-// high-frequency phosphor-mask columns are the first detail to show
-// interpolation between neighbouring pixels - looking like a gradient
-// instead of sharp columns. SDL_GetCurrentDisplayMode() reports the video
-// mode in the same pixel units as SDL_GL_GetDrawableSize(), so the two are
-// safe to compare and max() directly.
-static ePoint GetMaxDisplayResolution()
-{
-	ePoint result(-1, -1);
-	int count = SDL_GetNumVideoDisplays();
-	for(int i = 0; i < count; ++i)
-	{
-		SDL_DisplayMode mode;
-		if(SDL_GetCurrentDisplayMode(i, &mode) != 0)
-			continue;
-		if(mode.w * mode.h > result.x * result.y)
-		{
-			result.x = mode.w;
-			result.y = mode.h;
-		}
-	}
-	return result;
-}
-
 // Two identical monitor models can still legitimately produce the same
 // identity (GetDisplayIdentity() narrows this a lot on Windows compared to
 // SDL_GetDisplayName() alone, but doesn't eliminate it - two identical
@@ -989,16 +949,7 @@ bool InitVideo()
 	ePoint drawable;
 	SDL_GL_GetDrawableSize(g_gl_window.window, &drawable.x, &drawable.y);
 
-	// Size the FBO from whichever is larger: the current drawable, or the
-	// biggest connected display (see GetMaxDisplayResolution() above). This
-	// covers the common case (start windowed, then go fullscreen) without
-	// needing any runtime FBO-resize logic at all.
-	ePoint max_display = GetMaxDisplayResolution();
-	ePoint init_size(
-		(max_display.x > drawable.x) ? max_display.x : drawable.x,
-		(max_display.y > drawable.y) ? max_display.y : drawable.y);
-
-	initGraphics(init_size.x, init_size.y);
+	initGraphics(drawable.x, drawable.y);
 	g_gl_window.graphics_inited = true;
 
 	xImGui::Init(g_gl_window.window, g_gl_window.context());
@@ -1035,9 +986,7 @@ void UpdateScreen()
 	// selected display mode's resolution, which may now differ from the
 	// desktop's own (FindBestFieldRateDisplayMode()'s stage 1 may pick a
 	// smaller one) - this is what passes the correct resolution to
-	// DrawGL() below. The full-quality FBO in draw.cpp is deliberately
-	// left at its init-time size (the largest connected display) and simply
-	// scaled to this vport.
+	// DrawGL() below.
 	ePoint s;
 	SDL_GL_GetDrawableSize(g_gl_window.window, &s.x, &s.y);
 

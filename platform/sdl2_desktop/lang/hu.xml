@@ -120,8 +120,8 @@
 	<string id="tip.options.audio.stereo_mode">Az AY sztereó csatornáinak irányítása</string>
 	<string id="options.audio.restore_defaults">Alapértelmezések visszaállítása</string>
 	<string id="tip.options.audio.restore_defaults">Visszaállítja a hangbeállításokat az alapértelmezett értékekre</string>
-	<string id="options.video.mipmapping">Mipmapping</string>
-	<string id="tip.options.video.mipmapping">A kép finom lekicsinyítése a villódzás csökkentésére</string>
+	<string id="options.video.lightweight_shader">Könnyű shader</string>
+	<string id="tip.options.video.lightweight_shader">A legegyszerűbb és leggyorsabb megjelenítés: átméretezés simítás nélkül, PAL-effektek nélkül</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: a két AY színkeretet keveri, így 256 szín jön létre 15 helyett</string>
 	<string id="options.video.scanlines">CRT sorok</string>

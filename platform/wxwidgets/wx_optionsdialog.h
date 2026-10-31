@@ -42,7 +42,7 @@ namespace xPlatform {
 		ID_CHECK_GIGASCREEN = 201,
 		ID_CHECK_SCANLINES,
 		ID_CHECK_PAL_EFFECTS,
-		ID_CHECK_MIPMAPPING = 251,
+		ID_CHECK_LIGHTWEIGHT_SHADER = 251,
 		// Add reset button IDs
 		ID_RESET_AUDIO = 301,
 		ID_RESET_VIDEO,
@@ -159,7 +159,7 @@ namespace xPlatform {
 		wxStaticText* labelPalStrength_;
 		wxSlider* sliderBeamSpread_;
 		wxStaticText* labelBeamSpread_;
-		wxCheckBox* checkMipmapping_;
+		wxCheckBox* checkLightweightShader_;
 		wxSlider* sliderMaskScale_;
 		wxStaticText* labelMaskScale_;
 
@@ -168,11 +168,14 @@ namespace xPlatform {
 		bool pal_effects_enabled;
 		int pal_strength_val;
 		int beam_spread_val;
-		bool mipmap_enabled;
+		bool lightweight_shader_enabled;
 		int mask_scale_val;
 
 		void ReflectSettings();
 		void LoadCurrentSettings();
+		// The lightweight shader has no PAL effects: disables/enables the
+		// PAL section's controls when it is switched on/off.
+		void UpdatePalEffectsEnabled();
 
 		// Reset buttons (one per tab)
 		wxBitmapButton* resetAudioBtn_;
