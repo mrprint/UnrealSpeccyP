@@ -740,6 +740,8 @@ void ImGuiBackend::Done()
 	m_inited = false;
 }
 
+bool FileBrowserActive(); // sdl2_desktop_filedialog.cpp
+
 void ImGuiBackend::BeginFrame()
 {
 	// While the mouse is captured for the emulated (Kempston) mouse the real pointer is hidden, and the position SDL
@@ -755,6 +757,22 @@ void ImGuiBackend::BeginFrame()
 			io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
 		else
 			io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+
+		// The OS cursor is hidden in fullscreen when nothing is on screen to point at, and while the mouse is
+		// captured (see UpdateCursorVisibility() in sdl2_desktop.cpp - the one place that decides it). ImGui's SDL2
+		// backend, however, calls SDL_ShowCursor(SDL_TRUE) from NewFrame() every frame, i.e. it would show the cursor
+		// at the start of each frame only for UpdateCursorVisibility() to hide it again at the end: a show/hide
+		// pair per frame, which on some drivers (seen: Intel HD 610 on Windows, hardware cursor plane) leaks out as
+		// a flickering pointer. So whenever the cursor is meant to be hidden, ImGui is told to leave it alone.
+		bool fullscreen = false;
+		if(xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("full screen"))
+			fullscreen = *op;
+		const bool grabbed = m_window && SDL_GetWindowGrab(m_window) != SDL_FALSE;
+		const bool dialog_open = AnyMenuDialogActive() || FileBrowserActive();
+		if(grabbed || (fullscreen && !dialog_open))
+			io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+		else
+			io.ConfigFlags &= ~ImGuiConfigFlags_NoMouseCursorChange;
 	}
 
 	ImGui_ImplOpenGL3_NewFrame();
