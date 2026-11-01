@@ -28,6 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // =============================================================================
 
 #include "../platform.h"
+#include "../gl/gl_version.h"
 
 #ifdef USE_SDL2_DESKTOP
 
@@ -851,9 +852,13 @@ bool InitVideo()
 	// Mesa and other drivers do not read it.
 	SDL_setenv("__GL_YIELD", "USLEEP", 0);
 #endif//_LINUX
+	// The OpenGL version to ask for - 3.0 (3.2 core on macOS): see gl/gl_version.h. The
+	// driver may give a newer context than that, which is fine.
+#if RENDERER_GL_CORE_PROFILE
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+#endif
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, RENDERER_GL_MAJOR);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, RENDERER_GL_MINOR);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG); // required for a core-profile context on macOS; harmless elsewhere
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 

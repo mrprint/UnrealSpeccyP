@@ -30,6 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "../../tools/options.h"
 #include "../../options_common.h"
 #include "../../devices/video_snapshot.h"
+#include "gl_version.h"
 
 #ifdef USE_GL
 
@@ -308,9 +309,10 @@ namespace xPlatform
     // Shaders
     // -------------------------------------------------------------------------
 
+    // Every shader starts with RENDERER_GLSL_VERSION_LINE (gl_version.h): GLSL 1.30
+    // (OpenGL 3.0), 1.50 on macOS. The rest of the text is the same for both.
     const char* vertex_src =
-        R"(
-#version 130
+        RENDERER_GLSL_VERSION_LINE R"(
 in vec2 aPos;
 in vec2 aTexCoord;
 out vec2 TexCoord;
@@ -345,9 +347,7 @@ void main()
     // the ramp is wider than the fetch can blend and it degrades to plain bilinear.
     // -------------------------------------------------------------------------
     const char* full_fragment_src =
-        R"(
-#version 130
-
+        RENDERER_GLSL_VERSION_LINE R"(
 in vec2 TexCoord;
 out vec4 FragColor;
 
@@ -545,9 +545,7 @@ void main() {
     // columns after zoom + aspect correction, uploaded each frame from the CPU.
     // -------------------------------------------------------------------------
     const char* lw_fragment_src =
-        R"(
-#version 130
-
+        RENDERER_GLSL_VERSION_LINE R"(
 in vec2 TexCoord;
 out vec4 FragColor;
 

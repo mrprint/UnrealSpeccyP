@@ -32,6 +32,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // =============================================================================
 
 #include "../platform.h"
+#include "../gl/gl_version.h"
 
 #ifdef USE_SDL2_DESKTOP
 
@@ -719,7 +720,7 @@ void ImGuiBackend::Init(SDL_Window* window, SDL_GLContext context)
 #endif
 
 	ImGui_ImplSDL2_InitForOpenGL(window, context);
-	ImGui_ImplOpenGL3_Init("#version 330");
+	ImGui_ImplOpenGL3_Init(RENDERER_GLSL_VERSION); // the GLSL its shaders are compiled as: gl/gl_version.h
 
 	LoadFont(dpi_scale); // after backend Init() - DestroyFontsTexture()/CreateFontsTexture() need it ready
 

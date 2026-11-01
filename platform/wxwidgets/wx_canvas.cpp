@@ -17,6 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "../platform.h"
+#include "../gl/gl_version.h"
 
 #ifdef USE_WXWIDGETS
 
@@ -137,11 +138,11 @@ END_EVENT_TABLE()
 GLCanvas::GLCanvas(wxWindow* parent) : eInherited(parent, wxID_ANY, canvas_attr), mouse_capture(NULL), gl_initialized(false)
 {
 	wxGLContextAttrs ctx_attrs;
-	ctx_attrs.PlatformDefaults().CoreProfile().OGLVersion(3, 0).EndList();
+	ctx_attrs.PlatformDefaults().CoreProfile().OGLVersion(RENDERER_GL_MAJOR, RENDERER_GL_MINOR).EndList();
     gl_context = new wxGLContext(this, nullptr, &ctx_attrs);
 	if (!gl_context->IsOK())
 	{
-		wxMessageBox("An OpenGL 3.0 capable driver is required.\nThe app will end now.",
+		wxMessageBox("An OpenGL " + wxString::Format("%d.%d", RENDERER_GL_MAJOR, RENDERER_GL_MINOR) + " capable driver is required.\nThe app will end now.",
 			"OpenGL version error", wxOK | wxICON_INFORMATION, this);
 		delete gl_context;
 		gl_context = nullptr;
