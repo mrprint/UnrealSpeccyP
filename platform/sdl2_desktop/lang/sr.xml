@@ -29,6 +29,8 @@
 	<string id="tip.menu.view.gigascreen">Gigascreen: меша два AY кадра боје да добије 256 боја уместо 15</string>
 	<string id="menu.view.crt_scanlines">CRT линије</string>
 	<string id="tip.menu.view.crt_scanlines">Симулирај CRT линије</string>
+	<string id="menu.view.soft_pixels">CRT меки пиксели</string>
+	<string id="tip.menu.view.soft_pixels">Симулирај меке ивице пиксела CRT зрака при увећању</string>
 	<string id="menu.view.pal_effects">PAL ефекти</string>
 	<string id="tip.menu.view.pal_effects">Симулирај PAL ефекте боје (замућеност боја, нијанса, укрштено мешање)</string>
 	<string id="menu.view.full_screen">Цео екран</string>
@@ -88,6 +90,8 @@
 	<string id="status.gigascreen.off">Gigascreen искључен</string>
 	<string id="status.scanlines.on">Симулација CRT линија укључена</string>
 	<string id="status.scanlines.off">Симулација CRT линија искључена</string>
+	<string id="status.soft_pixels.on">CRT меки пиксели укључени</string>
+	<string id="status.soft_pixels.off">CRT меки пиксели искључени</string>
 	<string id="status.pal_effects.on">PAL ефекти укључени</string>
 	<string id="status.pal_effects.off">PAL ефекти искључени</string>
 	<string id="status.pal_refresh.on">Изворно освежавање укључено</string>
@@ -122,6 +126,8 @@
 	<string id="tip.options.audio.restore_defaults">Враћа звучна подешавања на подразумеване вредности</string>
 	<string id="options.video.lightweight_shader">Лаки шејдер</string>
 	<string id="tip.options.video.lightweight_shader">Најједноставније и најбрже приказивање: скалирање без заглађивања, без PAL ефеката</string>
+	<string id="options.video.soft_pixels">CRT меки пиксели</string>
+	<string id="tip.options.video.soft_pixels">Меке ивице пиксела при увећању: шире код светлих пиксела, мешање у линеарном светлу као код CRT зрака. Само квалитетни шејдер</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: меша два AY кадра боје да добије 256 боја уместо 15</string>
 	<string id="options.video.scanlines">CRT линије</string>

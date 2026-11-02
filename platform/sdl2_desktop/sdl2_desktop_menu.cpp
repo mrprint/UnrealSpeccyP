@@ -453,6 +453,19 @@ void DrawMenuBar()
 			}
 		}
 		{
+			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("soft pixels");
+			if(op)
+			{
+				// Part of the full-quality shader: the item is disabled while the
+				// lightweight one is on (see LightweightShaderActive()).
+				ImGui::BeginDisabled(LightweightShaderActive());
+				if(ImGui::MenuItem(Tr("menu.view.soft_pixels"), nullptr, *op))
+					ToggleBoolOption("soft pixels", Tr("status.soft_pixels.on"), Tr("status.soft_pixels.off"));
+				ItemTooltip("tip.menu.view.soft_pixels");
+				ImGui::EndDisabled();
+			}
+		}
+		{
 			xOptions::eOption<bool>* op = xOptions::eOption<bool>::Find("pal effects");
 			if(op)
 			{

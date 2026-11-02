@@ -29,6 +29,8 @@
 	<string id="tip.menu.view.gigascreen">Gigascreen: combină cele două cadre de culoare AY pentru a obține 256 de culori în loc de 15</string>
 	<string id="menu.view.crt_scanlines">Linii CRT</string>
 	<string id="tip.menu.view.crt_scanlines">Simulează liniile CRT</string>
+	<string id="menu.view.soft_pixels">Pixeli moi CRT</string>
+	<string id="tip.menu.view.soft_pixels">Simulează marginile moi ale pixelilor unui fascicul CRT la mărire</string>
 	<string id="menu.view.pal_effects">Efecte PAL</string>
 	<string id="tip.menu.view.pal_effects">Simulează efectele de culoare PAL (estomparea culorilor, nuanță, interferență încrucișată)</string>
 	<string id="menu.view.full_screen">Ecran complet</string>
@@ -88,6 +90,8 @@
 	<string id="status.gigascreen.off">Gigascreen dezactivat</string>
 	<string id="status.scanlines.on">Simulare linii CRT activată</string>
 	<string id="status.scanlines.off">Simulare linii CRT dezactivată</string>
+	<string id="status.soft_pixels.on">Pixeli moi CRT activați</string>
+	<string id="status.soft_pixels.off">Pixeli moi CRT dezactivați</string>
 	<string id="status.pal_effects.on">Efecte PAL activate</string>
 	<string id="status.pal_effects.off">Efecte PAL dezactivate</string>
 	<string id="status.pal_refresh.on">Rată de reîmprospătare nativă activată</string>
@@ -122,6 +126,8 @@
 	<string id="tip.options.audio.restore_defaults">Restabilește opțiunile audio la valorile implicite</string>
 	<string id="options.video.lightweight_shader">Shader ușor</string>
 	<string id="tip.options.video.lightweight_shader">Randare simplă și rapidă: scalare fără netezire, fără efecte PAL</string>
+	<string id="options.video.soft_pixels">Pixeli moi CRT</string>
+	<string id="tip.options.video.soft_pixels">Margini moi ale pixelilor la mărire: mai late la pixelii luminoși, amestec în lumină liniară, ca la fasciculul unui CRT. Doar cu shader de calitate maximă</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: combină cele două cadre de culoare AY pentru a obține 256 de culori în loc de 15</string>
 	<string id="options.video.scanlines">Linii CRT</string>

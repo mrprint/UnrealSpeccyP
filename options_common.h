@@ -58,6 +58,7 @@ const bool DEFAULT_SCANLINES = false;
 const bool DEFAULT_PAL_REFRESH_RATE = false; // try a display mode close to the emulated field rate when going fullscreen
 const float DEFAULT_ZOOM_VALUE = 1.0f;
 const bool DEFAULT_LIGHTWEIGHT_SHADER = false;
+const bool DEFAULT_SOFT_PIXELS = false; // CRT-like soft pixels when magnified (full-quality shader only)
 const int DEFAULT_MASK_SCALE = 1; // CRT mask scale (0=disabled, 1-4=visible)
 
 const bool DEFAULT_NVIDIA_WARNING = true;

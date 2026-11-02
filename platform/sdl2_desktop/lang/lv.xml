@@ -29,6 +29,8 @@
 	<string id="tip.menu.view.gigascreen">Gigascreen: sajauc divus AY krāsu kadrus, iegūstot 256 krāsas 15 vietā</string>
 	<string id="menu.view.crt_scanlines">CRT līnijas</string>
 	<string id="tip.menu.view.crt_scanlines">Imitēt CRT līnijas</string>
+	<string id="menu.view.soft_pixels">CRT mīkstie pikseļi</string>
+	<string id="tip.menu.view.soft_pixels">Imitēt CRT stara mīkstās pikseļu malas palielinot</string>
 	<string id="menu.view.pal_effects">PAL efekti</string>
 	<string id="tip.menu.view.pal_effects">Imitēt PAL krāsu efektus (krāsu izplūšanu, nokrāsu, šķērsošanos)</string>
 	<string id="menu.view.full_screen">Pilnekrāns</string>
@@ -88,6 +90,8 @@
 	<string id="status.gigascreen.off">Gigascreen izslēgts</string>
 	<string id="status.scanlines.on">CRT līniju imitācija ieslēgta</string>
 	<string id="status.scanlines.off">CRT līniju imitācija izslēgta</string>
+	<string id="status.soft_pixels.on">CRT mīkstie pikseļi ieslēgti</string>
+	<string id="status.soft_pixels.off">CRT mīkstie pikseļi izslēgti</string>
 	<string id="status.pal_effects.on">PAL efekti ieslēgti</string>
 	<string id="status.pal_effects.off">PAL efekti izslēgti</string>
 	<string id="status.pal_refresh.on">Dzimtā atsvaidzes frekvence ieslēgta</string>
@@ -122,6 +126,8 @@
 	<string id="tip.options.audio.restore_defaults">Atjauno skaņas iestatījumus uz noklusējuma vērtībām</string>
 	<string id="options.video.lightweight_shader">Vienkāršotais šeiders</string>
 	<string id="tip.options.video.lightweight_shader">Vienkāršākā un ātrākā atveidošana: mērogošana bez izlīdzināšanas, bez PAL efektiem</string>
+	<string id="options.video.soft_pixels">CRT mīkstie pikseļi</string>
+	<string id="tip.options.video.soft_pixels">Mīkstas pikseļu malas palielinot: platākas spilgtiem pikseļiem, sajaukšana lineārā gaismā kā CRT starā. Tikai pilnas kvalitātes šeiders</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: sajauc divus AY krāsu kadrus, iegūstot 256 krāsas 15 vietā</string>
 	<string id="options.video.scanlines">CRT līnijas</string>

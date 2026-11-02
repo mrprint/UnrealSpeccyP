@@ -36,6 +36,8 @@
 	<string id="tip.menu.view.gigascreen">Гигаскрин: смешивание двух цветовых кадров AY для получения 256 цветов вместо 15</string>
 	<string id="menu.view.crt_scanlines">Строки ЭЛТ</string>
 	<string id="tip.menu.view.crt_scanlines">Имитировать строки ЭЛТ</string>
+	<string id="menu.view.soft_pixels">Мягкие пиксели ЭЛТ</string>
+	<string id="tip.menu.view.soft_pixels">Имитировать мягкие края пикселей луча ЭЛТ при увеличении</string>
 	<string id="menu.view.pal_effects">PAL-эффекты</string>
 	<string id="tip.menu.view.pal_effects">Имитировать цветовые эффекты PAL (размытие цвета, оттенок, перекрёстные помехи)</string>
 	<string id="menu.view.full_screen">Полноэкранный режим</string>
@@ -102,6 +104,8 @@
 	<string id="status.gigascreen.off">Гигаскрин выключен</string>
 	<string id="status.scanlines.on">Имитация строк ЭЛТ включена</string>
 	<string id="status.scanlines.off">Имитация строк ЭЛТ выключена</string>
+	<string id="status.soft_pixels.on">Мягкие пиксели ЭЛТ включены</string>
+	<string id="status.soft_pixels.off">Мягкие пиксели ЭЛТ выключены</string>
 	<string id="status.pal_effects.on">PAL-эффекты включены</string>
 	<string id="status.pal_effects.off">PAL-эффекты выключены</string>
 	<string id="status.pal_refresh.on">Родная частота обновления включена</string>
@@ -139,6 +143,8 @@
 
 	<string id="options.video.lightweight_shader">Облегчённый шейдер</string>
 	<string id="tip.options.video.lightweight_shader">Простейшая и быстрая отрисовка: масштабирование без сглаживания, без PAL-эффектов</string>
+	<string id="options.video.soft_pixels">Мягкие пиксели ЭЛТ</string>
+	<string id="tip.options.video.soft_pixels">Мягкие края пикселей при увеличении: шире у ярких пикселей, смешение в линейном свете, как у луча ЭЛТ. Только полноценный шейдер</string>
 	<string id="options.video.gigascreen">Гигаскрин</string>
 	<string id="tip.options.video.gigascreen">Гигаскрин: смешивание двух цветовых кадров AY для получения 256 цветов вместо 15</string>
 	<string id="options.video.scanlines">Строки ЭЛТ</string>

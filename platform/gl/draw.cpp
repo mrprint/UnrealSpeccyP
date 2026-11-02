@@ -136,6 +136,17 @@ namespace xPlatform
         virtual int Order() const { return 46; }
     } op_lightweight_shader;
 
+    // Soft pixels: when the picture is magnified, the edges between source pixels are
+    // spread over a fraction of a pixel - wider for bright pixels (a CRT beam grows
+    // with its current) - and blended in linear light, as the light of a CRT adds up.
+    // The full-quality shader only; see PIXEL_SOFTNESS in full_fragment_src.
+    static struct eOptionSoftPixels : public xOptions::eOptionBool
+    {
+        eOptionSoftPixels() { Set(DEFAULT_SOFT_PIXELS); }
+        virtual const char* Name() const { return "soft pixels"; }
+        virtual int Order() const { return 49; }
+    } op_soft_pixels;
+
     // -------------------------------------------------------------------------
     // CachedUniform
     // -------------------------------------------------------------------------
@@ -191,6 +202,7 @@ namespace xPlatform
     CachedUniform<float>               u_pal_strength_cached;
     CachedUniform<float>               u_beam_spread_cached;
     CachedUniform<float>               u_slines_cnt_cached;
+    CachedUniform<int>                 u_soft_pixels_cached;
 
     // Lightweight uniforms
     CachedUniform<std::array<float, 2>> u_lw_scale;
@@ -204,6 +216,7 @@ namespace xPlatform
     // Driver-call reduction
     static GLuint current_program = 0;
     static int    src_filter_applied = 0;   // filter of the source textures: 0 = GL_NEAREST (as created), 1 = GL_LINEAR
+    static bool   src_srgb_applied = false; // format of the source textures: false = GL_RGBA8 (as created), true = GL_SRGB8_ALPHA8
 
     static constexpr int MAX_CACHED_UNITS = 8;
     static GLuint bound_tex[MAX_CACHED_UNITS] = {};  // zeroed = no texture bound
@@ -288,6 +301,26 @@ namespace xPlatform
     static int   video_frame_last = -1;
     static bool  giga_was_enabled = false;
 
+    // The source textures hold colours in sRGB. As GL_SRGB8_ALPHA8 the hardware decodes
+    // them to linear light before it filters (so a blend of two pixels is the sum of
+    // their light, as on a CRT) - the soft pixels path of the full-quality shader encodes
+    // the result back, see Src(). Everything else wants them as plain GL_RGBA8. The
+    // format is respecified when the wish changes, and the content of both CPU buffers
+    // (the previous frame is what Gigascreen blends with) is uploaded again.
+    static void SetSourceSRGB(bool srgb)
+    {
+        if (srgb == src_srgb_applied)
+            return;
+        src_srgb_applied = srgb;
+        for (int i = 0; i < 2; ++i)
+        {
+            BindTextureUnit(GL_TEXTURE0, tex_id_for[i]);
+            glActiveTexture(GL_TEXTURE0);   // glTexImage2D works on the active unit
+            glTexImage2D(GL_TEXTURE_2D, 0, srgb ? GL_SRGB8_ALPHA8 : GL_RGBA8,
+                sline_len, tex_lines, 0, GL_RGBA, GL_UNSIGNED_BYTE, i == 0 ? tex1 : tex2);
+        }
+    }
+
 #ifdef USE_SDL2_DESKTOP
     // sdl2_desktop/sdl2_desktop_video.cpp - true only while fullscreen with
     // "Native refresh" on and a matching display mode actually applied.
@@ -363,6 +396,7 @@ uniform int enablePalEffects;
 uniform float palStrength;    // 0.0 - 1.0 (PAL effect intensity)
 uniform float beamSpread;     // 0.0 - 1.0 (CRT beam spread amount; clamped to [0,1] for mix)
 uniform int maskScale;        // Phosphor mask column width (pixels per phase)
+uniform int softPixels;       // 1: soft pixels (see PIXEL_SOFTNESS); the textures are then sRGB, filtered in linear light
 
 // Precomputed constants (for readability and optimization)
 const float PI = 3.141592653589793;          // Precise Pi value
@@ -413,6 +447,27 @@ const vec2 SCANLINE_PARAMS = vec2(0.95, 0.05); // Min value + amplitude (peak-to
 // White Balance: PAL RGB correction to match expected output
 const vec3 WHITE_BALANCE = vec3(1.0, 0.985, 1.03);
 
+// Soft pixels (softPixels): the narrowest edge between two source pixels, in texels (x:
+// along a line, y: between lines; 0 = crisp, 1 = plain bilinear). When the picture is
+// magnified so much that the screen pixel is smaller than this, edges are spread over
+// this width instead of over one screen pixel - the soft edge of a CRT beam. A CRT is
+// softer along the line (the signal bandwidth) than between lines (the scan is discrete).
+// It never makes a downscaled picture softer: the screen pixel size wins then.
+// The width is PIXEL_SOFTNESS for a pixel of middling brightness; the beam is narrower
+// for dark pixels and wider for bright ones: SOFT_DARK and SOFT_BRIGHT are the factors
+// for black and for the brightest white (so SOFT_BRIGHT * PIXEL_SOFTNESS must not
+// exceed 1: the bilinear fetch in Src() cannot blend over more than one texel).
+const vec2 PIXEL_SOFTNESS = vec2(0.6, 0.35);
+const float SOFT_DARK = 0.65;
+const float SOFT_BRIGHT = 1.25;
+
+// Linear light -> sRGB (the inverse of what the GL_SRGB8_ALPHA8 fetch does).
+vec3 LinearToSrgb(vec3 c)
+{
+    c = max(c, vec3(0.0));
+    return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
+}
+
 // The picture at p (in texels): the nearest-neighbour picture averaged over a screen
 // pixel of w texels (see above). The fetch is clamped to the picture, so that its
 // edges do not blend with the unused rest of the texture.
@@ -420,12 +475,27 @@ vec3 Src(vec2 p, vec2 w)
 {
     vec2 i = floor(p - 0.5);                                  // texels i and i+1 share the nearest edge
     vec2 t = clamp((p - (i + 1.0)) / w + 0.5, 0.0, 1.0);      // how much of texel i+1 the pixel covers
+    if (softPixels != 0)
+        t = t * t * (3.0 - 2.0 * t);                          // eased: a soft edge has no hard corners
     vec2 q = clamp(i + 0.5 + t, vec2(0.5), srcSize - 0.5);    // the bilinear position that blends (1-t, t)
     vec2 uv = q / texSize;
     vec3 c = texture(texture1, uv).rgb;
     if (blendFactor > 0.0)
         c = mix(c, texture(texture2, uv).rgb, blendFactor);
+    if (softPixels != 0)
+        c = LinearToSrgb(c);                                  // it was filtered in linear light
     return c;
+}
+
+// The brightness of the picture at p (linear light, 0 - 1; smooth between texel centres,
+// so the width of the edges that depends on it has no seams).
+float SoftLuma(vec2 p)
+{
+    vec2 uv = clamp(p, vec2(0.5), srcSize - 0.5) / texSize;
+    vec3 c = texture(texture1, uv).rgb;
+    if (blendFactor > 0.0)
+        c = mix(c, texture(texture2, uv).rgb, blendFactor);
+    return clamp(dot(c, LUMINANCE_COEFF), 0.0, 1.0);
 }
 
 // YUV <-> RGB conversion (PAL-specific coefficients from original code)
@@ -448,6 +518,12 @@ vec3 yuv2rgb(vec3 yuv) {
 void main() {
     vec2 p = TexCoord * texSize;               // this pixel, in texels of the picture
     vec2 w = max(fwidth(p), vec2(1e-4));       // the size of a screen pixel, in texels
+    if (softPixels != 0)
+    {
+        // ... but not less than the width of the CRT beam here (<= 1, see PIXEL_SOFTNESS)
+        float beam = mix(SOFT_DARK, SOFT_BRIGHT, sqrt(SoftLuma(p)));
+        w = max(w, min(PIXEL_SOFTNESS * beam, vec2(1.0)));
+    }
     vec4 color = vec4(Src(p, w), 1.0);
     vec2 fragPos = gl_FragCoord.xy;            // Fragment position for mask/line math
 
@@ -764,6 +840,7 @@ void main()
         u_pal_strength_cached.set(glGetUniformLocation(full_shader, "palStrength"));
         u_beam_spread_cached.set(glGetUniformLocation(full_shader, "beamSpread"));
         u_slines_cnt_cached.set(glGetUniformLocation(full_shader, "slinesCnt"));
+        u_soft_pixels_cached.set(glGetUniformLocation(full_shader, "softPixels"));
 
         if (u_scale_cached.location == -1 ||
             u_blend_factor_cached.location == -1 ||
@@ -829,8 +906,8 @@ void main()
         for (int i = 0; i < 2; ++i)
         {
             glBindTexture(GL_TEXTURE_2D, tex_id_for[i]);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sline_len, tex_lines, 0,
-                GL_RGBA, GL_UNSIGNED_BYTE, i == 0 ? tex1 : tex2);
+            glTexImage2D(GL_TEXTURE_2D, 0, src_srgb_applied ? GL_SRGB8_ALPHA8 : GL_RGBA8,
+                sline_len, tex_lines, 0, GL_RGBA, GL_UNSIGNED_BYTE, i == 0 ? tex1 : tex2);
         }
 
         // The quad that shows the picture: the w x h corner of the texture.
@@ -1025,6 +1102,7 @@ void main()
         if (use_lightweight)
         {
             SetSourceFilter(0);
+            SetSourceSRGB(false);   // the lightweight shader has no soft pixels: plain colours
             glViewport(vport_x, vport_y, vport_width, vport_height);
             HandleLayoutClear(vport_width, vport_height);
 
@@ -1063,6 +1141,7 @@ void main()
         //  full_fragment_src.
         // =====================================================================
         SetSourceFilter(1);
+        SetSourceSRGB(op_soft_pixels);
         glViewport(vport_x, vport_y, vport_width, vport_height);
         HandleLayoutClear(vport_width, vport_height);
 
@@ -1091,6 +1170,7 @@ void main()
         u_pal_strength_cached.update(static_cast<float>(OpPalStrength()) / 100.0f);
         u_beam_spread_cached.update(static_cast<float>(OpBeamSpread()) / 100.0f);
         u_slines_cnt_cached.update(src_h == 240 ? (float)slines_cnt : (float)src_h);
+        u_soft_pixels_cached.update(src_srgb_applied ? 1 : 0);   // the format the textures really have
 
         glBindVertexArray(vao1); // the quad that shows the picture
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);

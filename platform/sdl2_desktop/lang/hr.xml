@@ -29,6 +29,8 @@
 	<string id="tip.menu.view.gigascreen">Gigascreen: miješa dva AY sličice boje kako bi se dobilo 256 boja umjesto 15</string>
 	<string id="menu.view.crt_scanlines">CRT linije</string>
 	<string id="tip.menu.view.crt_scanlines">Simuliraj CRT linije</string>
+	<string id="menu.view.soft_pixels">CRT meki pikseli</string>
+	<string id="tip.menu.view.soft_pixels">Simuliraj meke rubove piksela CRT zrake pri povećanju</string>
 	<string id="menu.view.pal_effects">PAL efekti</string>
 	<string id="tip.menu.view.pal_effects">Simuliraj PAL efekte boje (zamućenje boja, obojenost, ukršteno miješanje)</string>
 	<string id="menu.view.full_screen">Puni zaslon</string>
@@ -88,6 +90,8 @@
 	<string id="status.gigascreen.off">Gigascreen isključen</string>
 	<string id="status.scanlines.on">Simulacija CRT linija uključena</string>
 	<string id="status.scanlines.off">Simulacija CRT linija isključena</string>
+	<string id="status.soft_pixels.on">CRT meki pikseli uključeni</string>
+	<string id="status.soft_pixels.off">CRT meki pikseli isključeni</string>
 	<string id="status.pal_effects.on">PAL efekti uključeni</string>
 	<string id="status.pal_effects.off">PAL efekti isključeni</string>
 	<string id="status.pal_refresh.on">Preferiranje izvornog osvježavanja uključeno</string>
@@ -122,6 +126,8 @@
 	<string id="tip.options.audio.restore_defaults">Vraća zvučne postavke na zadane vrijednosti</string>
 	<string id="options.video.lightweight_shader">Laki shader</string>
 	<string id="tip.options.video.lightweight_shader">Najjednostavnije i najbrže iscrtavanje: skaliranje bez izglađivanja, bez PAL efekata</string>
+	<string id="options.video.soft_pixels">CRT meki pikseli</string>
+	<string id="tip.options.video.soft_pixels">Meki rubovi piksela pri povećanju: širi kod svijetlih piksela, miješanje u linearnom svjetlu kao kod CRT zrake. Samo shader pune kvalitete</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: miješa dva AY sličice boje kako bi se dobilo 256 boja umjesto 15</string>
 	<string id="options.video.scanlines">CRT linije</string>

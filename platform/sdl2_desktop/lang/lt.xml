@@ -29,6 +29,8 @@
 	<string id="tip.menu.view.gigascreen">Gigascreen: sumaišo du AY spalvų kadrus, kad gautų 256 spalvas vietoje 15</string>
 	<string id="menu.view.crt_scanlines">CRT linijos</string>
 	<string id="tip.menu.view.crt_scanlines">Imituoti CRT linijas</string>
+	<string id="menu.view.soft_pixels">CRT minkšti pikseliai</string>
+	<string id="tip.menu.view.soft_pixels">Imituoti CRT spindulio minkštus pikselių kraštus didinant</string>
 	<string id="menu.view.pal_effects">PAL efektai</string>
 	<string id="tip.menu.view.pal_effects">Imituoti PAL spalvų efektus (spalvų neryškumą, atspalvį, kryžminį triukšmą)</string>
 	<string id="menu.view.full_screen">Visas ekranas</string>
@@ -88,6 +90,8 @@
 	<string id="status.gigascreen.off">Gigascreen išjungtas</string>
 	<string id="status.scanlines.on">CRT linijų imitacija įjungta</string>
 	<string id="status.scanlines.off">CRT linijų imitacija išjungta</string>
+	<string id="status.soft_pixels.on">CRT minkšti pikseliai įjungti</string>
+	<string id="status.soft_pixels.off">CRT minkšti pikseliai išjungti</string>
 	<string id="status.pal_effects.on">PAL efektai įjungti</string>
 	<string id="status.pal_effects.off">PAL efektai išjungti</string>
 	<string id="status.pal_refresh.on">Natūralus atnaujinimo dažnis įjungtas</string>
@@ -122,6 +126,8 @@
 	<string id="tip.options.audio.restore_defaults">Atkuria garso parinktis į numatytąsias reikšmes</string>
 	<string id="options.video.lightweight_shader">Lengvas šeiderys</string>
 	<string id="tip.options.video.lightweight_shader">Paprasčiausias ir greičiausias vaizdavimas: mastelio keitimas be glotninimo, be PAL efektų</string>
+	<string id="options.video.soft_pixels">CRT minkšti pikseliai</string>
+	<string id="tip.options.video.soft_pixels">Minkšti pikselių kraštai didinant: platesni ryškiems pikseliams, maišymas tiesinėje šviesoje kaip CRT spindulio. Tik aukštos kokybės šeiderys</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: sumaišo du AY spalvų kadrus, kad gautų 256 spalvas vietoje 15</string>
 	<string id="options.video.scanlines">CRT linijos</string>

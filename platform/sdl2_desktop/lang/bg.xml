@@ -29,6 +29,8 @@
 	<string id="tip.menu.view.gigascreen">Gigascreen: смесва двата цветови кадъра на AY, за да получи 256 цвята вместо 15</string>
 	<string id="menu.view.crt_scanlines">CRT линии</string>
 	<string id="tip.menu.view.crt_scanlines">Имитира CRT линии</string>
+	<string id="menu.view.soft_pixels">CRT меки пиксели</string>
+	<string id="tip.menu.view.soft_pixels">Имитира меките краища на пикселите при CRT лъч при увеличение</string>
 	<string id="menu.view.pal_effects">PAL ефекти</string>
 	<string id="tip.menu.view.pal_effects">Имитира цветовите ефекти на PAL (размазани цветове, оцветяване, прехвърляне)</string>
 	<string id="menu.view.full_screen">Цял екран</string>
@@ -88,6 +90,8 @@
 	<string id="status.gigascreen.off">Gigascreen изключен</string>
 	<string id="status.scanlines.on">Симулация на CRT линии включена</string>
 	<string id="status.scanlines.off">Симулация на CRT линии изключена</string>
+	<string id="status.soft_pixels.on">CRT меки пиксели включени</string>
+	<string id="status.soft_pixels.off">CRT меки пиксели изключени</string>
 	<string id="status.pal_effects.on">PAL ефекти включени</string>
 	<string id="status.pal_effects.off">PAL ефекти изключени</string>
 	<string id="status.pal_refresh.on">Родна честота на опресняване включена</string>
@@ -122,6 +126,8 @@
 	<string id="tip.options.audio.restore_defaults">Връща аудио настройките към стойностите по подразбиране</string>
 	<string id="options.video.lightweight_shader">Лек шейдър</string>
 	<string id="tip.options.video.lightweight_shader">Най-простото и най-бързо изобразяване: мащабиране без изглаждане, без PAL ефекти</string>
+	<string id="options.video.soft_pixels">CRT меки пиксели</string>
+	<string id="tip.options.video.soft_pixels">Меки краища на пикселите при увеличение: по-широки при ярките пиксели, смесване в линейна светлина, като при CRT лъч. Само пълноценен шейдър</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: смесва двата цветови кадъра на AY, за да получи 256 цвята вместо 15</string>
 	<string id="options.video.scanlines">CRT линии</string>

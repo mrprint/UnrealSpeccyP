@@ -29,6 +29,8 @@
 	<string id="tip.menu.view.gigascreen">Gigascreen: змешванне двух колеравых кадраў AY для атрымання 256 колераў замест 15</string>
 	<string id="menu.view.crt_scanlines">Радкі ЭПТ</string>
 	<string id="tip.menu.view.crt_scanlines">Імітаваць радкі ЭПТ</string>
+	<string id="menu.view.soft_pixels">Мяккія пікселі ЭПТ</string>
+	<string id="tip.menu.view.soft_pixels">Імітаваць мяккія краі пікселяў праменя ЭПТ пры павелічэнні</string>
 	<string id="menu.view.pal_effects">PAL-эфекты</string>
 	<string id="tip.menu.view.pal_effects">Імітаваць колеравыя эфекты PAL (розмытасць колераў, афарбоўку, перадбісанне)</string>
 	<string id="menu.view.full_screen">Поўнаэкранны рэжым</string>
@@ -88,6 +90,8 @@
 	<string id="status.gigascreen.off">Gigascreen выключаны</string>
 	<string id="status.scanlines.on">Імітацыя радкоў ЭПТ уключана</string>
 	<string id="status.scanlines.off">Імітацыя радкоў ЭПТ выключана</string>
+	<string id="status.soft_pixels.on">Мяккія пікселі ЭПТ уключаны</string>
+	<string id="status.soft_pixels.off">Мяккія пікселі ЭПТ выключаны</string>
 	<string id="status.pal_effects.on">PAL-эфекты ўключаны</string>
 	<string id="status.pal_effects.off">PAL-эфекты выключаны</string>
 	<string id="status.pal_refresh.on">Родная частата абнаўлення ўключана</string>
@@ -122,6 +126,8 @@
 	<string id="tip.options.audio.restore_defaults">Скідае налады гуку да прадвызначаных значэнняў</string>
 	<string id="options.video.lightweight_shader">Аблегчаны шэйдар</string>
 	<string id="tip.options.video.lightweight_shader">Найпрасцейшая і хуткая адмалёўка: маштабаванне без згладжвання, без PAL-эфектаў</string>
+	<string id="options.video.soft_pixels">Мяккія пікселі ЭПТ</string>
+	<string id="tip.options.video.soft_pixels">Мяккія краі пікселяў пры павелічэнні: шырэйшыя ў яркіх пікселяў, змешванне ў лінейным святле, як у праменя ЭПТ. Толькі якасны шэйдар</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: змешванне двух колеравых кадраў AY для атрымання 256 колераў замест 15</string>
 	<string id="options.video.scanlines">Радкі ЭПТ</string>

@@ -29,6 +29,8 @@
 	<string id="tip.menu.view.gigascreen">Gigascreen: combina os dois fotogramas de cor AY para obter 256 cores em vez de 15</string>
 	<string id="menu.view.crt_scanlines">Linhas CRT</string>
 	<string id="tip.menu.view.crt_scanlines">Simular linhas CRT</string>
+	<string id="menu.view.soft_pixels">Pixels suaves CRT</string>
+	<string id="tip.menu.view.soft_pixels">Simular as bordas suaves dos pixels de um feixe CRT ao ampliar</string>
 	<string id="menu.view.pal_effects">Efeitos PAL</string>
 	<string id="tip.menu.view.pal_effects">Simular os efeitos de cor PAL (desfoque de cor, matiz, interferência cruzada)</string>
 	<string id="menu.view.full_screen">Ecrã completo</string>
@@ -88,6 +90,8 @@
 	<string id="status.gigascreen.off">Gigascreen desativado</string>
 	<string id="status.scanlines.on">Simulação de linhas CRT ativada</string>
 	<string id="status.scanlines.off">Simulação de linhas CRT desativada</string>
+	<string id="status.soft_pixels.on">Pixels suaves CRT ativados</string>
+	<string id="status.soft_pixels.off">Pixels suaves CRT desativados</string>
 	<string id="status.pal_effects.on">Efeitos PAL ativados</string>
 	<string id="status.pal_effects.off">Efeitos PAL desativados</string>
 	<string id="status.pal_refresh.on">Taxa de atualização nativa ativada</string>
@@ -122,6 +126,8 @@
 	<string id="tip.options.audio.restore_defaults">Repõe as opções de áudio nos valores predefinidos</string>
 	<string id="options.video.lightweight_shader">Shader leve</string>
 	<string id="tip.options.video.lightweight_shader">Renderização mais simples e rápida: escala sem suavização, sem efeitos PAL</string>
+	<string id="options.video.soft_pixels">Pixels suaves CRT</string>
+	<string id="tip.options.video.soft_pixels">Bordas de pixel suaves ao ampliar: mais largas nos pixels brilhantes e misturadas em luz linear, como o feixe de um CRT. Apenas com shader de qualidade máxima</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: combina os dois fotogramas de cor AY para obter 256 cores em vez de 15</string>
 	<string id="options.video.scanlines">Linhas CRT</string>

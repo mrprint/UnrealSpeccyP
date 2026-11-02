@@ -29,6 +29,8 @@
 	<string id="tip.menu.view.gigascreen">Гігаскрін: змішування двох кольорових кадрів AY для отримання 256 кольорів замість 15</string>
 	<string id="menu.view.crt_scanlines">Рядки ЕПТ</string>
 	<string id="tip.menu.view.crt_scanlines">Імітувати рядки ЕПТ</string>
+	<string id="menu.view.soft_pixels">М'які пікселі ЕПТ</string>
+	<string id="tip.menu.view.soft_pixels">Імітувати м'які краї пікселів променя ЕПТ при збільшенні</string>
 	<string id="menu.view.pal_effects">Ефекти PAL</string>
 	<string id="tip.menu.view.pal_effects">Імітувати колірні ефекти PAL (розмиття кольорів, відтінок, перехресні завади)</string>
 	<string id="menu.view.full_screen">Повноекранний режим</string>
@@ -88,6 +90,8 @@
 	<string id="status.gigascreen.off">Гігаскрін вимкнено</string>
 	<string id="status.scanlines.on">Імітацію рядків ЕПТ увімкнено</string>
 	<string id="status.scanlines.off">Імітацію рядків ЕПТ вимкнено</string>
+	<string id="status.soft_pixels.on">М'які пікселі ЕПТ увімкнено</string>
+	<string id="status.soft_pixels.off">М'які пікселі ЕПТ вимкнено</string>
 	<string id="status.pal_effects.on">Ефекти PAL увімкнено</string>
 	<string id="status.pal_effects.off">Ефекти PAL вимкнено</string>
 	<string id="status.pal_refresh.on">Рідну частоту оновлення увімкнено</string>
@@ -122,6 +126,8 @@
 	<string id="tip.options.audio.restore_defaults">Скидає налаштування звуку до значень за замовчуванням</string>
 	<string id="options.video.lightweight_shader">Легкий шейдер</string>
 	<string id="tip.options.video.lightweight_shader">Найпростіша і найшвидша відмальовка: масштабування без згладжування, без PAL-ефектів</string>
+	<string id="options.video.soft_pixels">М'які пікселі ЕПТ</string>
+	<string id="tip.options.video.soft_pixels">М'які краї пікселів при збільшенні: ширші в яскравих пікселів, змішування в лінійному світлі, як у променя ЕПТ. Лише повноякісний шейдер</string>
 	<string id="options.video.gigascreen">Гігаскрін</string>
 	<string id="tip.options.video.gigascreen">Гігаскрін: змішування двох кольорових кадрів AY для отримання 256 кольорів замість 15</string>
 	<string id="options.video.scanlines">Рядки ЕПТ</string>

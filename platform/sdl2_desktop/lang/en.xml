@@ -39,6 +39,8 @@
 	<string id="tip.menu.view.gigascreen">Gigascreen: blend the two AY colour frames to get 256 colours instead of 15</string>
 	<string id="menu.view.crt_scanlines">CRT scanlines</string>
 	<string id="tip.menu.view.crt_scanlines">Simulate CRT scanlines</string>
+	<string id="menu.view.soft_pixels">CRT soft pixels</string>
+	<string id="tip.menu.view.soft_pixels">Simulate the soft pixel edges of a CRT beam when magnified</string>
 	<string id="menu.view.pal_effects">PAL effects</string>
 	<string id="tip.menu.view.pal_effects">Simulate the PAL colour effects (chroma blur, tint, crosstalk)</string>
 	<string id="menu.view.full_screen">Full screen</string>
@@ -106,6 +108,8 @@
 	<string id="status.gigascreen.off">Gigascreen off</string>
 	<string id="status.scanlines.on">CRT scanlines simulation on</string>
 	<string id="status.scanlines.off">CRT scanlines simulation off</string>
+	<string id="status.soft_pixels.on">CRT soft pixels on</string>
+	<string id="status.soft_pixels.off">CRT soft pixels off</string>
 	<string id="status.pal_effects.on">PAL effects on</string>
 	<string id="status.pal_effects.off">PAL effects off</string>
 	<string id="status.pal_refresh.on">Native refresh on</string>
@@ -144,6 +148,8 @@
 
 	<string id="options.video.lightweight_shader">Lightweight shader</string>
 	<string id="tip.options.video.lightweight_shader">Simplest and fastest rendering: nearest-neighbour scaling, no PAL effects</string>
+	<string id="options.video.soft_pixels">CRT soft pixels</string>
+	<string id="tip.options.video.soft_pixels">Soft pixel edges when magnified, wider for bright pixels and blended in linear light, like a CRT beam. Full-quality shader only</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: blend the two AY colour frames to get 256 colours instead of 15</string>
 	<string id="options.video.scanlines">CRT scanlines</string>

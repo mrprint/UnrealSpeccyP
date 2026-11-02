@@ -29,6 +29,8 @@
 	<string id="tip.menu.view.gigascreen">Gigascreen: combina los dos fotogramas de color AY para obtener 256 colores en lugar de 15</string>
 	<string id="menu.view.crt_scanlines">Líneas CRT</string>
 	<string id="tip.menu.view.crt_scanlines">Simular líneas CRT</string>
+	<string id="menu.view.soft_pixels">Píxeles suaves CRT</string>
+	<string id="tip.menu.view.soft_pixels">Simular los bordes suaves de los píxeles de un haz CRT al ampliar</string>
 	<string id="menu.view.pal_effects">Efectos PAL</string>
 	<string id="tip.menu.view.pal_effects">Simular los efectos de color PAL (desenfoque de color, matiz, interferencia cruzada)</string>
 	<string id="menu.view.full_screen">Pantalla completa</string>
@@ -88,6 +90,8 @@
 	<string id="status.gigascreen.off">Gigascreen desactivado</string>
 	<string id="status.scanlines.on">Simulación de líneas CRT activada</string>
 	<string id="status.scanlines.off">Simulación de líneas CRT desactivada</string>
+	<string id="status.soft_pixels.on">Píxeles suaves CRT activados</string>
+	<string id="status.soft_pixels.off">Píxeles suaves CRT desactivados</string>
 	<string id="status.pal_effects.on">Efectos PAL activados</string>
 	<string id="status.pal_effects.off">Efectos PAL desactivados</string>
 	<string id="status.pal_refresh.on">Frecuencia nativa activada</string>
@@ -122,6 +126,8 @@
 	<string id="tip.options.audio.restore_defaults">Restaura las opciones de audio a sus valores predeterminados</string>
 	<string id="options.video.lightweight_shader">Shader ligero</string>
 	<string id="tip.options.video.lightweight_shader">Renderizado más simple y rápido: escalado sin suavizado, sin efectos PAL</string>
+	<string id="options.video.soft_pixels">Píxeles suaves CRT</string>
+	<string id="tip.options.video.soft_pixels">Bordes de píxel suaves al ampliar: más anchos en los píxeles brillantes y mezclados en luz lineal, como el haz de un CRT. Solo con shader de máxima calidad</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: combina los dos fotogramas de color AY para obtener 256 colores en lugar de 15</string>
 	<string id="options.video.scanlines">Líneas CRT</string>

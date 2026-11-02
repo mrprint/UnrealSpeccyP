@@ -29,6 +29,8 @@
 	<string id="tip.menu.view.gigascreen">Gigascreen: a két AY színkeretet keveri, így 256 szín jön létre 15 helyett</string>
 	<string id="menu.view.crt_scanlines">CRT sorok</string>
 	<string id="tip.menu.view.crt_scanlines">CRT sorok szimulálása</string>
+	<string id="menu.view.soft_pixels">CRT lágy pixelek</string>
+	<string id="tip.menu.view.soft_pixels">A CRT-sugár lágy pixelszéleinek szimulálása nagyításkor</string>
 	<string id="menu.view.pal_effects">PAL effektek</string>
 	<string id="tip.menu.view.pal_effects">A PAL színhatások szimulálása (színelmosás, színezés, átbeszélés)</string>
 	<string id="menu.view.full_screen">Teljes képernyő</string>
@@ -88,6 +90,8 @@
 	<string id="status.gigascreen.off">Gigascreen kikapcsolva</string>
 	<string id="status.scanlines.on">CRT sorok szimuláció bekapcsolva</string>
 	<string id="status.scanlines.off">CRT sorok szimuláció kikapcsolva</string>
+	<string id="status.soft_pixels.on">CRT lágy pixelek bekapcsolva</string>
+	<string id="status.soft_pixels.off">CRT lágy pixelek kikapcsolva</string>
 	<string id="status.pal_effects.on">PAL effektek bekapcsolva</string>
 	<string id="status.pal_effects.off">PAL effektek kikapcsolva</string>
 	<string id="status.pal_refresh.on">Natív frissítés bekapcsolva</string>
@@ -122,6 +126,8 @@
 	<string id="tip.options.audio.restore_defaults">Visszaállítja a hangbeállításokat az alapértelmezett értékekre</string>
 	<string id="options.video.lightweight_shader">Könnyű shader</string>
 	<string id="tip.options.video.lightweight_shader">A legegyszerűbb és leggyorsabb megjelenítés: átméretezés simítás nélkül, PAL-effektek nélkül</string>
+	<string id="options.video.soft_pixels">CRT lágy pixelek</string>
+	<string id="tip.options.video.soft_pixels">Lágy pixelszélek nagyításkor: a világos pixeleknél szélesebbek, lineáris fényben keverve, mint a CRT-sugárnál. Csak teljes minőségű shaderrel</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: a két AY színkeretet keveri, így 256 szín jön létre 15 helyett</string>
 	<string id="options.video.scanlines">CRT sorok</string>

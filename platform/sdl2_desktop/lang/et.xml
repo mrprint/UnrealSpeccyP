@@ -29,6 +29,8 @@
 	<string id="tip.menu.view.gigascreen">Gigascreen: segab kaks AY värvikaadrit, et saada 256 värvi 15 asemel</string>
 	<string id="menu.view.crt_scanlines">CRT jooned</string>
 	<string id="tip.menu.view.crt_scanlines">Simuleeri CRT jooni</string>
+	<string id="menu.view.soft_pixels">CRT pehmed pikslid</string>
+	<string id="tip.menu.view.soft_pixels">Simuleeri CRT kiire pehmeid piksliservi suurendamisel</string>
 	<string id="menu.view.pal_effects">PAL-efektid</string>
 	<string id="tip.menu.view.pal_effects">Simuleeri PAL-i värviefekte (värvide pehmendus, toon, ristmüra)</string>
 	<string id="menu.view.full_screen">Täisekraan</string>
@@ -88,6 +90,8 @@
 	<string id="status.gigascreen.off">Gigascreen väljas</string>
 	<string id="status.scanlines.on">CRT joonte simulatsioon sees</string>
 	<string id="status.scanlines.off">CRT joonte simulatsioon väljas</string>
+	<string id="status.soft_pixels.on">CRT pehmed pikslid sees</string>
+	<string id="status.soft_pixels.off">CRT pehmed pikslid väljas</string>
 	<string id="status.pal_effects.on">PAL-efektid sees</string>
 	<string id="status.pal_effects.off">PAL-efektid väljas</string>
 	<string id="status.pal_refresh.on">Natiivne värskendussagedus sees</string>
@@ -122,6 +126,8 @@
 	<string id="tip.options.audio.restore_defaults">Taastab helisätted vaikeväärtustele</string>
 	<string id="options.video.lightweight_shader">Kerge varjund</string>
 	<string id="tip.options.video.lightweight_shader">Lihtsaim ja kiireim joonistamine: skaleerimine ilma silumiseta, ilma PAL-efektideta</string>
+	<string id="options.video.soft_pixels">CRT pehmed pikslid</string>
+	<string id="tip.options.video.soft_pixels">Pehmed piksliservad suurendamisel: heledatel pikslitel laiemad, segamine lineaarses valguses nagu CRT kiirel. Ainult täiskvaliteetne varjund</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: segab kaks AY värvikaadrit, et saada 256 värvi 15 asemel</string>
 	<string id="options.video.scanlines">CRT jooned</string>

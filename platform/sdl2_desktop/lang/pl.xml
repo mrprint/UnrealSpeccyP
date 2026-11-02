@@ -29,6 +29,8 @@
 	<string id="tip.menu.view.gigascreen">Gigascreen: łączy dwie klatki kolorów AY, aby uzyskać 256 kolorów zamiast 15</string>
 	<string id="menu.view.crt_scanlines">Linie CRT</string>
 	<string id="tip.menu.view.crt_scanlines">Symuluj linie CRT</string>
+	<string id="menu.view.soft_pixels">Miękkie piksele CRT</string>
+	<string id="tip.menu.view.soft_pixels">Symuluj miękkie krawędzie pikseli wiązki CRT przy powiększeniu</string>
 	<string id="menu.view.pal_effects">Efekty PAL</string>
 	<string id="tip.menu.view.pal_effects">Symuluj efekty koloru PAL (rozmycie kolorów, odcień, crosstalk)</string>
 	<string id="menu.view.full_screen">Pełny ekran</string>
@@ -88,6 +90,8 @@
 	<string id="status.gigascreen.off">Gigascreen wyłączony</string>
 	<string id="status.scanlines.on">Symulacja linii CRT włączona</string>
 	<string id="status.scanlines.off">Symulacja linii CRT wyłączona</string>
+	<string id="status.soft_pixels.on">Miękkie piksele CRT włączone</string>
+	<string id="status.soft_pixels.off">Miękkie piksele CRT wyłączone</string>
 	<string id="status.pal_effects.on">Efekty PAL włączone</string>
 	<string id="status.pal_effects.off">Efekty PAL wyłączone</string>
 	<string id="status.pal_refresh.on">Natywne odświeżanie włączone</string>
@@ -122,6 +126,8 @@
 	<string id="tip.options.audio.restore_defaults">Przywraca opcje dźwięku do wartości domyślnych</string>
 	<string id="options.video.lightweight_shader">Lekki shader</string>
 	<string id="tip.options.video.lightweight_shader">Najprostsze i najszybsze renderowanie: skalowanie bez wygładzania, bez efektów PAL</string>
+	<string id="options.video.soft_pixels">Miękkie piksele CRT</string>
+	<string id="tip.options.video.soft_pixels">Miękkie krawędzie pikseli przy powiększeniu: szersze dla jasnych pikseli, mieszanie w świetle liniowym jak w wiązce CRT. Tylko shader pełnej jakości</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: łączy dwie klatki kolorów AY, aby uzyskać 256 kolorów zamiast 15</string>
 	<string id="options.video.scanlines">Linie CRT</string>

@@ -29,6 +29,8 @@
 	<string id="tip.menu.view.gigascreen">Gigascreen: mieša dva farebné snímky AY a získa 256 farieb namiesto 15</string>
 	<string id="menu.view.crt_scanlines">Riadky CRT</string>
 	<string id="tip.menu.view.crt_scanlines">Simulovať riadky CRT</string>
+	<string id="menu.view.soft_pixels">Mäkké pixely CRT</string>
+	<string id="tip.menu.view.soft_pixels">Simulovať mäkké okraje pixelov lúča CRT pri zväčšení</string>
 	<string id="menu.view.pal_effects">Efekty PAL</string>
 	<string id="tip.menu.view.pal_effects">Simulovať farebné efekty PAL (rozostrenie farieb, odtieň, prekrížené interferencie)</string>
 	<string id="menu.view.full_screen">Celá obrazovka</string>
@@ -88,6 +90,8 @@
 	<string id="status.gigascreen.off">Gigascreen vypnutý</string>
 	<string id="status.scanlines.on">Simulácia riadkov CRT zapnutá</string>
 	<string id="status.scanlines.off">Simulácia riadkov CRT vypnutá</string>
+	<string id="status.soft_pixels.on">Mäkké pixely CRT zapnuté</string>
+	<string id="status.soft_pixels.off">Mäkké pixely CRT vypnuté</string>
 	<string id="status.pal_effects.on">Efekty PAL zapnuté</string>
 	<string id="status.pal_effects.off">Efekty PAL vypnuté</string>
 	<string id="status.pal_refresh.on">Natívna obnovovacia frekvencia zapnutá</string>
@@ -122,6 +126,8 @@
 	<string id="tip.options.audio.restore_defaults">Obnoví zvukové možnosti na predvolené hodnoty</string>
 	<string id="options.video.lightweight_shader">Odľahčený shader</string>
 	<string id="tip.options.video.lightweight_shader">Najjednoduchšie a najrýchlejšie vykresľovanie: zväčšenie bez vyhladzovania, bez efektov PAL</string>
+	<string id="options.video.soft_pixels">Mäkké pixely CRT</string>
+	<string id="tip.options.video.soft_pixels">Mäkké okraje pixelov pri zväčšení: širšie pri jasných pixeloch, miešanie v lineárnom svetle ako pri lúči CRT. Iba plnohodnotný shader</string>
 	<string id="options.video.gigascreen">Gigascreen</string>
 	<string id="tip.options.video.gigascreen">Gigascreen: mieša dva farebné snímky AY a získa 256 farieb namiesto 15</string>
 	<string id="options.video.scanlines">Riadky CRT</string>

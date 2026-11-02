@@ -492,6 +492,7 @@ private:
 	int m_pal_strength = 50;
 	int m_beam_spread = 30;
 	bool m_lightweight_shader = DEFAULT_LIGHTWEIGHT_SHADER;
+	bool m_soft_pixels = DEFAULT_SOFT_PIXELS;
 	int m_mask_scale = 1;
 	bool m_prefer_pal_refresh = false;
 	int m_theme_mode = (int)eThemeMode::Auto; // index into theme_keys[] in DrawAppearanceTab()
@@ -533,6 +534,7 @@ void OptionsDialog::LoadCurrentSettings()
 	op = xOptions::eOption<int>::Find("pal strength");   if(op) m_pal_strength = *op;
 	op = xOptions::eOption<int>::Find("beam spread");    if(op) m_beam_spread = *op;
 	opb = xOptions::eOption<bool>::Find("lightweight shader"); m_lightweight_shader = opb ? (bool)*opb : DEFAULT_LIGHTWEIGHT_SHADER;
+	opb = xOptions::eOption<bool>::Find("soft pixels"); m_soft_pixels = opb ? (bool)*opb : DEFAULT_SOFT_PIXELS;
 	op = xOptions::eOption<int>::Find("mask scale");     m_mask_scale = op ? *op : DEFAULT_MASK_SCALE;
 	opb = xOptions::eOption<bool>::Find("Prefer PAL refresh"); m_prefer_pal_refresh = opb ? (bool)*opb : DEFAULT_PAL_REFRESH_RATE;
 
@@ -559,6 +561,7 @@ void OptionsDialog::CommitToOptions()
 	op = xOptions::eOption<int>::Find("pal strength");  if(op) { op->Set(m_pal_strength); op->Apply(); }
 	op = xOptions::eOption<int>::Find("beam spread");   if(op) { op->Set(m_beam_spread); op->Apply(); }
 	opb = xOptions::eOption<bool>::Find("lightweight shader"); if(opb) { opb->Set(m_lightweight_shader); opb->Apply(); }
+	opb = xOptions::eOption<bool>::Find("soft pixels"); if(opb) { opb->Set(m_soft_pixels); opb->Apply(); }
 	op = xOptions::eOption<int>::Find("mask scale");    if(op) { op->Set(m_mask_scale); op->Apply(); }
 	opb = xOptions::eOption<bool>::Find("Prefer PAL refresh"); if(opb) { opb->Set(m_prefer_pal_refresh); opb->Apply(); }
 
@@ -702,6 +705,11 @@ void OptionsDialog::DrawVideoTab()
 	ItemTooltip("tip.options.video.gigascreen");
 	ImGui::Checkbox(Tr("options.video.scanlines"), &m_scanlines);
 	ItemTooltip("tip.options.video.scanlines");
+	// The lightweight shader has no soft pixels (they are part of the full-quality shader).
+	ImGui::BeginDisabled(m_lightweight_shader);
+	ImGui::Checkbox(Tr("options.video.soft_pixels"), &m_soft_pixels);
+	ItemTooltip("tip.options.video.soft_pixels");
+	ImGui::EndDisabled();
 	ImGui::Checkbox(Tr("options.video.prefer_pal_refresh"), &m_prefer_pal_refresh);
 	ItemTooltip("tip.options.video.prefer_pal_refresh");
 
@@ -728,6 +736,7 @@ void OptionsDialog::DrawVideoTab()
 		m_pal_strength = DEFAULT_PAL_STRENGTH;
 		m_beam_spread = DEFAULT_BEAM_SPREAD;
 		m_lightweight_shader = DEFAULT_LIGHTWEIGHT_SHADER;
+		m_soft_pixels = DEFAULT_SOFT_PIXELS;
 		m_mask_scale = DEFAULT_MASK_SCALE;
 		m_prefer_pal_refresh = DEFAULT_PAL_REFRESH_RATE;
 	}
