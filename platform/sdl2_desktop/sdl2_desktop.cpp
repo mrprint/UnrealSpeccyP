@@ -174,8 +174,15 @@ static const char* USP_HomePath()
 	static char usp_home_path[xIo::MAX_PATH_LEN];
 
 #ifdef _WINAPI
-	const char* appdata = getenv("APPDATA");
-	if(appdata)
+	// %APPDATA% as UTF-16, then UTF-8 like every path in the program: getenv() gives the ANSI
+	// code page, in which a user name with letters the page lacks turns into '?' (and Windows 7
+	// has no UTF-8 page). The folder itself is created by xIo::PathCreate() below - see
+	// sdl2_desktop_winutf8_mkdir.h.
+	wchar_t wappdata[xIo::MAX_PATH_LEN];
+	DWORD wlen = GetEnvironmentVariableW(L"APPDATA", wappdata, xIo::MAX_PATH_LEN);
+	char appdata[xIo::MAX_PATH_LEN];
+	if(wlen > 0 && wlen < xIo::MAX_PATH_LEN &&
+		WideCharToMultiByte(CP_UTF8, 0, wappdata, -1, appdata, (int)sizeof(appdata), NULL, NULL) > 0)
 	{
 		snprintf(usp_home_path, sizeof(usp_home_path), "%s/unreal_speccy_portable/", appdata);
 		return usp_home_path;

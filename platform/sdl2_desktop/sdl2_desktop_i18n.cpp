@@ -51,10 +51,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <algorithm>
 #include <cctype>
 #include <cstring>
-#include <filesystem>
 #include <unordered_map>
 
 #include "sdl2_desktop_i18n.h"
+#include "sdl2_desktop_fs.h"
 #include "../../tools/options.h"
 
 namespace xPlatform
@@ -63,8 +63,6 @@ namespace xI18n
 {
 
 namespace {
-
-namespace fs = std::filesystem;
 
 // Where res/lang/*.xml actually live at runtime - next to the running
 // executable itself, NOT relative to whatever the current working
@@ -119,6 +117,8 @@ bool EqualsIgnoreCase(const std::string& a, const std::string& b)
 bool LoadLanguageFile(const std::string& path, std::unordered_map<std::string, std::string>* strings,
 	std::string* out_code, std::string* out_name)
 {
+	// `path` is UTF-8 (SDL_GetBasePath() gives it so). tinyxml2 opens it with fopen_s()/fopen(), which
+	// the Windows build redirects to open a UTF-8 name as UTF-16 - see sdl2_desktop_winutf8.h.
 	tinyxml2::XMLDocument doc;
 	if(doc.LoadFile(path.c_str()) != tinyxml2::XML_SUCCESS)
 		return false;
@@ -159,20 +159,18 @@ bool LoadLanguageFile(const std::string& path, std::unordered_map<std::string, s
 void ScanAvailableLanguages()
 {
 	g_available.clear();
-	std::error_code ec;
-	if(!fs::exists(g_lang_dir, ec) || ec || !fs::is_directory(g_lang_dir, ec) || ec)
+	if(!xFs::exists(g_lang_dir) || !xFs::is_directory(g_lang_dir))
 		return;
 
-	for(const auto& entry : fs::directory_iterator(g_lang_dir, ec))
+	std::vector<std::string> files, dirs;
+	if(!xFs::list_directory(g_lang_dir, files, dirs))
+		return;
+	for(const std::string& file : files)
 	{
-		if(ec)
-			break;
-		if(!entry.is_regular_file())
-			continue;
-		if(entry.path().extension() != ".xml")
+		if(xFs::path(file).extension() != ".xml")
 			continue;
 		std::string code, name;
-		if(LoadLanguageFile(entry.path().string(), nullptr, &code, &name))
+		if(LoadLanguageFile((xFs::path(g_lang_dir) / file).string(), nullptr, &code, &name))
 			g_available.push_back(LanguageInfo{code, name});
 	}
 

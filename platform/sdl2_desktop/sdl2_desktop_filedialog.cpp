@@ -22,23 +22,29 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "sdl2_desktop_filedialog.h"
 #include "sdl2_desktop_dirwatch.h"
+#include "sdl2_desktop_fs.h"
 #include "imgui_shared.h"
 #include "imgui.h"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
-#include <filesystem>
-
-#ifdef _WINAPI
-#include <windows.h> // GetLogicalDrives() - see FileDialog::ShowDriveList()
-#endif
-
-namespace fs = std::filesystem;
 
 namespace xPlatform {
 namespace xImGui {
 
 namespace {
+
+// Every path here is an xFs::path: a plain UTF-8 string - the encoding Dear ImGui works in, and the one
+// the callers of the browser use - which sdl2_desktop_fs.h converts to the native one only at the
+// operating system's door. Nothing below depends on the system code page (Windows 7 has no UTF-8 one).
+using xFs::path;
+using xFs::exists;
+using xFs::is_directory;
+using xFs::list_directory;
+using xFs::current_path;
+using xFs::is_drive_root;
+using xFs::drive_roots;
+using xFs::normalize;
 
 std::string ToLower(std::string s) {
     // Only fold plain ASCII letters. std::tolower(unsigned char) is only
@@ -53,39 +59,6 @@ std::string ToLower(std::string s) {
         return (c < 0x80) ? (char)std::tolower(c) : (char)c;
     });
     return s;
-}
-
-// fs::path::string() converts to the *native narrow* encoding - on Windows
-// that's the local ANSI codepage, and the conversion throws
-// std::system_error for any character that codepage can't represent (which
-// includes plenty of legitimate Cyrillic filenames - very plausible for ZX
-// Spectrum software). fs::path::u8string() instead re-encodes to UTF-8,
-// which every native path (POSIX bytes or Windows UTF-16) can always be
-// losslessly represented in, so it doesn't throw - and it's exactly the
-// encoding Dear ImGui expects for text anyway (the font here already loads
-// a Cyrillic glyph range). Falls back to a placeholder rather than
-// propagating an exception on the off chance some other error still occurs.
-std::string PathToUtf8(const fs::path& p) {
-    try {
-        return p.u8string();
-    } catch (...) {
-        return "<?>";
-    }
-}
-
-// Mirror of PathToUtf8() for the opposite direction - constructing a path
-// from UTF-8 text (path bar input, entry names, the save-mode filename
-// field). Utf8ToPath() doesn't take an error_code overload and can in
-// principle throw if handed a byte sequence that isn't valid UTF-8; every
-// caller here sources its string from PathToUtf8() or Dear ImGui's own
-// UTF-8 text buffers, so that shouldn't happen in practice, but there's no
-// reason to let a directory listing crash the whole app over it either.
-fs::path Utf8ToPath(const std::string& s) {
-    try {
-        return fs::u8path(s);
-    } catch (...) {
-        return fs::path();
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -119,7 +92,7 @@ private:
     bool m_open = false;
     bool m_save_mode = false;
     std::string m_title;
-    fs::path m_current_dir;
+    path m_current_dir;
     std::vector<FileDialogFilter> m_filters;
     int m_filter_index = 0; // index into m_filters; "All files" (if present) is just a normal
                              // entry in m_filters with an empty extension list, not a sentinel value
@@ -130,7 +103,7 @@ private:
 
     // Windows-only virtual level above every real drive root, listing drive
     // letters as pseudo-directories (m_entries filled by ShowDriveList()
-    // rather than RefreshEntries() while this is true) - std::filesystem has
+    // rather than RefreshEntries() while this is true) - a path has
     // no notion of "My Computer"/"This PC" above "C:\" and friends, so Up
     // from a drive root needs somewhere to go that isn't just a no-op. See
     // GoUp(). m_current_dir is empty while this is true - nothing else may
@@ -161,20 +134,20 @@ private:
 
     static bool MatchesFilter(const std::string& filename, const FileDialogFilter& filter);
     void RefreshEntries();
-    void NavigateTo(const fs::path& dir);
+    void NavigateTo(const path& dir);
     void GoUp(); // "Up" button - handles the drive-root -> virtual drive list step itself
     void GoRoot(); // "Root" button - jumps straight to the top in one click
 #ifdef _WINAPI
     void ShowDriveList(); // populates m_entries with drive letters - see m_showing_drives
 #endif
     std::string CurrentFilterFirstExtension() const;
-    void Confirm(const std::string& path);
+    void Confirm(const std::string& p);
 };
 
 bool FileDialog::MatchesFilter(const std::string& filename, const FileDialogFilter& filter) {
     if (filter.extensions.empty())
         return true; // "All files"-style entry
-    std::string ext = ToLower(PathToUtf8(Utf8ToPath(filename).extension()));
+    std::string ext = ToLower(path(filename).extension());
     if (!ext.empty() && ext[0] == '.')
         ext = ext.substr(1);
     for (const auto& e : filter.extensions)
@@ -188,8 +161,7 @@ void FileDialog::RefreshEntries() {
     m_selected = -1;
     m_error_text.clear();
 
-    std::error_code ec;
-    if (!fs::exists(m_current_dir, ec) || !fs::is_directory(m_current_dir, ec)) {
+    if (!exists(m_current_dir) || !is_directory(m_current_dir)) {
         m_error_text = Tr("filedialog.error.cannot_open");
         return;
     }
@@ -199,26 +171,24 @@ void FileDialog::RefreshEntries() {
         m_filter_index < (int)m_filters.size())
         active_filter = &m_filters[m_filter_index];
 
-    // directory_iterator's constructor is given an error_code above and
-    // won't throw for the initial open, but incrementing it (which the
-    // range-for below does implicitly) has no such non-throwing overload -
-    // it can still throw filesystem_error mid-listing (a file removed/
-    // permissions changed while iterating, a broken symlink, ...). Both
-    // this and PathToUtf8() can fail, so the whole listing is wrapped
-    // rather than trying to guard every call site individually.
-    try {
-        for (const auto& de : fs::directory_iterator(m_current_dir, fs::directory_options::skip_permission_denied, ec)) {
-            std::error_code ec2;
-            bool is_dir = de.is_directory(ec2);
-            std::string name = PathToUtf8(de.path().filename());
-            if (name.empty() || name[0] == '.')
-                continue; // hide dotfiles/hidden entries, same spirit as a native picker's default view
-            if (!is_dir && active_filter && !MatchesFilter(name, *active_filter))
-                continue;
-            m_entries.push_back({ name, is_dir });
-        }
-    } catch (const std::exception&) {
+    // list_directory() hands out the names already in UTF-8 and never throws: a folder that cannot be
+    // read is just `false` (a file removed or a permission changed mid-listing is skipped, not fatal).
+    std::vector<std::string> files, dirs;
+    if (!list_directory(m_current_dir, files, dirs)) {
         m_error_text = Tr("filedialog.error.read_failed");
+        return;
+    }
+    // Hide dotfiles/hidden entries, same spirit as a native picker's default view.
+    for (const auto& name : dirs) {
+        if (!name.empty() && name[0] != '.')
+            m_entries.push_back({ name, true });
+    }
+    for (const auto& name : files) {
+        if (name.empty() || name[0] == '.')
+            continue;
+        if (active_filter && !MatchesFilter(name, *active_filter))
+            continue;
+        m_entries.push_back({ name, false });
     }
 
     std::sort(m_entries.begin(), m_entries.end(), [](const Entry& a, const Entry& b) {
@@ -226,38 +196,36 @@ void FileDialog::RefreshEntries() {
         return ToLower(a.name) < ToLower(b.name);
     });
 
-    std::string dir_utf8 = PathToUtf8(m_current_dir);
-    CopyToBuffer(m_path_buf, sizeof(m_path_buf), dir_utf8);
+    CopyToBuffer(m_path_buf, sizeof(m_path_buf), m_current_dir.string());
 }
 
-void FileDialog::NavigateTo(const fs::path& dir) {
+void FileDialog::NavigateTo(const path& dir) {
     m_showing_drives = false; // always navigating to a real, concrete directory
-    std::error_code ec;
-    fs::path canon = fs::weakly_canonical(dir, ec);
-    m_current_dir = ec ? dir : canon;
+    // Lexical only: the "." and ".." of what was typed into the path bar, repeated and trailing
+    // separators. Unlike weakly_canonical() it does not resolve symlinks.
+    m_current_dir = normalize(dir);
     RefreshEntries();
     // (Re)start watching whatever we actually ended up showing - harmless,
     // and cheap, even if it's the same directory as before (Watch() just
     // tears down and re-creates the native watch).
-    m_watcher.Watch(PathToUtf8(m_current_dir));
+    m_watcher.Watch(m_current_dir.string());
 }
 
 void FileDialog::GoUp() {
     if (m_showing_drives)
         return; // already at the top - nothing above the virtual drive list
 #ifdef _WINAPI
-    // A drive root (e.g. "C:\") has no parent of its own in
-    // std::filesystem's model (parent_path() of a root just returns itself)
-    // - comparing against root_path() detects that directly rather than
-    // relying on that self-referential quirk. Surface one more, virtual
-    // level here (mirroring Explorer's "This PC") instead of Up silently
-    // doing nothing once you reach a drive's root.
-    if (m_current_dir == m_current_dir.root_path()) {
+    // A drive root (e.g. "C:\") has no parent of its own (parent_path() of
+    // a root just returns itself) - is_drive_root() detects that directly
+    // rather than relying on that self-referential quirk. Surface one more,
+    // virtual level here (mirroring Explorer's "This PC") instead of Up
+    // silently doing nothing once you reach a drive's root.
+    if (is_drive_root(m_current_dir)) {
         ShowDriveList();
         return;
     }
 #endif
-    fs::path parent = m_current_dir.parent_path();
+    path parent = m_current_dir.parent_path();
     if (!parent.empty() && parent != m_current_dir)
         NavigateTo(parent);
 }
@@ -271,35 +239,28 @@ void FileDialog::GoRoot() {
     // the same place repeatedly pressing Up would eventually land on.
     ShowDriveList();
 #else
-    NavigateTo(fs::path("/"));
+    NavigateTo(path("/"));
 #endif
 }
 
 #ifdef _WINAPI
 void FileDialog::ShowDriveList() {
     m_showing_drives = true;
-    m_current_dir.clear();
+    m_current_dir = path();
     m_selected = -1;
     m_error_text.clear();
     m_entries.clear();
     m_watcher.Reset(); // nothing real to watch at this virtual level
 
-    // GetLogicalDrives() bit i (0-based) set = drive letter 'A'+i exists -
-    // simplest way to enumerate drive letters; doesn't distinguish an empty
-    // optical drive from a populated one, but neither does Explorer's "This
-    // PC" list, and RefreshEntries()'s existing fs::exists()/try-catch
-    // handling already copes fine with a drive that turns out to be
-    // inaccessible once actually entered.
-    DWORD mask = GetLogicalDrives();
-    for (int i = 0; i < 26; ++i) {
-        if (!(mask & (1u << i)))
-            continue;
-        std::string name;
-        name += char('A' + i);
-        name += ":\\";
-        m_entries.push_back({ name, true });
-    }
-    // Already in A -> Z order from the bit scan above - no sort needed.
+    // drive_roots() is GetLogicalDrives() underneath - doesn't distinguish an
+    // empty optical drive from a populated one, but neither does Explorer's
+    // "This PC" list, and RefreshEntries()'s exists()/list_directory() handling
+    // already copes fine with a drive that turns out to be inaccessible once
+    // actually entered (the sdl2_desktop_fs.h calls fail quietly, without
+    // Windows putting up its "no disk in the drive" box).
+    for (const auto& root : drive_roots())
+        m_entries.push_back({ root.string(), true });
+    // Already in A -> Z order - no sort needed.
 
     // Cosmetic only - m_showing_drives (not this text) is what the rest of
     // the class actually checks.
@@ -314,11 +275,11 @@ std::string FileDialog::CurrentFilterFirstExtension() const {
     return exts.empty() ? "" : exts[0];
 }
 
-void FileDialog::Confirm(const std::string& path) {
+void FileDialog::Confirm(const std::string& p) {
     auto cb = m_on_confirm;
     m_open = false;
     m_show_overwrite_confirm = false;
-    if (cb) cb(path);
+    if (cb) cb(p);
 }
 
 void FileDialog::Open(const std::string& title, const std::string& start_dir,
@@ -335,10 +296,9 @@ void FileDialog::Open(const std::string& title, const std::string& start_dir,
     m_filter_index = 0;
     m_on_confirm = std::move(on_confirm);
 
-    std::error_code ec;
-    fs::path dir = start_dir.empty() ? fs::current_path(ec) : Utf8ToPath(start_dir);
-    if (dir.empty() || !fs::exists(dir, ec))
-        dir = fs::current_path(ec);
+    path dir = start_dir.empty() ? current_path() : path(start_dir);
+    if (dir.empty() || !exists(dir))
+        dir = current_path();
 
     if (save_mode) {
         CopyToBuffer(m_name_buf, sizeof(m_name_buf), default_name);
@@ -379,12 +339,10 @@ void FileDialog::Draw() {
     }
     ImGui::SetNextItemWidth(-1.0f);
     if (ImGui::InputText("##path", m_path_buf, sizeof(m_path_buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
-        // m_path_buf holds UTF-8 (it's what PathToUtf8() wrote into it, and
-        // what Dear ImGui's InputText itself works in) - fs::path's own
-        // narrow-string constructor instead assumes the *native* encoding
-        // (ANSI codepage on Windows), so it needs the explicit UTF-8
-        // constructor to round-trip correctly for non-ASCII paths.
-        NavigateTo(Utf8ToPath(m_path_buf));
+        // m_path_buf holds UTF-8 (it's what RefreshEntries() wrote into it,
+        // and what Dear ImGui's InputText itself works in) - and so does
+        // xFs::path, so it goes in as it is.
+        NavigateTo(path(m_path_buf));
     }
     m_path_bar_was_active = ImGui::IsItemActive();
 
@@ -424,7 +382,7 @@ void FileDialog::Draw() {
     // us mid-loop). Instead, just record what the user asked for here, and
     // act on it once after the loop (and after EndChild()) has finished
     // touching m_entries for this frame.
-    fs::path pending_navigate;
+    path pending_navigate;
     bool has_pending_navigate = false;
     std::string pending_confirm;
     bool has_pending_confirm = false;
@@ -439,17 +397,17 @@ void FileDialog::Draw() {
             }
             if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                 if (e.is_dir) {
-                    // e.name is UTF-8 (from PathToUtf8() in RefreshEntries) -
-                    // same u8path() reasoning as the path bar above. While
-                    // showing the virtual drive list, e.name ("C:\\" etc.)
-                    // is already an absolute root on its own, not something
-                    // to join under m_current_dir (which is empty there).
-                    pending_navigate = Utf8ToPath(e.name);
+                    // e.name is UTF-8 (from list_directory() in RefreshEntries) -
+                    // same reasoning as the path bar above. While showing the
+                    // virtual drive list, e.name ("C:\\" etc.) is already an
+                    // absolute root on its own, not something to join under
+                    // m_current_dir (which is empty there).
+                    pending_navigate = path(e.name);
                     if (!m_showing_drives)
                         pending_navigate = m_current_dir / pending_navigate;
                     has_pending_navigate = true;
                 } else if (!m_save_mode) {
-                    pending_confirm = PathToUtf8(m_current_dir / Utf8ToPath(e.name));
+                    pending_confirm = (m_current_dir / e.name).string();
                     has_pending_confirm = true;
                 }
             }
@@ -484,31 +442,30 @@ void FileDialog::Draw() {
     if (do_confirm) {
         if (m_save_mode) {
             // m_name_buf is UTF-8 (Dear ImGui's InputText works in UTF-8) -
-            // same u8path() reasoning as elsewhere in this file. Nothing to
+            // as every path in this file is. Nothing to
             // save into yet while m_current_dir is the empty, virtual drive
             // list - m_current_dir / name would silently produce a bogus
             // *relative* path instead.
             std::string name = m_name_buf;
             if (!name.empty() && !m_showing_drives) {
-                std::string ext = ToLower(PathToUtf8(Utf8ToPath(name).extension()));
+                std::string ext = ToLower(path(name).extension());
                 if (ext.empty() || ext == ".") {
                     std::string default_ext = CurrentFilterFirstExtension();
                     if (!default_ext.empty())
                         name += "." + default_ext;
                 }
-                fs::path full = m_current_dir / Utf8ToPath(name);
-                std::error_code exists_ec;
-                if (fs::exists(full, exists_ec)) {
+                path full = m_current_dir / name;
+                if (exists(full)) {
                     m_show_overwrite_confirm = true;
                     m_overwrite_popup_pending_open = true;
-                    m_overwrite_path = PathToUtf8(full);
+                    m_overwrite_path = full.string();
                 } else {
-                    Confirm(PathToUtf8(full));
+                    Confirm(full.string());
                 }
             }
         } else if (m_selected >= 0 && m_selected < (int)m_entries.size() &&
                    !m_entries[m_selected].is_dir) {
-            Confirm(PathToUtf8(m_current_dir / Utf8ToPath(m_entries[m_selected].name)));
+            Confirm((m_current_dir / m_entries[m_selected].name).string());
         }
     }
 

@@ -173,8 +173,19 @@ jobs:
           path: build/cmake/build_win32_wxwidgets/*.msi
 
   windows-sdl2-desktop:
-    name: Windows SDL2 desktop OpenGL Dear ImGui
+    # One build for Windows 7 and later (WINDOWS_TARGET_WIN7), x64 and x86. The x64 installer keeps its
+    # old name; the x86 one gets "_x86". The executable is checked for imports newer than Windows 7:
+    # that is what keeps a toolset or a dependency from quietly dropping Windows 7 support.
+    name: Windows SDL2 desktop OpenGL Dear ImGui (${{ matrix.arch }}, Windows 7+)
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            suffix: ""
+          - arch: Win32
+            suffix: _x86
     steps:
       - uses: actions/checkout@v7
         with:
@@ -198,21 +209,27 @@ jobs:
           curl -O https://github.com/nigels-com/glew/releases/download/glew-2.2.0/glew-2.2.0-win32.zip --location
           7z x glew-2.2.0-win32.zip
 
-      - name: Build SDL2 desktop OpenGL Dear ImGui version
+      - name: Build SDL2 desktop OpenGL Dear ImGui version (${{ matrix.arch }})
         working-directory: build/cmake
         shell: cmd
         run: |
-          mkdir build_win32_sdl2_desktop
-          cd build_win32_sdl2_desktop
-          cmake .. -A x64 -DUSE_SDL=0 -DUSE_SDL2_DESKTOP=1 ^
+          mkdir build_win32_sdl2_desktop_${{ matrix.arch }}
+          cd build_win32_sdl2_desktop_${{ matrix.arch }}
+          cmake .. -A ${{ matrix.arch }} -DUSE_SDL=0 -DUSE_SDL2_DESKTOP=1 ^
+            -DWINDOWS_TARGET_WIN7=ON ^
             -DGLEW_INCLUDE_DIR=%CD%/../glew-2.2.0/include ^
-            -DGLEW_LIBRARY=%CD%/../glew-2.2.0/lib/Release/x64/glew32s.lib
+            -DGLEW_LIBRARY=%CD%/../glew-2.2.0/lib/Release/${{ matrix.arch }}/glew32s.lib
           cmake --build . --config Release --target PACKAGE
-          ren *.msi unreal-speccy-portable-${{ steps.ver.outputs.version }}_win32_sdl2_desktop.msi
+          ren *.msi unreal-speccy-portable-${{ steps.ver.outputs.version }}_win32${{ matrix.suffix }}_sdl2_desktop.msi
+
+      - name: Check that the executable imports nothing newer than Windows 7
+        working-directory: build/cmake
+        shell: cmd
+        run: python ..\win\check_win7_imports.py build_win32_sdl2_desktop_${{ matrix.arch }}\Release\unreal_speccy_portable.exe
 
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
           archive: false
           if-no-files-found: warn
-          path: build/cmake/build_win32_sdl2_desktop/*.msi
+          path: build/cmake/build_win32_sdl2_desktop_${{ matrix.arch }}/*.msi

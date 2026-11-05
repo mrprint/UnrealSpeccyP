@@ -11,6 +11,13 @@ option(USE_HAIKU "Haiku version" OFF)
 option(USE_BENCHMARK "benchmark mode (console)" OFF)
 option(USE_LIBRARY "library mode" OFF)
 option(USE_WEB "use web sources (SDL or iOS versions)" ON)
+#The sdl2_desktop version is built to run on Windows 7 and later: the one build for all of them.
+#Other versions are left as they are unless asked (-DWINDOWS_TARGET_WIN7=ON).
+if(USE_SDL2_DESKTOP)
+option(WINDOWS_TARGET_WIN7 "target Windows 7 (minimum OS version)" ON)
+else(USE_SDL2_DESKTOP)
+option(WINDOWS_TARGET_WIN7 "target Windows 7 (minimum OS version)" OFF)
+endif(USE_SDL2_DESKTOP)
 
 project (USP)
 
@@ -43,6 +50,14 @@ foreach(variable ${variables})
 	endif()
 endforeach()
 endif(NOT UWP)
+
+#Windows 7 target: the minimum OS version, for the API declarations of the headers.
+#Must be set here, before any add_subdirectory() calls (SDL2, wxWidgets, OpenAL Soft),
+#so that all the bundled dependencies get the same target. It only hides declarations:
+#what the program really imports is checked by build/win/check_win7_imports.py.
+if(WINDOWS_TARGET_WIN7)
+add_definitions(-D_WIN32_WINNT=0x0601 -DNTDDI_VERSION=0x06010000)
+endif(WINDOWS_TARGET_WIN7)
 endif(MSVC)
 
 #core
@@ -879,6 +894,23 @@ add_platform_io_stuff()
 
 add_executable(${PROJECT} WIN32 ${SRCCXX} ${SRCC} ${SRCH} ${SRCRES})
 set_target_properties(${PROJECT} PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+
+#Windows: every path in this program is UTF-8, and Windows 7 has no UTF-8 code page for the
+#narrow C runtime functions - see platform/sdl2_desktop/sdl2_desktop_winutf8.h. The emulation
+#core and the third-party sources stay as they are: fopen()/fopen_s() are redirected for the
+#whole target by a force-included header, CreateDirectoryA() (the MkDir() of platform/win) in
+#that one file by another.
+if(WIN32)
+	set(USP_WINUTF8_H "${CMAKE_CURRENT_SOURCE_DIR}/../../platform/sdl2_desktop/sdl2_desktop_winutf8.h")
+	set(USP_WINUTF8_MKDIR_H "${CMAKE_CURRENT_SOURCE_DIR}/../../platform/sdl2_desktop/sdl2_desktop_winutf8_mkdir.h")
+	if(MSVC)
+		target_compile_options(${PROJECT} PRIVATE "/FI${USP_WINUTF8_H}")
+		set_source_files_properties("../../platform/win/io_select_win.cpp" PROPERTIES COMPILE_OPTIONS "/FI${USP_WINUTF8_MKDIR_H}")
+	else()
+		target_compile_options(${PROJECT} PRIVATE -include "${USP_WINUTF8_H}")
+		set_source_files_properties("../../platform/win/io_select_win.cpp" PROPERTIES COMPILE_OPTIONS "-include;${USP_WINUTF8_MKDIR_H}")
+	endif(MSVC)
+endif(WIN32)
 
 #Localization data (res/lang/*.xml - see sdl2_desktop_i18n.h) is specific
 #to this platform's ImGui UI, so unlike res/rom and res/font it does NOT

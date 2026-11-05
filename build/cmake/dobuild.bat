@@ -1,100 +1,141 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal
+
 rem Local dev build script.
 rem
-rem Default: builds the sdl2_desktop platform (SDL2 + desktop OpenGL + Dear ImGui).
+rem Default: the sdl2_desktop platform (SDL2 + desktop OpenGL + Dear ImGui), x64, built to run
+rem on Windows 7 and later (-DWINDOWS_TARGET_WIN7=ON).
 rem
-rem Usage:
-rem   build\cmake\dobuild.bat                  - build sdl2_desktop .exe only (default)
-rem   build\cmake\dobuild.bat package     - also build a .msi installer via
-rem                                              CPack/WiX (requires WiX Toolset v3 on PATH)
-rem   build\cmake\dobuild.bat wx               - build the wxWidgets variant instead
-rem   build\cmake\dobuild.bat wx package       - build wxWidgets .exe and .msi
+rem Usage: dobuild.bat [x64] [x86] [both] [package] [wx]      (in any order)
+rem   (no arguments)         build the x64 .exe
+rem   x86 | win32            build the x86 .exe instead
+rem   x64                    build the x64 .exe (the default, for use with "both"-like scripts)
+rem   both                   build x86 and x64
+rem   package | msi | installer
+rem                          also build a .msi installer via CPack/WiX (WiX Toolset v3 on PATH)
+rem   wx | wxwidgets         build the wxWidgets variant instead (no Windows 7 target)
 rem
-rem Requires: git, cmake, curl, powershell (all built into modern Windows),
-rem MSVC toolchain (VS 2019+ Developer environment or plain "Visual Studio").
+rem Examples: dobuild.bat x86 package      dobuild.bat both      dobuild.bat package wx
+rem
+rem Requires: git, cmake, curl, powershell (all built into modern Windows), MSVC toolchain
+rem (VS 2019+ Developer environment or plain "Visual Studio"). Optional: python, for the
+rem check that the sdl2_desktop .exe imports nothing newer than Windows 7.
 rem Submodules must be fetched manually before running this script.
 
 set DO_PACKAGE=0
 set BUILD_WX=0
-if /I "%~1"=="package" set DO_PACKAGE=1
-if /I "%~1"=="msi" set DO_PACKAGE=1
-if /I "%~1"=="installer" set DO_PACKAGE=1
-if /I "%~1"=="wx" set BUILD_WX=1
-if /I "%~1"=="wxwidgets" set BUILD_WX=1
+set BUILD_X86=0
+set BUILD_X64=0
 
-if "%BUILD_WX%"=="1" (
-    if /I "%~2"=="package" set DO_PACKAGE=1
-    if /I "%~2"=="msi" set DO_PACKAGE=1
-    if /I "%~2"=="installer" set DO_PACKAGE=1
+:parse
+if "%~1"=="" goto parsed
+set ARG_OK=0
+for %%A in (package msi installer) do (
+    if /I "%~1"=="%%A" (
+        set DO_PACKAGE=1
+        set ARG_OK=1
+    )
 )
+for %%A in (wx wxwidgets) do (
+    if /I "%~1"=="%%A" (
+        set BUILD_WX=1
+        set ARG_OK=1
+    )
+)
+for %%A in (x86 win32) do (
+    if /I "%~1"=="%%A" (
+        set BUILD_X86=1
+        set ARG_OK=1
+    )
+)
+if /I "%~1"=="x64" (
+    set BUILD_X64=1
+    set ARG_OK=1
+)
+if /I "%~1"=="both" (
+    set BUILD_X86=1
+    set BUILD_X64=1
+    set ARG_OK=1
+)
+if "%ARG_OK%"=="0" (
+    echo Unknown argument: %~1 ^(see the usage at the top of this file^)
+    exit /b 1
+)
+shift
+goto parse
 
-cd "%~dp0"
+:parsed
+if "%BUILD_X86%%BUILD_X64%"=="00" set BUILD_X64=1
+
+cd /d "%~dp0"
 
 set CACHE_DIR=%~dp0_devcache
 if not exist "%CACHE_DIR%" mkdir "%CACHE_DIR%"
 
-rem --- 1. GLEW (prebuilt, same version as CI) ---
+rem --- GLEW (prebuilt, same version as CI) ---
 
 set GLEWLIB=glew-2.2.0
-if not exist "%CACHE_DIR%\%GLEWLIB%" (
-	echo Downloading GLEW...
-	curl -L -o "%CACHE_DIR%\%GLEWLIB%-win32.zip" https://github.com/nigels-com/glew/releases/download/glew-2.2.0/%GLEWLIB%-win32.zip
-	powershell -NoProfile -Command "Expand-Archive -Path '%CACHE_DIR%\%GLEWLIB%-win32.zip' -DestinationPath '%CACHE_DIR%' -Force"
-)
+if exist "%CACHE_DIR%\%GLEWLIB%" goto glew_ready
+echo Downloading GLEW...
+curl -L -o "%CACHE_DIR%\%GLEWLIB%-win32.zip" https://github.com/nigels-com/glew/releases/download/glew-2.2.0/%GLEWLIB%-win32.zip
+if errorlevel 1 exit /b 1
+powershell -NoProfile -Command "Expand-Archive -Path '%CACHE_DIR%\%GLEWLIB%-win32.zip' -DestinationPath '%CACHE_DIR%' -Force"
+if errorlevel 1 exit /b 1
+:glew_ready
 set GLEW_INCLUDE_DIR=%CACHE_DIR%\%GLEWLIB%\include
-set GLEW_LIBRARY=%CACHE_DIR%\%GLEWLIB%\lib\Release\x64\glew32s.lib
+set RES_SRC=%~dp0..\..\res
 
-rem --- 2. Configure + build ---
-if "%BUILD_WX%"=="1" (
-set BUILD_DIR=build_win32_wxwidgets_dev
-    set USE_SDL=0
-    set USE_WX_WIDGETS=1
-) else (
-    set BUILD_DIR=build_win32_sdl2_desktop_dev
-    set USE_SDL=0
-    set USE_SDL2_DESKTOP=1
-    set USE_WX_WIDGETS=0
-)
+if "%BUILD_X86%"=="1" call :build Win32
+if errorlevel 1 exit /b 1
+if "%BUILD_X64%"=="1" call :build x64
+if errorlevel 1 exit /b 1
+
+echo.
+if "%DO_PACKAGE%"=="1" (echo Done. Installers: build_win32_*_dev\*.msi) else (echo Done. Executables: build_win32_*_dev\Release\unreal_speccy_portable.exe)
+echo Options: package ^(.msi via WiX^), x86, both, wx
+endlocal
+exit /b 0
+
+rem ----------------------------------------------------------------------------------------
+rem :build <Win32|x64>
+rem ----------------------------------------------------------------------------------------
+:build
+set BUILD_ARCH=%~1
+set GLEW_LIBRARY=%CACHE_DIR%\%GLEWLIB%\lib\Release\%BUILD_ARCH%\glew32s.lib
+if "%BUILD_WX%"=="1" (set BUILD_DIR=build_win32_wxwidgets_%BUILD_ARCH%_dev) else (set BUILD_DIR=build_win32_sdl2_desktop_%BUILD_ARCH%_dev)
+
+echo.
+echo === Building %BUILD_DIR% ===
 if exist "%BUILD_DIR%" rmdir /S /Q "%BUILD_DIR%"
 mkdir "%BUILD_DIR%"
 pushd "%BUILD_DIR%"
 
-if "%BUILD_WX%"=="1" (
-    cmake .. -A x64 -DUSE_SDL=%USE_SDL% -DUSE_WX_WIDGETS=%USE_WX_WIDGETS% ^
-	-DGLEW_INCLUDE_DIR=%GLEW_INCLUDE_DIR% ^
-	-DGLEW_LIBRARY=%GLEW_LIBRARY%
-) else (
-    cmake .. -A x64 -DUSE_SDL=%USE_SDL% -DUSE_SDL2_DESKTOP=%USE_SDL2_DESKTOP% ^
-        -DUSE_WX_WIDGETS=%USE_WX_WIDGETS% ^
-        -DGLEW_INCLUDE_DIR=%GLEW_INCLUDE_DIR% ^
-        -DGLEW_LIBRARY=%GLEW_LIBRARY%
-)
-if errorlevel 1 exit /b 1
+if "%BUILD_WX%"=="1" goto configure_wx
+cmake .. -A %BUILD_ARCH% -DUSE_SDL=0 -DUSE_SDL2_DESKTOP=1 -DWINDOWS_TARGET_WIN7=ON "-DGLEW_INCLUDE_DIR=%GLEW_INCLUDE_DIR%" "-DGLEW_LIBRARY=%GLEW_LIBRARY%"
+goto configured
+:configure_wx
+cmake .. -A %BUILD_ARCH% -DUSE_SDL=0 -DUSE_WX_WIDGETS=1 "-DGLEW_INCLUDE_DIR=%GLEW_INCLUDE_DIR%" "-DGLEW_LIBRARY=%GLEW_LIBRARY%"
+:configured
+if errorlevel 1 goto build_failed
 
-if "%DO_PACKAGE%"=="1" (
-	echo Building .exe and packaging .msi via CPack/WiX ...
-	cmake --build . --config Release --target PACKAGE
-) else (
-	echo Building .exe only ^(pass "package" as an argument to also build a .msi^) ...
-	cmake --build . --config Release
-)
-if errorlevel 1 exit /b 1
-
+set BUILD_ARGS=--config Release
+if "%DO_PACKAGE%"=="1" set BUILD_ARGS=--config Release --target PACKAGE
+cmake --build . %BUILD_ARGS%
+if errorlevel 1 goto build_failed
 popd
 
-rem --- 3. Copy resources into the Release output folder (Release\res) ---
-
-set RES_SRC=%~dp0..\..\res
 xcopy /S /I /Y /Q "%RES_SRC%" "%BUILD_DIR%\Release\res"
 if errorlevel 1 exit /b 1
 
-echo.
-if "%DO_PACKAGE%"=="1" (
-	echo Done. Installer: %BUILD_DIR%\*.msi
-) else (
-	echo Done. Executable: %BUILD_DIR%\Release\unreal_speccy_portable.exe
-	echo ^(run "dobuild.bat package" to also build a .msi via WiX^)
-    echo ^(run "dobuild.bat wx" to build the wxWidgets variant^)
-)
-endlocal
+rem --- sdl2_desktop must run on Windows 7: nothing newer may be imported (python is optional;
+rem     "python --version" rather than "where": a Microsoft Store stub would be found by it) ---
+if "%BUILD_WX%"=="1" exit /b 0
+python --version >nul 2>nul
+if errorlevel 1 echo python not found: the Windows 7 imports check is skipped
+if errorlevel 1 exit /b 0
+python "%~dp0..\win\check_win7_imports.py" "%BUILD_DIR%\Release\unreal_speccy_portable.exe"
+exit /b %errorlevel%
+
+:build_failed
+popd
+exit /b 1
