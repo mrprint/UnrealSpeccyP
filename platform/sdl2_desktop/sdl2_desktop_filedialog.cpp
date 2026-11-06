@@ -44,7 +44,7 @@ using xFs::list_directory;
 using xFs::current_path;
 using xFs::is_drive_root;
 using xFs::drive_roots;
-using xFs::normalize;
+using xFs::resolve;
 
 std::string ToLower(std::string s) {
     // Only fold plain ASCII letters. std::tolower(unsigned char) is only
@@ -201,9 +201,12 @@ void FileDialog::RefreshEntries() {
 
 void FileDialog::NavigateTo(const path& dir) {
     m_showing_drives = false; // always navigating to a real, concrete directory
-    // Lexical only: the "." and ".." of what was typed into the path bar, repeated and trailing
-    // separators. Unlike weakly_canonical() it does not resolve symlinks.
-    m_current_dir = normalize(dir);
+    // Like weakly_canonical(): the "." and ".." of what was typed into the path bar are folded away
+    // and symbolic links and junctions are followed to where they lead. It matters on Windows: the
+    // old compatibility junctions ("C:\Users\All Users", its "Desktop", "Application Data" and the
+    // like) forbid listing to everyone, but the folder each points to is readable - so a folder is
+    // always entered by its real path, never through the link.
+    m_current_dir = resolve(dir);
     RefreshEntries();
     // (Re)start watching whatever we actually ended up showing - harmless,
     // and cheap, even if it's the same directory as before (Watch() just

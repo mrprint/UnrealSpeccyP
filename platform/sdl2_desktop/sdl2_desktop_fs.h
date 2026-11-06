@@ -48,6 +48,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/stat.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <limits.h>
+#include <stdlib.h>
 #endif
 
 namespace xPlatform
@@ -199,6 +201,26 @@ inline std::string Normalize(const std::string& path, bool win)
     return r.empty() ? std::string(".") : r;
 }
 
+// "\\?\C:\a" -> "C:\a", "\\?\UNC\srv\share\a" -> "\\srv\share\a": the form
+// GetFinalPathNameByHandle() answers in, back to the one everything else here uses. A path
+// that is too long for the plain form (MAX_PATH) keeps its prefix - without it Windows
+// would not open it.
+inline std::string StripExtendedPrefix(const std::string& s)
+{
+    const size_t kMaxPlain = 260;
+    if (s.compare(0, 8, "\\\\?\\UNC\\") == 0)
+    {
+        std::string plain = "\\\\" + s.substr(8);
+        return plain.size() < kMaxPlain ? plain : s;
+    }
+    if (s.size() >= 6 && s.compare(0, 4, "\\\\?\\") == 0 && s[5] == ':')
+    {
+        std::string plain = s.substr(4);
+        return plain.size() < kMaxPlain ? plain : s;
+    }
+    return s;
+}
+
 #ifdef _WINAPI
 
 // UTF-8 -> UTF-16. Empty for an empty string and for malformed UTF-8 (so that
@@ -292,6 +314,77 @@ private:
 inline path normalize(const path& p)
 {
     return path(detail::Normalize(p.string(), detail::kWin));
+}
+
+namespace detail
+{
+
+// The real, fully resolved form of a path that EXISTS - every symbolic link, junction,
+// subst and mapped drive followed to where it leads. False if it does not exist or cannot be
+// opened. On Windows the folder is opened with no access rights at all (just to ask where it
+// is), which is allowed even for the old compatibility junctions that deny listing.
+inline bool ResolveExisting(const std::string& p, std::string& out)
+{
+#ifdef _WINAPI
+    std::wstring w = Widen(p);
+    if (w.empty())
+        return false;
+    NoCriticalErrors guard;
+    HANDLE h = CreateFileW(w.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL); // BACKUP_SEMANTICS: a folder can be opened
+    if (h == INVALID_HANDLE_VALUE)
+        return false;
+    const DWORD flags = FILE_NAME_NORMALIZED | VOLUME_NAME_DOS;
+    DWORD need = GetFinalPathNameByHandleW(h, NULL, 0, flags);   // with the terminating zero
+    std::wstring final_path;
+    DWORD got = 0;
+    if (need > 0)
+    {
+        final_path.resize((size_t)need);
+        got = GetFinalPathNameByHandleW(h, &final_path[0], need, flags); // without it
+    }
+    CloseHandle(h);
+    if (got == 0 || got >= need)
+        return false;
+    out = StripExtendedPrefix(Narrow(final_path.data(), (size_t)got));
+    return true;
+#else
+    char* r = realpath(p.c_str(), NULL);
+    if (!r)
+        return false;
+    out = r;
+    free(r);
+    return true;
+#endif
+}
+
+} // namespace detail
+
+// What std::filesystem's weakly_canonical() gave the file dialog: the path made absolute and
+// normalized, and every symbolic link and junction in the part of it that exists followed to
+// where it leads (the part that does not exist yet is just normalized and kept).
+//
+// It matters on Windows: the old compatibility junctions ("C:\Users\All Users", its "Desktop",
+// "Application Data" and the like) forbid listing to everyone, but the folder each of them
+// points to is readable - a folder must be entered by its real path, never through the link.
+// (".." is folded away before the links are followed, as the Windows API itself does.)
+inline path resolve(const path& p)
+{
+    const path n = normalize(p);
+    path head = n;
+    std::string rest;                                   // the components that do not exist
+    for (;;)
+    {
+        std::string real;
+        if (detail::ResolveExisting(head.string(), real))
+            return rest.empty() ? path(real) : path(real) / rest;
+        path parent = head.parent_path();
+        if (parent.empty() || parent == head)
+            return n;                                   // nothing of it can be resolved
+        const std::string name = head.filename();
+        rest = rest.empty() ? name : name + (detail::kWin ? "\\" : "/") + rest;
+        head = parent;
+    }
 }
 
 // Check if path exists (file or directory)
